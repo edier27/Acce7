@@ -31,6 +31,29 @@
       .trp-bottom-nav{padding-bottom:env(safe-area-inset-bottom)}
     }
   </style>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script>
+    var __firebaseOK = false;
+    var __dataRef = null;
+    try {
+      var firebaseConfig = {
+        apiKey: "AIzaSyAzOoK99y6L95sFAKZFZ0wY42Ljw2YEOM8",
+        authDomain: "globalacce-37997.firebaseapp.com",
+        projectId: "globalacce-37997",
+        storageBucket: "globalacce-37997.firebasestorage.app",
+        messagingSenderId: "779307465490",
+        appId: "1:779307465490:web:848a554272501bbaf251cb"
+      };
+      firebase.initializeApp(firebaseConfig);
+      var __db = firebase.firestore();
+      __dataRef = __db.collection("trp_data").doc("main");
+      __firebaseOK = true;
+    } catch(e) {
+      console.warn("Firebase no disponible, usando modo offline:", e);
+    }
+  </script>
 </head>
 <body>
   <div id="root"></div>
@@ -5546,33 +5569,45 @@ function App() {
     } catch (_unused2) {}
   };
   useEffect(function () {
-    // Cargar datos
-    try {
-      var stored = localStorage.getItem("trp_data_v2");
-      setData(stored ? JSON.parse(stored) : INIT);
-    } catch (_unused3) {
-      setData(INIT);
-    }
-
-    // Sincronización automática entre ventanas:
-    // cuando el admin guarda, el catálogo del cliente se actualiza al instante
-    var onStorage = function onStorage(e) {
-      if (e.key === "trp_data_v2" && e.newValue) {
+    // ── Cargar datos: Firebase (en línea) o localStorage (sin conexión) ──
+    if (__firebaseOK && __dataRef) {
+      var unsubscribe = __dataRef.onSnapshot(function(doc) {
+        if (doc.exists) {
+          try {
+            var d = doc.data().appData ? JSON.parse(doc.data().appData) : INIT;
+            setData(_objectSpread(_objectSpread({}, INIT), d));
+          } catch(e) { setData(INIT); }
+        } else {
+          __dataRef.set({ appData: JSON.stringify(INIT), updatedAt: new Date().toISOString() });
+          setData(INIT);
+        }
+      }, function(error) {
+        console.warn("Error Firebase, usando localStorage:", error);
         try {
-          setData(JSON.parse(e.newValue));
-        } catch (_unused4) {}
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return function () {
-      return window.removeEventListener("storage", onStorage);
-    };
+          var stored = localStorage.getItem("trp_data_v2");
+          setData(stored ? JSON.parse(stored) : INIT);
+        } catch(e) { setData(INIT); }
+      });
+      return function() { unsubscribe(); };
+    } else {
+      // Modo offline: usar localStorage
+      try {
+        var stored = localStorage.getItem("trp_data_v2");
+        setData(stored ? JSON.parse(stored) : INIT);
+      } catch(e) { setData(INIT); }
+    }
   }, []);
   var save = function save(d) {
     setData(d);
-    try {
-      localStorage.setItem("trp_data_v2", JSON.stringify(d));
-    } catch (_unused5) {}
+    // Guardar en Firebase si está disponible
+    if (__firebaseOK && __dataRef) {
+      __dataRef.set({
+        appData: JSON.stringify(d),
+        updatedAt: new Date().toISOString()
+      }).catch(function(e) { console.warn("Error guardando en Firebase:", e); });
+    }
+    // Siempre guardar en localStorage como respaldo
+    try { localStorage.setItem("trp_data_v2", JSON.stringify(d)); } catch(e) {}
   };
   var openCatalog = function openCatalog() {
     var base = window.location.href.split("#")[0];
