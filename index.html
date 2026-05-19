@@ -6097,7 +6097,17 @@ var DIAS_DEMO = 8;
 
 // Códigos válidos — tú los generas y compartes con cada cliente
 // Formato: { "CODIGO": { type: "demo"|"pro", days: N, created: "YYYY-MM-DD" } }
-var LICENCIAS_REF = __firebaseOK && __dataRef ? firebase.firestore().collection("licencias") : null;
+var LICENCIAS_REF = null;
+function getLicRef() {
+  if (LICENCIAS_REF) return LICENCIAS_REF;
+  try {
+    if (typeof firebase !== "undefined" && __firebaseOK) {
+      LICENCIAS_REF = firebase.firestore().collection("licencias");
+      return LICENCIAS_REF;
+    }
+  } catch(e) { console.warn("getLicRef error:", e); }
+  return null;
+}
 
 function generarCodigo(tipo) {
   var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -6116,12 +6126,13 @@ function LicenseGate(_ref) {
     var c = code.trim().toUpperCase();
     if (!c) { setError("Ingresa un código de acceso"); return; }
     setLoading(true); setError("");
-    if (LICENCIAS_REF) {
-      LICENCIAS_REF.doc(c).get().then(function(doc) {
+    var licRef = getLicRef();
+    if (licRef) {
+      licRef.doc(c).get().then(function(doc) {
         setLoading(false);
         if (!doc.exists) { setError("Código inválido. Verifica e intenta de nuevo."); return; }
         var lic = doc.data();
-        var created = new Date(lic.created);
+        var created = new Date(lic.created + "T12:00:00");
         var now = new Date();
         var diffDays = Math.floor((now - created) / (1000 * 60 * 60 * 24));
         if (lic.type === "pro" || lic.type === "permanente") {
@@ -6134,9 +6145,9 @@ function LicenseGate(_ref) {
           localStorage.setItem("trp_license", JSON.stringify({ code: c, type: "demo", created: lic.created, days: dias }));
           onActivated({ type: "demo", daysLeft: daysLeft });
         } else { setError("Código inválido."); }
-      }).catch(function() { setLoading(false); setError("Error de conexión. Verifica tu internet."); });
+      }).catch(function(e) { setLoading(false); setError("Error de conexión: " + e.message); });
     } else {
-      setLoading(false); setError("Sin conexión a la base de datos.");
+      setLoading(false); setError("Sin conexión a Firebase. Verifica tu internet.");
     }
   };
 
@@ -6230,8 +6241,9 @@ function AdminPanel() {
   var _ua5 = useState(""), _aa5 = _slicedToArray(_ua5, 2), msg = _aa5[0], setMsg = _aa5[1];
 
   useEffect(function() {
-    if (!LICENCIAS_REF) return;
-    LICENCIAS_REF.orderBy("created", "desc").limit(20).get().then(function(snap) {
+    var licRef = getLicRef();
+    if (!licRef) return;
+    licRef.orderBy("created", "desc").limit(20).get().then(function(snap) {
       var list = [];
       snap.forEach(function(d) { list.push(_objectSpread({ id: d.id }, d.data())); });
       setLicList(list);
@@ -6239,16 +6251,18 @@ function AdminPanel() {
   }, [msg]);
 
   var crear = function() {
-    if (!LICENCIAS_REF) { setMsg("Sin conexión a Firebase"); return; }
+    var licRef = getLicRef();
+    if (!licRef) { setMsg("Sin conexión a Firebase"); return; }
     var c = generarCodigo(newType);
-    LICENCIAS_REF.doc(c).set({ type: newType, days: parseInt(newDays), created: new Date().toISOString().split("T")[0], active: true })
+    licRef.doc(c).set({ type: newType, days: parseInt(newDays), created: new Date().toISOString().split("T")[0], active: true })
       .then(function() { setNewCode(c); setMsg("✅ Código creado: " + c); })
-      .catch(function() { setMsg("❌ Error al crear código"); });
+      .catch(function(e) { setMsg("❌ Error: " + e.message); });
   };
 
   var eliminar = function(id) {
-    if (!LICENCIAS_REF) return;
-    LICENCIAS_REF.doc(id).delete().then(function() { setMsg("Código " + id + " eliminado"); });
+    var licRef = getLicRef();
+    if (!licRef) return;
+    licRef.doc(id).delete().then(function() { setMsg("Código " + id + " eliminado"); });
   };
 
   return /*#__PURE__*/React.createElement("div", {
