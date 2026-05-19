@@ -6433,7 +6433,7 @@ function _resetCode(clientId) {
 }
 
 function UserLoginGate(_ref) {
-  var clientId = _ref.clientId, onAuth = _ref.onAuth;
+  var clientId = _ref.clientId, onAuth = _ref.onAuth, licenseInfo = _ref.license;
   var _u1 = useState(null), _ua1 = _slicedToArray(_u1, 2), authData = _ua1[0], setAuthData = _ua1[1];
   var _u2 = useState(true), _ua2 = _slicedToArray(_u2, 2), loading = _ua2[0], setLoading = _ua2[1];
   var _u3 = useState("login"), _ua3 = _slicedToArray(_u3, 2), mode = _ua3[0], setMode = _ua3[1];
@@ -6547,7 +6547,7 @@ function UserLoginGate(_ref) {
         "Solicita tu código de recuperación a ", /*#__PURE__*/React.createElement("strong", null, "GlobalAcce"), " por WhatsApp. Una vez que lo tengas, ingrésalo aquí."
       ),
       /*#__PURE__*/React.createElement("a", {
-        href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20necesito%20restablecer%20mi%20contrase%C3%B1a%20de%20TechRepair%20Pro.%20Mi%20c%C3%B3digo%20es%3A%20" + (license ? (license.clientId || "") : ""),
+        href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20necesito%20restablecer%20mi%20contrase%C3%B1a%20de%20TechRepair%20Pro.%20Mi%20c%C3%B3digo%20es%3A%20" + clientId.replace(/_/g, "-"),
         target: "_blank",
         style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#25D366", color: "#fff", padding: "10px", borderRadius: 4, fontWeight: 600, fontSize: 13, textDecoration: "none", marginBottom: 14 }
       }, "📱 Solicitar código por WhatsApp"),
