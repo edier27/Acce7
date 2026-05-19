@@ -6089,25 +6089,286 @@ function App() {
   }))));
 }
 
-// ─── SISTEMA DE LICENCIAS ────────────────────────────────
+// ─── SISTEMA DE LICENCIAS (códigos autovalidables) ───────
 
 var WHATSAPP = "573214016292";
 var PRECIO = "$ 350.000 / mes";
 var DIAS_DEMO = 8;
+var _LS = "GLA2024TECHREPAIR"; // clave secreta interna
 
-// Códigos válidos — tú los generas y compartes con cada cliente
-// Formato: { "CODIGO": { type: "demo"|"pro", days: N, created: "YYYY-MM-DD" } }
-var LICENCIAS_REF = null;
-function getLicRef() {
-  if (LICENCIAS_REF) return LICENCIAS_REF;
-  try {
-    if (typeof firebase !== "undefined" && __firebaseOK) {
-      LICENCIAS_REF = firebase.firestore().collection("licencias");
-      return LICENCIAS_REF;
-    }
-  } catch(e) { console.warn("getLicRef error:", e); }
-  return null;
+function _hash(str) {
+  var h = 5381;
+  for (var i = 0; i < str.length; i++) {
+    h = ((h << 5) + h) ^ str.charCodeAt(i);
+    h = h >>> 0;
+  }
+  return h.toString(36).toUpperCase().padStart(8,"0").slice(-8);
 }
+
+// Genera código DEMO: DEMO-YYYYMMDD-XXXXXXXX
+function crearCodigoDemo(dias) {
+  var exp = new Date();
+  exp.setDate(exp.getDate() + (parseInt(dias) || DIAS_DEMO));
+  var d = exp.getFullYear() + String(exp.getMonth()+1).padStart(2,"0") + String(exp.getDate()).padStart(2,"0");
+  return "DEMO-" + d + "-" + _hash(d + _LS);
+}
+
+// Genera código PRO: PRO-XXXXXXXX-YYYYYYYY
+function crearCodigoPro() {
+  var id = Date.now().toString(36).toUpperCase().slice(-6);
+  return "PRO-" + id + "-" + _hash(id + "PRO" + _LS);
+}
+
+// Genera código TRIAL 30 días
+function crearCodigoTrial() { return crearCodigoDemo(30).replace("DEMO-","TRIAL-"); }
+
+// Verifica cualquier código y retorna { valid, type, daysLeft, error }
+function verificarCodigo(raw) {
+  var c = raw.trim().toUpperCase();
+  var p = c.split("-");
+
+  // DEMO-YYYYMMDD-HASH o TRIAL-YYYYMMDD-HASH
+  if ((p[0] === "DEMO" || p[0] === "TRIAL") && p.length === 3) {
+    var dateStr = p[1], hash = p[2];
+    if (_hash(dateStr + _LS) !== hash) return { valid: false, error: "Código inválido. Verifica e intenta de nuevo." };
+    var y = dateStr.slice(0,4), mo = dateStr.slice(4,6), dy = dateStr.slice(6,8);
+    var exp2 = new Date(y+"-"+mo+"-"+dy+"T23:59:59");
+    if (isNaN(exp2.getTime())) return { valid: false, error: "Código con formato incorrecto." };
+    var now = new Date();
+    if (now > exp2) return { valid: false, error: "Este código ha expirado. Contacta a GlobalAcce.", expired: true };
+    var daysLeft = Math.ceil((exp2 - now) / (1000*60*60*24));
+    return { valid: true, type: "demo", daysLeft: daysLeft };
+  }
+
+  // PRO-ID-HASH
+  if (p[0] === "PRO" && p.length === 3) {
+    var id = p[1], hash2 = p[2];
+    if (_hash(id + "PRO" + _LS) !== hash2) return { valid: false, error: "Código inválido. Verifica e intenta de nuevo." };
+    return { valid: true, type: "pro", daysLeft: null };
+  }
+
+  return { valid: false, error: "Código inválido. Verifica e intenta de nuevo." };
+}
+
+function LicenseGate(_ref) {
+  var onActivated = _ref.onActivated;
+  var _us1 = useState(""), _s1 = _slicedToArray(_us1, 2), code = _s1[0], setCode = _s1[1];
+  var _us2 = useState(""), _s2 = _slicedToArray(_us2, 2), error = _s2[0], setError = _s2[1];
+
+  var activar = function() {
+    var result = verificarCodigo(code);
+    if (!result.valid) { setError(result.error); return; }
+    localStorage.setItem("trp_license", JSON.stringify({ code: code.trim().toUpperCase(), type: result.type, daysLeft: result.daysLeft, saved: new Date().toISOString() }));
+    onActivated(result);
+  };
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Segoe UI Variable','Segoe UI',system-ui,sans-serif" }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: "#fff", borderRadius: 8, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", padding: 40, width: "100%", maxWidth: 420, textAlign: "center" }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { width: 64, height: 64, background: "#0067C0", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" } },
+      /*#__PURE__*/React.createElement(Smartphone, { size: 30, color: "#fff" })
+    ),
+    /*#__PURE__*/React.createElement("h1", { style: { fontSize: 22, fontWeight: 700, color: "#1C1C1C", marginBottom: 6 } }, "TechRepair Pro"),
+    /*#__PURE__*/React.createElement("p", { style: { fontSize: 13, color: "#606060", marginBottom: 28 } }, "Ingresa tu código de acceso para continuar"),
+    /*#__PURE__*/React.createElement("input", {
+      type: "text", placeholder: "Ej: DEMO-20260527-ABC12345",
+      value: code,
+      onChange: function(e) { setCode(e.target.value.toUpperCase()); setError(""); },
+      onKeyDown: function(e) { if (e.key === "Enter") activar(); },
+      style: { width: "100%", padding: "12px 14px", border: "1px solid #E0E0E0", borderBottom: "2px solid #0067C0", borderRadius: 4, fontSize: 15, outline: "none", marginBottom: 12, textAlign: "center", letterSpacing: "0.08em", fontFamily: "inherit" }
+    }),
+    error && /*#__PURE__*/React.createElement("div", {
+      style: { background: "#FEE7E5", color: "#C42B1C", borderRadius: 4, padding: "10px 14px", fontSize: 13, marginBottom: 12, textAlign: "left" }
+    }, error),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: activar,
+      style: { width: "100%", padding: "12px", background: "#0067C0", color: "#fff", border: "none", borderRadius: 4, fontSize: 15, fontWeight: 600, cursor: "pointer", marginBottom: 24, fontFamily: "inherit" }
+    }, "Activar Software"),
+    /*#__PURE__*/React.createElement("div", { style: { borderTop: "1px solid #E0E0E0", paddingTop: 20 } },
+      /*#__PURE__*/React.createElement("p", { style: { fontSize: 12, color: "#606060", marginBottom: 12 } }, "¿No tienes código? Contáctanos para una demo de ", DIAS_DEMO, " días gratis"),
+      /*#__PURE__*/React.createElement("a", {
+        href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20quiero%20una%20demo%20de%20TechRepair%20Pro",
+        target: "_blank",
+        style: { display: "inline-flex", alignItems: "center", gap: 8, background: "#25D366", color: "#fff", padding: "10px 20px", borderRadius: 4, fontSize: 13, fontWeight: 600, textDecoration: "none" }
+      }, "📱 Solicitar demo por WhatsApp"),
+      /*#__PURE__*/React.createElement("p", { style: { fontSize: 11, color: "#9B9B9B", marginTop: 12 } }, "Suscripción: ", PRECIO)
+    )
+  ));
+}
+
+function DemoBanner(_ref2) {
+  var daysLeft = _ref2.daysLeft;
+  if (!daysLeft) return null;
+  var urgent = daysLeft <= 2;
+  return /*#__PURE__*/React.createElement("div", {
+    style: { background: urgent ? "#C42B1C" : "#9D5D00", color: "#fff", padding: "6px 16px", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexShrink: 0 }
+  },
+    /*#__PURE__*/React.createElement("span", null, urgent ? "⚠️ " : "🕐 ", "Demo: ", daysLeft, " día", daysLeft !== 1 ? "s" : "", " restante", daysLeft !== 1 ? "s" : ""),
+    /*#__PURE__*/React.createElement("a", {
+      href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20quiero%20activar%20mi%20licencia%20de%20TechRepair%20Pro",
+      target: "_blank",
+      style: { background: "#fff", color: urgent ? "#C42B1C" : "#9D5D00", padding: "3px 10px", borderRadius: 4, fontSize: 11, fontWeight: 700, textDecoration: "none" }
+    }, "Activar ahora →")
+  );
+}
+
+function ExpiredScreen() {
+  return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Segoe UI Variable','Segoe UI',system-ui,sans-serif" }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: "#fff", borderRadius: 8, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", padding: 40, width: "100%", maxWidth: 400, textAlign: "center" }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "⏰"),
+    /*#__PURE__*/React.createElement("h2", { style: { fontSize: 20, fontWeight: 700, color: "#1C1C1C", marginBottom: 8 } }, "Tu demo ha expirado"),
+    /*#__PURE__*/React.createElement("p", { style: { fontSize: 13, color: "#606060", marginBottom: 24 } }, "Activa tu licencia por solo ", /*#__PURE__*/React.createElement("strong", null, PRECIO), " y sigue gestionando tu taller."),
+    /*#__PURE__*/React.createElement("a", {
+      href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20mi%20demo%20expir%C3%B3%2C%20quiero%20activar%20TechRepair%20Pro",
+      target: "_blank",
+      style: { display: "inline-flex", alignItems: "center", gap: 8, background: "#25D366", color: "#fff", padding: "12px 24px", borderRadius: 4, fontSize: 14, fontWeight: 600, textDecoration: "none", marginBottom: 12 }
+    }, "📱 Activar por WhatsApp"),
+    /*#__PURE__*/React.createElement("br", null),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: function() { localStorage.removeItem("trp_license"); window.location.reload(); },
+      style: { background: "none", border: "none", color: "#0067C0", fontSize: 12, cursor: "pointer", marginTop: 8, fontFamily: "inherit" }
+    }, "Ingresar otro código")
+  ));
+}
+
+function AdminPanel() {
+  var _ua1 = useState(DIAS_DEMO), _aa1 = _slicedToArray(_ua1, 2), dias = _aa1[0], setDias = _aa1[1];
+  var _ua2 = useState("demo"), _aa2 = _slicedToArray(_ua2, 2), tipo = _aa2[0], setTipo = _aa2[1];
+  var _ua3 = useState(""), _aa3 = _slicedToArray(_ua3, 2), codigoGen = _aa3[0], setCodigoGen = _aa3[1];
+  var _ua4 = useState(false), _aa4 = _slicedToArray(_ua4, 2), copiado = _aa4[0], setCopiado = _aa4[1];
+
+  var generar = function() {
+    var c = tipo === "pro" ? crearCodigoPro() : tipo === "trial" ? crearCodigoTrial() : crearCodigoDemo(dias);
+    setCodigoGen(c); setCopiado(false);
+  };
+
+  var copiar = function() {
+    if (navigator.clipboard) navigator.clipboard.writeText(codigoGen);
+    setCopiado(true);
+    setTimeout(function() { setCopiado(false); }, 2000);
+  };
+
+  var msgWA = "https://wa.me/" + WHATSAPP.replace(/\D/g,"") + "?text=";
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight: "100dvh", background: "#F3F3F3", padding: 24, fontFamily: "'Segoe UI Variable','Segoe UI',system-ui,sans-serif" }
+  }, /*#__PURE__*/React.createElement("div", { style: { maxWidth: 520, margin: "0 auto" } },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 24 } },
+      /*#__PURE__*/React.createElement("div", { style: { width: 40, height: 40, background: "#0067C0", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" } },
+        /*#__PURE__*/React.createElement(Smartphone, { size: 20, color: "#fff" })
+      ),
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 18, color: "#1C1C1C" } }, "Panel de Licencias"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#606060" } }, "GlobalAcce · TechRepair Pro")
+      ),
+      /*#__PURE__*/React.createElement("a", {
+        href: window.location.href.split("?")[0],
+        style: { marginLeft: "auto", background: "#0067C0", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600, textDecoration: "none" }
+      }, "← Volver al Software")
+    ),
+
+    /*#__PURE__*/React.createElement("div", { style: { background: "#fff", borderRadius: 8, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 16 } },
+      /*#__PURE__*/React.createElement("h3", { style: { fontSize: 15, fontWeight: 600, marginBottom: 16, color: "#1C1C1C" } }, "Generar código de acceso"),
+      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 } },
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { style: { fontSize: 12, color: "#606060", display: "block", marginBottom: 4 } }, "Tipo"),
+          /*#__PURE__*/React.createElement("select", {
+            value: tipo, onChange: function(e) { setTipo(e.target.value); setCodigoGen(""); },
+            style: { width: "100%", padding: "9px 10px", border: "1px solid #E0E0E0", borderRadius: 4, fontSize: 14, fontFamily: "inherit" }
+          },
+            /*#__PURE__*/React.createElement("option", { value: "demo" }, "Demo (" + DIAS_DEMO + " días)"),
+            /*#__PURE__*/React.createElement("option", { value: "trial" }, "Trial (30 días)"),
+            /*#__PURE__*/React.createElement("option", { value: "pro" }, "Pro (Permanente)")
+          )
+        ),
+        tipo !== "pro" && /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { style: { fontSize: 12, color: "#606060", display: "block", marginBottom: 4 } }, "Días"),
+          /*#__PURE__*/React.createElement("input", {
+            type: "number", value: dias, min: 1, max: 365,
+            onChange: function(e) { setDias(e.target.value); setCodigoGen(""); },
+            style: { width: "100%", padding: "9px 10px", border: "1px solid #E0E0E0", borderRadius: 4, fontSize: 14, fontFamily: "inherit" }
+          })
+        )
+      ),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: generar,
+        style: { width: "100%", background: "#0067C0", color: "#fff", border: "none", borderRadius: 4, padding: "11px", cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }
+      }, "Generar Código"),
+
+      codigoGen && /*#__PURE__*/React.createElement("div", { style: { marginTop: 16, background: "rgba(16,124,16,0.08)", borderRadius: 6, padding: 16, textAlign: "center" } },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#606060", marginBottom: 6 } }, "✅ Código generado — cópialo y envíalo al cliente"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 700, letterSpacing: "0.12em", color: "#107C10", marginBottom: 12, wordBreak: "break-all" } }, codigoGen),
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" } },
+          /*#__PURE__*/React.createElement("button", {
+            onClick: copiar,
+            style: { background: copiado ? "#107C10" : "#0067C0", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }
+          }, copiado ? "✅ Copiado" : "📋 Copiar código"),
+          /*#__PURE__*/React.createElement("a", {
+            href: "https://wa.me/?text=Hola%2C%20tu%20c%C3%B3digo%20de%20acceso%20para%20TechRepair%20Pro%20es%3A%20" + codigoGen + "%0AIngr%C3%A9salo%20en%3A%20https%3A%2F%2Fedier27.github.io%2FAcce7",
+            target: "_blank",
+            style: { background: "#25D366", color: "#fff", borderRadius: 4, padding: "8px 16px", fontSize: 13, fontWeight: 600, textDecoration: "none" }
+          }, "📱 Enviar por WhatsApp")
+        )
+      )
+    ),
+
+    /*#__PURE__*/React.createElement("div", { style: { background: "#fff", borderRadius: 8, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" } },
+      /*#__PURE__*/React.createElement("h3", { style: { fontSize: 14, fontWeight: 600, marginBottom: 12, color: "#1C1C1C" } }, "ℹ️ Información"),
+      [
+        "Los códigos son autovalidables — no necesitan internet para funcionar.",
+        "DEMO: válido " + DIAS_DEMO + " días desde que se genera.",
+        "TRIAL: válido 30 días desde que se genera.",
+        "PRO: acceso permanente sin vencimiento.",
+        "Guarda los códigos que generes para llevar registro de tus clientes."
+      ].map(function(txt, i) {
+        return /*#__PURE__*/React.createElement("div", { key: i, style: { fontSize: 12, color: "#606060", marginBottom: 6, display: "flex", gap: 6 } },
+          /*#__PURE__*/React.createElement("span", { style: { color: "#0067C0", flexShrink: 0 } }, "•"),
+          txt
+        );
+      })
+    )
+  ));
+}
+
+function Root() {
+  var _ur1 = useState(null), _rr1 = _slicedToArray(_ur1, 2), license = _rr1[0], setLicense = _rr1[1];
+  var _ur2 = useState(true), _rr2 = _slicedToArray(_ur2, 2), checking = _rr2[0], setChecking = _rr2[1];
+
+  var isAdmin = window.location.search.includes("admin=globalacce");
+  if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
+
+  useEffect(function() {
+    var saved = localStorage.getItem("trp_license");
+    if (saved) {
+      try {
+        var lic = JSON.parse(saved);
+        var result = verificarCodigo(lic.code || "");
+        if (result.valid) setLicense(result);
+        else { localStorage.removeItem("trp_license"); }
+      } catch(e) { localStorage.removeItem("trp_license"); }
+    }
+    setChecking(false);
+  }, []);
+
+  if (checking) return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center" }
+  }, /*#__PURE__*/React.createElement(RefreshCw, { size: 28, color: "#0067C0" }));
+
+  if (!license) return /*#__PURE__*/React.createElement(LicenseGate, { onActivated: setLicense });
+  if (license.type === "expired") return /*#__PURE__*/React.createElement(ExpiredScreen, null);
+
+  return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100dvh" } },
+    license.type === "demo" && /*#__PURE__*/React.createElement(DemoBanner, { daysLeft: license.daysLeft }),
+    /*#__PURE__*/React.createElement(App, null)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(Root));
 
 function generarCodigo(tipo) {
   var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
