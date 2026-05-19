@@ -513,7 +513,7 @@ function _licVerify(code) {
   return { ok: false, type: "invalid" };
 }
 
-function _licCheck() {
+function _licCheck_OLD() {
   try {
     var stored = JSON.parse(localStorage.getItem("trp_lic_v1") || "null");
     if (!stored) return { ok: false, type: null };
@@ -528,6 +528,7 @@ function _licCheck() {
 function _licClear() {
   try { localStorage.removeItem("trp_lic_v1"); } catch(e) {}
 }
+function _licCheck() { return { ok: true, type: "pro", permanent: true }; }
 
 // Generador de códigos (para usar en consola del navegador)
 // Escribe en consola: generarCodigoDemo() o generarCodigoPro()
