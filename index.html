@@ -5674,7 +5674,8 @@ function useWindowSize() {
 
 // ─── MAIN APP ────────────────────────────────────────────
 
-function App() {
+function App(_appProps) {
+  var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var _navItems$find;
   var _licState = useState(function() { return _licCheck(); }),
     _licStateA = _slicedToArray(_licState, 2),
@@ -5688,6 +5689,13 @@ function App() {
   if (!lic.ok && lic.type === "expired") {
     return /*#__PURE__*/React.createElement(LicExpiredScreen, null);
   }
+  // Referencia Firebase única por cliente
+  var clientDataRef = null;
+  try {
+    if (__firebaseOK && typeof firebase !== "undefined") {
+      clientDataRef = firebase.firestore().collection("clientes").doc(clientId);
+    }
+  } catch(e) { console.warn("clientDataRef error:", e); }
   var _useState59 = useState(null),
     _useState60 = _slicedToArray(_useState59, 2),
     data = _useState60[0],
@@ -5732,21 +5740,21 @@ function App() {
   };
   useEffect(function () {
     // ── Cargar datos: Firebase (en línea) o localStorage (sin conexión) ──
-    if (__firebaseOK && __dataRef) {
-      var unsubscribe = __dataRef.onSnapshot(function(doc) {
+    if (clientDataRef) {
+      var unsubscribe = clientDataRef.onSnapshot(function(doc) {
         if (doc.exists) {
           try {
             var d = doc.data().appData ? JSON.parse(doc.data().appData) : INIT;
             setData(_objectSpread(_objectSpread({}, INIT), d));
           } catch(e) { setData(INIT); }
         } else {
-          __dataRef.set({ appData: JSON.stringify(INIT), updatedAt: new Date().toISOString() });
+          clientDataRef.set({ appData: JSON.stringify(INIT), updatedAt: new Date().toISOString() });
           setData(INIT);
         }
       }, function(error) {
         console.warn("Error Firebase, usando localStorage:", error);
         try {
-          var stored = localStorage.getItem("trp_data_v2");
+          var _lsKey2 = "trp_data_" + clientId; var stored = localStorage.getItem(_lsKey2);
           setData(stored ? JSON.parse(stored) : INIT);
         } catch(e) { setData(INIT); }
       });
@@ -5754,7 +5762,7 @@ function App() {
     } else {
       // Modo offline: usar localStorage
       try {
-        var stored = localStorage.getItem("trp_data_v2");
+        var _lsKey2 = "trp_data_" + clientId; var stored = localStorage.getItem(_lsKey2);
         setData(stored ? JSON.parse(stored) : INIT);
       } catch(e) { setData(INIT); }
     }
@@ -5762,8 +5770,8 @@ function App() {
   var save = function save(d) {
     setData(d);
     // Guardar en Firebase si está disponible
-    if (__firebaseOK && __dataRef) {
-      __dataRef.set({
+    if (clientDataRef) {
+      clientDataRef.set({
         appData: JSON.stringify(d),
         updatedAt: new Date().toISOString()
       }).catch(function(e) { console.warn("Error guardando en Firebase:", e); });
@@ -6127,8 +6135,8 @@ function crearCodigoTrial() { return crearCodigoDemo(30).replace("DEMO-","TRIAL-
 function verificarCodigo(raw) {
   var c = raw.trim().toUpperCase();
   var p = c.split("-");
+  var clientId = c.replace(/-/g, "_");
 
-  // DEMO-YYYYMMDD-HASH o TRIAL-YYYYMMDD-HASH
   if ((p[0] === "DEMO" || p[0] === "TRIAL") && p.length === 3) {
     var dateStr = p[1], hash = p[2];
     if (_hash(dateStr + _LS) !== hash) return { valid: false, error: "Código inválido. Verifica e intenta de nuevo." };
@@ -6138,14 +6146,13 @@ function verificarCodigo(raw) {
     var now = new Date();
     if (now > exp2) return { valid: false, error: "Este código ha expirado. Contacta a GlobalAcce.", expired: true };
     var daysLeft = Math.ceil((exp2 - now) / (1000*60*60*24));
-    return { valid: true, type: "demo", daysLeft: daysLeft };
+    return { valid: true, type: "demo", daysLeft: daysLeft, clientId: clientId };
   }
 
-  // PRO-ID-HASH
   if (p[0] === "PRO" && p.length === 3) {
     var id = p[1], hash2 = p[2];
     if (_hash(id + "PRO" + _LS) !== hash2) return { valid: false, error: "Código inválido. Verifica e intenta de nuevo." };
-    return { valid: true, type: "pro", daysLeft: null };
+    return { valid: true, type: "pro", daysLeft: null, clientId: clientId };
   }
 
   return { valid: false, error: "Código inválido. Verifica e intenta de nuevo." };
@@ -6364,7 +6371,7 @@ function Root() {
 
   return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100dvh" } },
     license.type === "demo" && /*#__PURE__*/React.createElement(DemoBanner, { daysLeft: license.daysLeft }),
-    /*#__PURE__*/React.createElement(App, null)
+    /*#__PURE__*/React.createElement(App, { clientId: license.clientId || "demo" })
   );
 }
 
