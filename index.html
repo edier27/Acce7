@@ -6388,7 +6388,7 @@ function AdminPanel() {
             style: { flex: 1, padding: "8px 12px", border: "1px solid #E0E0E0", borderRadius: 4, fontSize: 13, fontFamily: "inherit", minWidth: 200 }
           }),
           /*#__PURE__*/React.createElement("button", {
-            onClick: function() { var cid = rcIn.trim().replace(/-/g,"_"); if(cid) setRcOut(_resetCode(cid)); },
+            onClick: function() { var cid = rcIn.trim().toUpperCase().replace(/-/g,"_"); if(cid) setRcOut(_resetCode(cid)); },
             style: { background: "#0067C0", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }
           }, "Obtener código"),
           rcOut && /*#__PURE__*/React.createElement("div", { style: { width: "100%", marginTop: 6, padding: "10px 14px", background: "rgba(16,124,16,0.08)", borderRadius: 4, fontSize: 16, fontWeight: 700, letterSpacing: "0.2em", color: "#107C10", textAlign: "center" } }, rcOut)
@@ -6429,7 +6429,9 @@ function _hashPwd(pwd, clientId) {
 }
 
 function _resetCode(clientId) {
-  return _hash(clientId + "RESET" + _LS).slice(0, 6).toUpperCase();
+  // Normalizar: convertir guiones y guiones bajos al mismo formato
+  var normalized = clientId.trim().toUpperCase().replace(/-/g, "_");
+  return _hash(normalized + "RESET" + _LS).slice(0, 6).toUpperCase();
 }
 
 function UserLoginGate(_ref) {
@@ -6494,7 +6496,8 @@ function UserLoginGate(_ref) {
   };
 
   var handleReset = function() {
-    if (resetCode.trim().toUpperCase() !== _resetCode(clientId)) { setError("Código de recuperación incorrecto"); return; }
+    var normalizedClientId = clientId.trim().toUpperCase().replace(/-/g, "_");
+    if (resetCode.trim().toUpperCase() !== _resetCode(normalizedClientId)) { setError("Código de recuperación incorrecto"); return; }
     guardarAuth(null);
     try { localStorage.removeItem(lsKey); localStorage.removeItem("trp_session_" + clientId); } catch(e) {}
     setAuthData(null); setMode("crear"); setError(""); setResetCode(""); setPwd(""); setPwd2(""); setUser("");
