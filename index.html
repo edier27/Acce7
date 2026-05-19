@@ -5345,18 +5345,24 @@ function SettingsView(_ref20) {
     saveSettings(form);
     notify("✅ Configuración guardada");
   };
+  var isBypass = false;
+  try { isBypass = localStorage.getItem("trp_bypass_" + clientId) === "true"; } catch(e) {}
   var handleChangePwd = function() {
     var lsKey = "trp_auth_" + clientId;
     var authData = null;
     try { authData = JSON.parse(localStorage.getItem(lsKey)); } catch(e) {}
-    if (!authData) { notify("❌ No hay cuenta registrada", "error"); return; }
-    if (_hashPwd(curPwd, clientId) !== authData.passwordHash) { notify("❌ Contraseña actual incorrecta", "error"); return; }
+    if (!isBypass && authData && _hashPwd(curPwd, clientId) !== authData.passwordHash) {
+      notify("❌ Contraseña actual incorrecta", "error"); return;
+    }
     if (newPwd.length < 4) { notify("❌ La nueva contraseña debe tener al menos 4 caracteres", "error"); return; }
     if (newPwd !== newPwd2) { notify("❌ Las contraseñas no coinciden", "error"); return; }
-    var newAuth = _objectSpread(_objectSpread({}, authData), {}, { passwordHash: _hashPwd(newPwd, clientId) });
+    var newAuth = authData
+      ? _objectSpread(_objectSpread({}, authData), {}, { passwordHash: _hashPwd(newPwd, clientId) })
+      : { username: "usuario", passwordHash: _hashPwd(newPwd, clientId), createdAt: new Date().toISOString() };
     var aRef = _authRef(clientId);
     if (aRef) aRef.set(newAuth).catch(function(){});
     try { localStorage.setItem(lsKey, JSON.stringify(newAuth)); } catch(e) {}
+    try { localStorage.removeItem("trp_bypass_" + clientId); } catch(e) {}
     setCurPwd(""); setNewPwd(""); setNewPwd2("");
     notify("✅ Contraseña actualizada correctamente");
   };
@@ -5683,9 +5689,12 @@ function SettingsView(_ref20) {
 
   /*#__PURE__*/React.createElement(Card, { s: { marginTop: 8 } },
     /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, "🔐 Seguridad"),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted, marginBottom: 16 } }, "Cambiar contraseña de acceso al software"),
+    isBypass && /*#__PURE__*/React.createElement("div", {
+      style: { background: "rgba(157,93,0,0.1)", border: "1px solid rgba(157,93,0,0.3)", borderRadius: 6, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: T.yellow, fontWeight: 600 }
+    }, "⚠️ Estás en modo recuperación. Establece una nueva contraseña para asegurar tu cuenta."),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted, marginBottom: 16 } }, isBypass ? "Establece tu nueva contraseña de acceso" : "Cambiar contraseña de acceso al software"),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, maxWidth: 340 } },
-      /*#__PURE__*/React.createElement("input", {
+      !isBypass && /*#__PURE__*/React.createElement("input", {
         type: "password", placeholder: "Contraseña actual",
         value: curPwd, onChange: function(e){ setCurPwd(e.target.value); },
         style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
@@ -5700,9 +5709,9 @@ function SettingsView(_ref20) {
         value: newPwd2, onChange: function(e){ setNewPwd2(e.target.value); },
         style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
       }),
-      /*#__PURE__*/React.createElement(Btn, { onClick: handleChangePwd, small: true }, "Cambiar contraseña")
+      /*#__PURE__*/React.createElement(Btn, { onClick: handleChangePwd, small: true }, isBypass ? "Establecer nueva contraseña" : "Cambiar contraseña")
     ),
-    /*#__PURE__*/React.createElement("div", { style: { marginTop: 20, paddingTop: 16, borderTop: "1px solid ".concat(T.border) } },
+    !isBypass && /*#__PURE__*/React.createElement("div", { style: { marginTop: 20, paddingTop: 16, borderTop: "1px solid ".concat(T.border) } },
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted, marginBottom: 10 } }, "Cerrar sesión en este dispositivo"),
       /*#__PURE__*/React.createElement(Btn, { onClick: handleLogout, variant: "ghost", small: true }, "Cerrar sesión")
     )
@@ -6473,8 +6482,13 @@ function UserLoginGate(_ref) {
   }, []);
 
   var guardarAuth = function(data) {
-    if (aRef) aRef.set(data).catch(function(){});
-    try { localStorage.setItem(lsKey, JSON.stringify(data)); } catch(e) {}
+    if (data === null) {
+      if (aRef) aRef.delete().catch(function(){});
+      try { localStorage.removeItem(lsKey); } catch(e) {}
+    } else {
+      if (aRef) aRef.set(data).catch(function(){});
+      try { localStorage.setItem(lsKey, JSON.stringify(data)); } catch(e) {}
+    }
   };
 
   var handleCrear = function() {
@@ -6497,10 +6511,14 @@ function UserLoginGate(_ref) {
 
   var handleReset = function() {
     var normalizedClientId = clientId.trim().toUpperCase().replace(/-/g, "_");
-    if (resetCode.trim().toUpperCase() !== _resetCode(normalizedClientId)) { setError("Código de recuperación incorrecto"); return; }
-    guardarAuth(null);
-    try { localStorage.removeItem(lsKey); localStorage.removeItem("trp_session_" + clientId); } catch(e) {}
-    setAuthData(null); setMode("crear"); setError(""); setResetCode(""); setPwd(""); setPwd2(""); setUser("");
+    if (resetCode.trim().toUpperCase() !== _resetCode(normalizedClientId)) {
+      setError("Código de recuperación incorrecto");
+      return;
+    }
+    // Marcar acceso temporal por recuperación (no borra datos)
+    try { localStorage.setItem("trp_bypass_" + clientId, "true"); } catch(e) {}
+    localStorage.setItem("trp_session_" + clientId, "active");
+    onAuth(true);
   };
 
   if (loading) return /*#__PURE__*/React.createElement("div", {
