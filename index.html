@@ -5317,11 +5317,15 @@ function SaleModal(_ref19) {
 function SettingsView(_ref20) {
   var settings = _ref20.settings,
     saveSettings = _ref20.saveSettings,
-    notify = _ref20.notify;
+    notify = _ref20.notify,
+    clientId = _ref20.clientId;
   var _useState57 = useState(_objectSpread({}, settings)),
     _useState58 = _slicedToArray(_useState57, 2),
     form = _useState58[0],
     setForm = _useState58[1];
+  var _spwd1 = useState(""), _spwda1 = _slicedToArray(_spwd1, 2), newPwd = _spwda1[0], setNewPwd = _spwda1[1];
+  var _spwd2 = useState(""), _spwda2 = _slicedToArray(_spwd2, 2), newPwd2 = _spwda2[0], setNewPwd2 = _spwda2[1];
+  var _spwd3 = useState(""), _spwda3 = _slicedToArray(_spwd3, 2), curPwd = _spwda3[0], setCurPwd = _spwda3[1];
   var set = function set(k, v) {
     return setForm(function (f) {
       return _objectSpread(_objectSpread({}, f), {}, _defineProperty({}, k, v));
@@ -5340,6 +5344,25 @@ function SettingsView(_ref20) {
   var handleSave = function handleSave() {
     saveSettings(form);
     notify("✅ Configuración guardada");
+  };
+  var handleChangePwd = function() {
+    var lsKey = "trp_auth_" + clientId;
+    var authData = null;
+    try { authData = JSON.parse(localStorage.getItem(lsKey)); } catch(e) {}
+    if (!authData) { notify("❌ No hay cuenta registrada", "error"); return; }
+    if (_hashPwd(curPwd, clientId) !== authData.passwordHash) { notify("❌ Contraseña actual incorrecta", "error"); return; }
+    if (newPwd.length < 4) { notify("❌ La nueva contraseña debe tener al menos 4 caracteres", "error"); return; }
+    if (newPwd !== newPwd2) { notify("❌ Las contraseñas no coinciden", "error"); return; }
+    var newAuth = _objectSpread(_objectSpread({}, authData), {}, { passwordHash: _hashPwd(newPwd, clientId) });
+    var aRef = _authRef(clientId);
+    if (aRef) aRef.set(newAuth).catch(function(){});
+    try { localStorage.setItem(lsKey, JSON.stringify(newAuth)); } catch(e) {}
+    setCurPwd(""); setNewPwd(""); setNewPwd2("");
+    notify("✅ Contraseña actualizada correctamente");
+  };
+  var handleLogout = function() {
+    try { localStorage.removeItem("trp_session_" + clientId); } catch(e) {}
+    window.location.reload();
   };
   var labelStyle = {
     fontSize: 11,
@@ -5656,7 +5679,34 @@ function SettingsView(_ref20) {
     style: {
       alignSelf: "flex-start"
     }
-  }, "Guardar Configuraci\xF3n"));
+  }, "Guardar Configuraci\xF3n"),
+
+  /*#__PURE__*/React.createElement(Card, { s: { marginTop: 8 } },
+    /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, "🔐 Seguridad"),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted, marginBottom: 16 } }, "Cambiar contraseña de acceso al software"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, maxWidth: 340 } },
+      /*#__PURE__*/React.createElement("input", {
+        type: "password", placeholder: "Contraseña actual",
+        value: curPwd, onChange: function(e){ setCurPwd(e.target.value); },
+        style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
+      }),
+      /*#__PURE__*/React.createElement("input", {
+        type: "password", placeholder: "Nueva contraseña",
+        value: newPwd, onChange: function(e){ setNewPwd(e.target.value); },
+        style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
+      }),
+      /*#__PURE__*/React.createElement("input", {
+        type: "password", placeholder: "Confirmar nueva contraseña",
+        value: newPwd2, onChange: function(e){ setNewPwd2(e.target.value); },
+        style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
+      }),
+      /*#__PURE__*/React.createElement(Btn, { onClick: handleChangePwd, small: true }, "Cambiar contraseña")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { marginTop: 20, paddingTop: 16, borderTop: "1px solid ".concat(T.border) } },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted, marginBottom: 10 } }, "Cerrar sesión en este dispositivo"),
+      /*#__PURE__*/React.createElement(Btn, { onClick: handleLogout, variant: "ghost", small: true }, "Cerrar sesión")
+    )
+  ));
 }
 
 // ─── Responsive Hook ──────────────────────────────────────
@@ -6047,7 +6097,7 @@ function App(_appProps) {
   view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
   view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
   view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
-  view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify })),
+  view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId })),
 
   isMobile && /*#__PURE__*/React.createElement("nav", {
     className: "trp-bottom-nav",
@@ -6325,6 +6375,27 @@ function AdminPanel() {
       )
     ),
 
+    /*#__PURE__*/React.createElement("div", { style: { background: "#fff", borderRadius: 8, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 0 } },
+      /*#__PURE__*/React.createElement("h3", { style: { fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#1C1C1C" } }, "🔑 Código de recuperación de contraseña"),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#606060", marginBottom: 12 } }, "Si un cliente olvidó su contraseña, ingresa su código de licencia para obtener el código de recuperación:"),
+      (function() {
+        var _ri = useState(""), _ria = _slicedToArray(_ri, 2), rcIn = _ria[0], setRcIn = _ria[1];
+        var _ro = useState(""), _roa = _slicedToArray(_ro, 2), rcOut = _roa[0], setRcOut = _roa[1];
+        return /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+          /*#__PURE__*/React.createElement("input", {
+            type: "text", placeholder: "Ej: DEMO-20260526-ABC12345",
+            value: rcIn, onChange: function(e){ setRcIn(e.target.value.toUpperCase()); setRcOut(""); },
+            style: { flex: 1, padding: "8px 12px", border: "1px solid #E0E0E0", borderRadius: 4, fontSize: 13, fontFamily: "inherit", minWidth: 200 }
+          }),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function() { var cid = rcIn.trim().replace(/-/g,"_"); if(cid) setRcOut(_resetCode(cid)); },
+            style: { background: "#0067C0", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }
+          }, "Obtener código"),
+          rcOut && /*#__PURE__*/React.createElement("div", { style: { width: "100%", marginTop: 6, padding: "10px 14px", background: "rgba(16,124,16,0.08)", borderRadius: 4, fontSize: 16, fontWeight: 700, letterSpacing: "0.2em", color: "#107C10", textAlign: "center" } }, rcOut)
+        );
+      })()
+    ),
+
     /*#__PURE__*/React.createElement("div", { style: { background: "#fff", borderRadius: 8, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" } },
       /*#__PURE__*/React.createElement("h3", { style: { fontSize: 14, fontWeight: 600, marginBottom: 12, color: "#1C1C1C" } }, "ℹ️ Información"),
       [
@@ -6342,9 +6413,157 @@ function AdminPanel() {
     )
   ));
 }
+
+// ─── SISTEMA DE USUARIO / CONTRASEÑA ─────────────────────
+
+function _authRef(clientId) {
+  try {
+    if (__firebaseOK && typeof firebase !== "undefined")
+      return firebase.firestore().collection("clientes").doc(clientId + "_auth");
+  } catch(e) {}
+  return null;
+}
+
+function _hashPwd(pwd, clientId) {
+  return _hash(pwd.trim() + clientId + "PWD2024");
+}
+
+function _resetCode(clientId) {
+  return _hash(clientId + "RESET" + _LS).slice(0, 6).toUpperCase();
+}
+
+function UserLoginGate(_ref) {
+  var clientId = _ref.clientId, onAuth = _ref.onAuth;
+  var _u1 = useState(null), _ua1 = _slicedToArray(_u1, 2), authData = _ua1[0], setAuthData = _ua1[1];
+  var _u2 = useState(true), _ua2 = _slicedToArray(_u2, 2), loading = _ua2[0], setLoading = _ua2[1];
+  var _u3 = useState("login"), _ua3 = _slicedToArray(_u3, 2), mode = _ua3[0], setMode = _ua3[1];
+  var _u4 = useState(""), _ua4 = _slicedToArray(_u4, 2), user = _ua4[0], setUser = _ua4[1];
+  var _u5 = useState(""), _ua5 = _slicedToArray(_u5, 2), pwd = _ua5[0], setPwd = _ua5[1];
+  var _u6 = useState(""), _ua6 = _slicedToArray(_u6, 2), pwd2 = _ua6[0], setPwd2 = _ua6[1];
+  var _u7 = useState(""), _ua7 = _slicedToArray(_u7, 2), error = _ua7[0], setError = _ua7[1];
+  var _u8 = useState(""), _ua8 = _slicedToArray(_u8, 2), resetCode = _ua8[0], setResetCode = _ua8[1];
+
+  var aRef = _authRef(clientId);
+  var lsKey = "trp_auth_" + clientId;
+
+  useEffect(function() {
+    // Verificar si ya hay sesión activa
+    var session = localStorage.getItem("trp_session_" + clientId);
+    if (session === "active") { onAuth(true); return; }
+    // Cargar datos de auth
+    if (aRef) {
+      aRef.get().then(function(doc) {
+        setAuthData(doc.exists ? doc.data() : null);
+        setMode(doc.exists ? "login" : "crear");
+        setLoading(false);
+      }).catch(function() {
+        var local = localStorage.getItem(lsKey);
+        setAuthData(local ? JSON.parse(local) : null);
+        setMode(local ? "login" : "crear");
+        setLoading(false);
+      });
+    } else {
+      var local = localStorage.getItem(lsKey);
+      setAuthData(local ? JSON.parse(local) : null);
+      setMode(local ? "login" : "crear");
+      setLoading(false);
+    }
+  }, []);
+
+  var guardarAuth = function(data) {
+    if (aRef) aRef.set(data).catch(function(){});
+    try { localStorage.setItem(lsKey, JSON.stringify(data)); } catch(e) {}
+  };
+
+  var handleCrear = function() {
+    if (!user.trim()) { setError("Ingresa un nombre de usuario"); return; }
+    if (pwd.length < 4) { setError("La contraseña debe tener al menos 4 caracteres"); return; }
+    if (pwd !== pwd2) { setError("Las contraseñas no coinciden"); return; }
+    var data = { username: user.trim().toLowerCase(), passwordHash: _hashPwd(pwd, clientId), createdAt: new Date().toISOString() };
+    guardarAuth(data);
+    localStorage.setItem("trp_session_" + clientId, "active");
+    onAuth(true);
+  };
+
+  var handleLogin = function() {
+    if (!authData) { setError("No hay cuenta registrada"); return; }
+    if (user.trim().toLowerCase() !== authData.username) { setError("Usuario incorrecto"); return; }
+    if (_hashPwd(pwd, clientId) !== authData.passwordHash) { setError("Contraseña incorrecta"); return; }
+    localStorage.setItem("trp_session_" + clientId, "active");
+    onAuth(true);
+  };
+
+  var handleReset = function() {
+    if (resetCode.trim().toUpperCase() !== _resetCode(clientId)) { setError("Código de recuperación incorrecto"); return; }
+    guardarAuth(null);
+    try { localStorage.removeItem(lsKey); localStorage.removeItem("trp_session_" + clientId); } catch(e) {}
+    setAuthData(null); setMode("crear"); setError(""); setResetCode(""); setPwd(""); setPwd2(""); setUser("");
+  };
+
+  if (loading) return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center" }
+  }, /*#__PURE__*/React.createElement(RefreshCw, { size: 28, color: "#0067C0" }));
+
+  var IS2 = { width: "100%", padding: "11px 14px", border: "1px solid #E0E0E0", borderBottom: "2px solid #0067C0", borderRadius: 4, fontSize: 15, outline: "none", fontFamily: "inherit", marginBottom: 10, boxSizing: "border-box" };
+  var BtnPrimary = { width: "100%", padding: "12px", background: "#0067C0", color: "#fff", border: "none", borderRadius: 4, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 };
+  var BtnLink = { background: "none", border: "none", color: "#0067C0", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" };
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Segoe UI Variable','Segoe UI',system-ui,sans-serif" }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: "#fff", borderRadius: 8, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", padding: 36, width: "100%", maxWidth: 400 }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", marginBottom: 24 } },
+      /*#__PURE__*/React.createElement("div", { style: { width: 56, height: 56, background: "#0067C0", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" } },
+        /*#__PURE__*/React.createElement(Smartphone, { size: 26, color: "#fff" })
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 20, color: "#1C1C1C" } }, "TechRepair Pro"),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: "#606060", marginTop: 4 } },
+        mode === "crear" ? "Crea tu cuenta para comenzar" :
+        mode === "reset" ? "Restablecer contraseña" : "Inicia sesión en tu cuenta"
+      )
+    ),
+
+    error && /*#__PURE__*/React.createElement("div", { style: { background: "#FEE7E5", color: "#C42B1C", borderRadius: 4, padding: "10px 14px", fontSize: 13, marginBottom: 12 } }, error),
+
+    mode === "login" && /*#__PURE__*/React.createElement(React.Fragment, null,
+      /*#__PURE__*/React.createElement("input", { type: "text", placeholder: "Usuario", value: user, onChange: function(e){ setUser(e.target.value); setError(""); }, onKeyDown: function(e){ if(e.key==="Enter") handleLogin(); }, style: IS2 }),
+      /*#__PURE__*/React.createElement("input", { type: "password", placeholder: "Contraseña", value: pwd, onChange: function(e){ setPwd(e.target.value); setError(""); }, onKeyDown: function(e){ if(e.key==="Enter") handleLogin(); }, style: IS2 }),
+      /*#__PURE__*/React.createElement("button", { onClick: handleLogin, style: BtnPrimary }, "Iniciar sesión"),
+      /*#__PURE__*/React.createElement("div", { style: { textAlign: "center" } },
+        /*#__PURE__*/React.createElement("button", { onClick: function(){ setMode("reset"); setError(""); }, style: BtnLink }, "¿Olvidaste tu contraseña?")
+      )
+    ),
+
+    mode === "crear" && /*#__PURE__*/React.createElement(React.Fragment, null,
+      /*#__PURE__*/React.createElement("input", { type: "text", placeholder: "Nombre de usuario", value: user, onChange: function(e){ setUser(e.target.value); setError(""); }, style: IS2 }),
+      /*#__PURE__*/React.createElement("input", { type: "password", placeholder: "Contraseña (mín. 4 caracteres)", value: pwd, onChange: function(e){ setPwd(e.target.value); setError(""); }, style: IS2 }),
+      /*#__PURE__*/React.createElement("input", { type: "password", placeholder: "Confirmar contraseña", value: pwd2, onChange: function(e){ setPwd2(e.target.value); setError(""); }, onKeyDown: function(e){ if(e.key==="Enter") handleCrear(); }, style: IS2 }),
+      /*#__PURE__*/React.createElement("button", { onClick: handleCrear, style: BtnPrimary }, "Crear cuenta")
+    ),
+
+    mode === "reset" && /*#__PURE__*/React.createElement(React.Fragment, null,
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: "#606060", marginBottom: 14, lineHeight: 1.5 } },
+        "Solicita tu código de recuperación a ", /*#__PURE__*/React.createElement("strong", null, "GlobalAcce"), " por WhatsApp. Una vez que lo tengas, ingrésalo aquí."
+      ),
+      /*#__PURE__*/React.createElement("a", {
+        href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20necesito%20restablecer%20mi%20contrase%C3%B1a%20de%20TechRepair%20Pro.%20Mi%20c%C3%B3digo%20es%3A%20" + (license ? (license.clientId || "") : ""),
+        target: "_blank",
+        style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#25D366", color: "#fff", padding: "10px", borderRadius: 4, fontWeight: 600, fontSize: 13, textDecoration: "none", marginBottom: 14 }
+      }, "📱 Solicitar código por WhatsApp"),
+      /*#__PURE__*/React.createElement("input", { type: "text", placeholder: "Código de recuperación", value: resetCode, onChange: function(e){ setResetCode(e.target.value.toUpperCase()); setError(""); }, style: IS2 }),
+      /*#__PURE__*/React.createElement("button", { onClick: handleReset, style: BtnPrimary }, "Restablecer y crear nueva cuenta"),
+      /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", marginTop: 4 } },
+        /*#__PURE__*/React.createElement("button", { onClick: function(){ setMode("login"); setError(""); }, style: BtnLink }, "← Volver al login")
+      )
+    )
+  ));
+}
+
 function Root() {
   var _ur1 = useState(null), _rr1 = _slicedToArray(_ur1, 2), license = _rr1[0], setLicense = _rr1[1];
   var _ur2 = useState(true), _rr2 = _slicedToArray(_ur2, 2), checking = _rr2[0], setChecking = _rr2[1];
+  var _ur3 = useState(false), _rr3 = _slicedToArray(_ur3, 2), authed = _ur3[0], setAuthed = _ur3[1];
 
   var isAdmin = window.location.search.includes("admin=globalacce");
   if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
@@ -6355,8 +6574,12 @@ function Root() {
       try {
         var lic = JSON.parse(saved);
         var result = verificarCodigo(lic.code || "");
-        if (result.valid) setLicense(result);
-        else localStorage.removeItem("trp_license");
+        if (result.valid) {
+          setLicense(result);
+          // Verificar si ya hay sesión activa
+          var session = localStorage.getItem("trp_session_" + result.clientId);
+          if (session === "active") setAuthed(true);
+        } else localStorage.removeItem("trp_license");
       } catch(e) { localStorage.removeItem("trp_license"); }
     }
     setChecking(false);
@@ -6368,6 +6591,7 @@ function Root() {
 
   if (!license) return /*#__PURE__*/React.createElement(LicenseGate, { onActivated: setLicense });
   if (license.type === "expired") return /*#__PURE__*/React.createElement(ExpiredScreen, null);
+  if (!authed) return /*#__PURE__*/React.createElement(UserLoginGate, { clientId: license.clientId || "demo", license: license, onAuth: setAuthed });
 
   return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100dvh" } },
     license.type === "demo" && /*#__PURE__*/React.createElement(DemoBanner, { daysLeft: license.daysLeft }),
