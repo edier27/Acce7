@@ -16,6 +16,29 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  try {
+    var _fbCfg = {
+      apiKey: "AIzaSyAzOoK99y6L95sFAKZFZ0wY42Ljw2YEOM8",
+      authDomain: "globalacce-37997.firebaseapp.com",
+      projectId: "globalacce-37997",
+      storageBucket: "globalacce-37997.firebasestorage.app",
+      messagingSenderId: "779307465490",
+      appId: "1:779307465490:web:848a554272501bbaf251cb"
+    };
+    var _ebeApp = firebase.apps.find(function(a){ return a.name === 'ebeapp'; });
+    if (!_ebeApp) _ebeApp = firebase.initializeApp(_fbCfg, 'ebeapp');
+    window.__ebeDB = _ebeApp.firestore().collection("ebenezer").doc("main");
+    window.__ebeFirebaseOK = true;
+  } catch(e) {
+    window.__ebeFirebaseOK = false;
+    window.__ebeDB = null;
+    console.warn("Firebase Eben-ezer no disponible:", e);
+  }
+</script>
 <style>
 :root{
   --bg:#f7f6f3;
@@ -952,6 +975,13 @@ function save(desc=''){
     const payload=JSON.stringify(db);
     localStorage.setItem('te4_db',payload);
     localStorage.setItem('te4_db_ts',Date.now().toString());
+    // Guardar en Firebase (nube automática)
+    if(window.__ebeFirebaseOK && window.__ebeDB){
+      window.__ebeDB.set({
+        appData: payload,
+        updatedAt: new Date().toISOString()
+      }).catch(function(e){ console.warn('Error Firebase Eben-ezer:', e); });
+    }
     // Indicador visual de guardado
     let el=document.getElementById('save-status');
     if(el){
@@ -973,6 +1003,32 @@ function _updateTopbarDeuda(){
   if(el && td>0) el.textContent='💰 Total en fiados: '+fmt(td);
   else if(el) el.textContent='Sistema de Fiados';
 }
+// Cargar datos frescos desde Firebase (asíncrono)
+function _loadFromFirebase(){
+  if(!window.__ebeFirebaseOK || !window.__ebeDB) return;
+  window.__ebeDB.get().then(function(doc){
+    if(doc.exists && doc.data().appData){
+      try{
+        const fbData = JSON.parse(doc.data().appData);
+        const fbTs = doc.data().updatedAt ? new Date(doc.data().updatedAt).getTime() : 0;
+        const localTs = parseInt(localStorage.getItem('te4_db_ts')||'0');
+        // Solo actualizar si Firebase tiene datos más recientes
+        if(fbTs > localTs && fbData && Array.isArray(fbData.clientes)){
+          db = fbData;
+          _migrateDb();
+          localStorage.setItem('te4_db', JSON.stringify(fbData));
+          localStorage.setItem('te4_db_ts', fbTs.toString());
+          refreshAll();
+          console.log('✅ Datos actualizados desde Firebase');
+        }
+      }catch(e){ console.warn('Error procesando Firebase:', e); }
+    } else if(!doc.exists) {
+      // Primera vez: subir datos locales a Firebase
+      save('Primera sincronización con Firebase');
+    }
+  }).catch(function(e){ console.warn('Error leyendo Firebase:', e); });
+}
+
 function load(){
   _loadHistorial();
   // 1. Intentar localStorage con clave principal
@@ -981,20 +1037,21 @@ function load(){
     let ts=localStorage.getItem('te4_db_ts');
     if(r){
       let parsed=JSON.parse(r);
-      // Validar que tiene estructura válida
       if(parsed && Array.isArray(parsed.clientes)){
         db=parsed;
         _migrateDb();
         console.log('[DB] Cargado desde localStorage — ts:',ts?new Date(parseInt(ts)).toLocaleString():'—',`(${db.clientes.length} clientes, ${db.movimientos.length} movs)`);
+        // Cargar datos frescos de Firebase en segundo plano
+        _loadFromFirebase();
         return true;
       }
     }
   }catch(e){console.warn('[DB] Error leyendo te4_db:',e);}
-  // 2. Intentar claves antiguas de versiones anteriores
+  // 2. Intentar claves antiguas
   try{
     let keys=['te4_hist','tc3_db','tc2_db'];
     for(let k of keys){
-      if(k==='te4_hist') continue; // es el historial, no los datos
+      if(k==='te4_hist') continue;
       let r2=localStorage.getItem(k);
       if(r2){
         let old=JSON.parse(r2);
