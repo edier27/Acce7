@@ -5712,16 +5712,32 @@ function SettingsView(_ref20) {
         setLicErr(""); setLicOk("");
         var result = verificarCodigo(newLic);
         if (!result.valid) { setLicErr(result.error || "Código inválido"); return; }
-        // Preservar clientId permanente — datos y sesión NO se pierden
-        var permClientId = localStorage.getItem("trp_clientId");
-        if (!permClientId) {
-          permClientId = result.clientId;
-          localStorage.setItem("trp_clientId", permClientId);
+        var newClientId = result.clientId;
+        var oldLic = null;
+        try { oldLic = JSON.parse(localStorage.getItem("trp_license") || "null"); } catch(e) {}
+        var oldClientId = oldLic ? verificarCodigo(oldLic.code || "").clientId : null;
+
+        // Migrar datos del código viejo al nuevo en localStorage
+        if (oldClientId && oldClientId !== newClientId) {
+          var oldData = localStorage.getItem("trp_data_" + oldClientId);
+          if (oldData) localStorage.setItem("trp_data_" + newClientId, oldData);
+          var oldAuth = localStorage.getItem("trp_auth_" + oldClientId);
+          if (oldAuth) localStorage.setItem("trp_auth_" + newClientId, oldAuth);
+          // Migrar en Firebase también
+          if (window.__firebaseOK && typeof firebase !== "undefined") {
+            try {
+              firebase.firestore().collection("clientes").doc(oldClientId).get().then(function(doc) {
+                if (doc.exists) {
+                  firebase.firestore().collection("clientes").doc(newClientId).set(doc.data());
+                }
+              });
+            } catch(e) {}
+          }
         }
-        // Solo actualizar la licencia, NO tocar sesión ni datos
+
+        // Guardar nueva licencia y mantener sesión activa
         localStorage.setItem("trp_license", JSON.stringify({ code: newLic.trim().toUpperCase() }));
-        // Mantener sesión activa
-        localStorage.setItem("trp_session_" + permClientId, "active");
+        localStorage.setItem("trp_session_" + newClientId, "active");
         setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Recarga para aplicar." : "✅ Demo activado — " + result.daysLeft + " días restantes. Recarga para aplicar.");
         setNewLic("");
       };
@@ -6310,13 +6326,7 @@ function LicenseGate(_ref) {
   var activar = function() {
     var result = verificarCodigo(code);
     if (!result.valid) { setError(result.error); return; }
-    // Preservar clientId permanente — nunca cambia aunque se renueve
-    var permClientId = localStorage.getItem("trp_clientId");
-    if (!permClientId) {
-      permClientId = result.clientId;
-      localStorage.setItem("trp_clientId", permClientId);
-    }
-    result.clientId = permClientId;
+    // clientId SIEMPRE del código — mismo código = mismos datos en cualquier dispositivo
     localStorage.setItem("trp_license", JSON.stringify({ code: code.trim().toUpperCase(), type: result.type, daysLeft: result.daysLeft, saved: new Date().toISOString() }));
     onActivated(result);
   };
@@ -6551,6 +6561,7 @@ function UserLoginGate(_ref) {
 
   useEffect(function() {
     // Si ya hay sesión activa, entrar directo sin pedir nada
+    // clientId viene del código → misma sesión en cualquier dispositivo con el mismo código
     var session = localStorage.getItem("trp_session_" + clientId);
     if (session === "active") { setLoading(false); onAuth(true); return; }
     // Cargar datos de auth para saber si mostrar login o crear cuenta
@@ -6682,24 +6693,15 @@ function Root() {
   if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
 
   useEffect(function() {
-    // clientId PERMANENTE — nunca cambia aunque se renueve la licencia
-    var permClientId = localStorage.getItem("trp_clientId");
     var saved = localStorage.getItem("trp_license");
     if (saved) {
       try {
         var lic = JSON.parse(saved);
         var result = verificarCodigo(lic.code || "");
         if (result.valid) {
-          // Si no hay clientId permanente, usar el del código actual
-          if (!permClientId) {
-            permClientId = result.clientId;
-            localStorage.setItem("trp_clientId", permClientId);
-          }
-          // Siempre usar el clientId permanente
-          result.clientId = permClientId;
+          // clientId SIEMPRE del código — mismo código = mismos datos en cualquier dispositivo
           setLicense(result);
-          // Verificar sesión activa
-          var session = localStorage.getItem("trp_session_" + permClientId);
+          var session = localStorage.getItem("trp_session_" + result.clientId);
           if (session === "active") setAuthed(true);
         } else {
           localStorage.removeItem("trp_license");
