@@ -5830,6 +5830,16 @@ function useWindowSize() {
   return _wsize;
 }
 
+// ─── SESSION ID y TIMESTAMP para protección de datos ────
+var _trpSessionId = localStorage.getItem('trp_sid_v1');
+if(!_trpSessionId){ _trpSessionId = Math.random().toString(36).slice(2,10); localStorage.setItem('trp_sid_v1',_trpSessionId); }
+var _trpLastSaveTs = 0;
+
+// ─── PROTECCIÓN DE DATOS: Session ID persistente ─────────
+var _trpSessionId = localStorage.getItem('trp_sid_v1');
+if(!_trpSessionId){ _trpSessionId = Math.random().toString(36).slice(2,10); localStorage.setItem('trp_sid_v1',_trpSessionId); }
+var _trpLastSaveTs = 0;
+
 // ─── MAIN APP ────────────────────────────────────────────
 
 function App(_appProps) {
@@ -5892,47 +5902,80 @@ function App(_appProps) {
     } catch (_unused2) {}
   };
   useEffect(function () {
-    // ── Cargar datos: Firebase (en línea) o localStorage (sin conexión) ──
+    // ── PASO 1: Cargar siempre desde localStorage primero (instantáneo) ──
+    var lsKey = "trp_data_" + clientId;
+    var localData = null;
+    try {
+      var stored = localStorage.getItem(lsKey);
+      if (stored) { localData = JSON.parse(stored); }
+    } catch(e) {}
+
+    if (localData && localData.repairs) {
+      // Tenemos datos locales — cargarlos inmediatamente
+      setData(_objectSpread(_objectSpread({}, INIT), localData));
+      _trpLastSaveTs = Date.now();
+    }
+
+    // ── PASO 2: Firebase en segundo plano para sincronizar ──
     if (clientDataRef) {
       var unsubscribe = clientDataRef.onSnapshot(function(doc) {
-        if (doc.exists) {
+        if (doc.exists && doc.data().appData) {
+          // Ignorar si es nuestra propia sesión (evitar eco)
+          if (doc.data().savedBy === _trpSessionId) return;
+          // Solo aplicar si Firebase es más reciente que nuestro último guardado
+          var fbTs = doc.data().updatedAt ? new Date(doc.data().updatedAt).getTime() : 0;
+          if (fbTs <= _trpLastSaveTs) return;
           try {
-            var d = doc.data().appData ? JSON.parse(doc.data().appData) : INIT;
+            var d = JSON.parse(doc.data().appData);
+            if (!d || !d.repairs) return;
+            // Protección: no aplicar si Firebase tiene menos datos que local
+            var localRepairs = (localData && localData.repairs) ? localData.repairs.length : 0;
+            if (d.repairs.length < localRepairs) {
+              console.warn("[TRP] Firebase tiene menos reparaciones — ignorado");
+              return;
+            }
             setData(_objectSpread(_objectSpread({}, INIT), d));
-          } catch(e) { setData(INIT); }
-        } else {
-          clientDataRef.set({ appData: JSON.stringify(INIT), updatedAt: new Date().toISOString() });
-          setData(INIT);
+            localStorage.setItem(lsKey, JSON.stringify(d));
+            localStorage.setItem("trp_data_ts_" + clientId, fbTs.toString());
+            console.log("[TRP] Datos sincronizados desde otro dispositivo");
+          } catch(e) {}
+        } else if (!doc.exists) {
+          // Firebase vacío — subir datos locales si existen
+          if (localData && localData.repairs && localData.repairs.length > 0) {
+            clientDataRef.set({
+              appData: JSON.stringify(localData),
+              updatedAt: new Date().toISOString(),
+              savedBy: _trpSessionId
+            }).catch(function(){});
+          } else {
+            // Primera vez en este dispositivo Y Firebase vacío
+            setData(INIT);
+          }
         }
       }, function(error) {
-        console.warn("Error Firebase, usando localStorage:", error);
-        try {
-          var stored = localStorage.getItem("trp_data_" + clientId);
-          if (stored) { setData(_objectSpread(_objectSpread({}, INIT), JSON.parse(stored))); }
-          else { setData(INIT); }
-        } catch(e) { setData(INIT); }
+        console.warn("Error Firebase:", error);
+        // Ya cargamos desde localStorage arriba — no hacer nada más
       });
       return function() { unsubscribe(); };
-    } else {
-      // Modo offline: usar localStorage
-      try {
-        var stored = localStorage.getItem("trp_data_" + clientId);
-        if (stored) { setData(_objectSpread(_objectSpread({}, INIT), JSON.parse(stored))); }
-        else { setData(INIT); }
-      } catch(e) { setData(INIT); }
     }
   }, [clientId]);
   var save = function save(d) {
     setData(d);
-    // Guardar en Firebase si está disponible
+    _trpLastSaveTs = Date.now();
+    // Guardar en localStorage primero (instantáneo)
+    try {
+      localStorage.setItem("trp_data_" + clientId, JSON.stringify(d));
+      localStorage.setItem("trp_data_ts_" + clientId, _trpLastSaveTs.toString());
+      localStorage.setItem('trp_sid_v1', _trpSessionId);
+    } catch(e) {}
+    // Guardar en Firebase con sessionId (evita eco en onSnapshot)
     if (clientDataRef) {
       clientDataRef.set({
         appData: JSON.stringify(d),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        savedBy: _trpSessionId
       }).catch(function(e) { console.warn("Error guardando en Firebase:", e); });
     }
-    // Siempre guardar en localStorage como respaldo
-    try { localStorage.setItem("trp_data_" + clientId, JSON.stringify(d)); } catch(e) {}
   };
   var openCatalog = function openCatalog() {
     var base = window.location.href.split("#")[0];
