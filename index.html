@@ -5,31 +5,42 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>TechRepair Pro</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
     *{box-sizing:border-box;margin:0;padding:0}
     html,body,#root{height:100%;height:100dvh}
-    body{overflow:hidden;font-family:'Inter',system-ui,sans-serif;-webkit-text-size-adjust:100%}
-    /* Scrollbars - ocultos en mobile */
-    ::-webkit-scrollbar{width:8px;height:8px}
+    body{overflow:hidden;font-family:'DM Sans',system-ui,sans-serif;-webkit-text-size-adjust:100%;letter-spacing:-0.01em}
+    /* Scrollbars premium */
+    ::-webkit-scrollbar{width:4px;height:4px}
     ::-webkit-scrollbar-track{background:transparent}
-    ::-webkit-scrollbar-thumb{background:#C4C4C4;border-radius:4px;border:2px solid transparent;background-clip:content-box}
-    ::-webkit-scrollbar-thumb:hover{background:#A0A0A0;background-clip:content-box}
+    ::-webkit-scrollbar-thumb{background:rgba(100,116,139,0.3);border-radius:10px}
+    ::-webkit-scrollbar-thumb:hover{background:rgba(100,116,139,0.5)}
     @media(max-width:640px){::-webkit-scrollbar{width:0;height:0}}
-    input,select,textarea,button{font-family:'Inter',system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
-    /* Touch: evitar zoom en inputs */
+    input,select,textarea,button{font-family:'DM Sans',system-ui,sans-serif;-webkit-tap-highlight-color:transparent;letter-spacing:-0.01em}
     @media(max-width:640px){input,select,textarea{font-size:16px!important}}
-    /* Windows 11 focus ring */
-    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #00A86B;outline-offset:2px;border-radius:4px}
-    /* Botones táctiles más grandes en mobile */
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #10E08A;outline-offset:2px;border-radius:10px}
     @media(max-width:640px){button{min-height:44px;touch-action:manipulation}}
-    /* Tablas responsive */
     .trp-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
-    /* Scroll suave en mobile */
     .trp-scroll{-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
-    /* Safe area para notch/home indicator en iOS */
     @supports(padding:env(safe-area-inset-bottom)){
       .trp-bottom-nav{padding-bottom:env(safe-area-inset-bottom)}
     }
+    /* Animaciones de entrada */
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    .trp-fade{animation:fadeUp 0.3s ease both}
+    .trp-pulse{animation:pulse 2s infinite}
+    /* Hover effects en cards */
+    .trp-card-hover{transition:transform 0.15s,box-shadow 0.15s}
+    .trp-card-hover:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.12)!important}
+    /* Number font monospace */
+    .trp-num{font-family:'DM Mono',monospace;font-feature-settings:"tnum"}
+    /* Gradient text */
+    .trp-gradient-text{background:linear-gradient(135deg,#10E08A,#4F8EFF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    /* Bottom nav blur */
+    .trp-bottom-nav{backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+    /* Sidebar blur on mobile overlay */
+    .trp-sidebar{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
   </style>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -424,36 +435,36 @@ var _LucideReact = LucideReact,
 
 // ─── Theme System — Windows 11 Fluent Design ──────────────
 var DARK = {
-  bg: "#0F1923",
-  surface: "#1A2535",
-  card: "#1E2D40",
-  border: "#2A3F55",
-  text: "#FFFFFF",
-  muted: "#8899AA",
-  dim: "#556677"
+  bg: "#090E1A",
+  surface: "#0F1729",
+  card: "#141E32",
+  border: "#1E2D45",
+  text: "#F0F4FF",
+  muted: "#7A8EAA",
+  dim: "#445566"
 };
 var LIGHT = {
-  bg: "#F0F2F5",
+  bg: "#F4F6FB",
   surface: "#FFFFFF",
   card: "#FFFFFF",
-  border: "#E8ECF0",
-  text: "#1A1A2E",
-  muted: "#6B7280",
-  dim: "#9CA3AF"
+  border: "#E2E8F4",
+  text: "#0D1B35",
+  muted: "#64748B",
+  dim: "#94A3B8"
 };
 var T = _objectSpread(_objectSpread({}, LIGHT), {}, {
-  accent: "#00A86B",
-  accentDim: "rgba(0,168,107,0.12)",
+  accent: "#10E08A",
+  accentDim: "rgba(16,224,138,0.10)",
   orange: "#FF6B35",
-  green: "#00A86B",
+  green: "#10E08A",
   red: "#EF4444",
   yellow: "#F59E0B",
   purple: "#8B5CF6",
-  blue: "#0078FF"
+  blue: "#4F8EFF"
 });
 var applyTheme = function applyTheme(settings) {
-  var base = settings.theme === "dark" ? DARK : LIGHT;
-  var accent = settings.accentColor || "#00A86B";
+  var base = settings.theme === "light" ? LIGHT : DARK;
+  var accent = settings.accentColor || "#10E08A";
   var hex = accent.replace("#", "");
   var r = parseInt(hex.slice(0, 2), 16),
     g = parseInt(hex.slice(2, 4), 16),
@@ -620,16 +631,16 @@ var DEFAULT_SETTINGS = {
   address: "",
   email: "",
   whatsapp: "",
-  theme: "light",
-  accentColor: "#00A86B"
+  theme: "dark",
+  accentColor: "#10E08A"
 };
-var ACCENT_PRESETS = ["#00A86B", "#0078FF", "#FF6B35", "#8B5CF6", "#EF4444", "#F59E0B", "#06B6D4", "#EC4899", "#10B981", "#6366F1"];
+var ACCENT_PRESETS = ["#10E08A", "#0078FF", "#FF6B35", "#8B5CF6", "#EF4444", "#F59E0B", "#06B6D4", "#EC4899", "#10B981", "#6366F1"];
 var STATUSES = ["Recibido", "Diagnóstico", "En Reparación", "Listo", "Entregado", "Cancelado"];
 var S_COLOR = {
   "Recibido": "#6B7280",
   "Diagnóstico": "#F59E0B",
   "En Reparación": "#0078FF",
-  "Listo": "#00A86B",
+  "Listo": "#10E08A",
   "Entregado": "#8B5CF6",
   "Cancelado": "#EF4444"
 };
@@ -806,9 +817,9 @@ var IS = {
   background: T.surface,
   border: "1px solid ".concat(T.border),
   borderBottom: "2px solid ".concat(T.border),
-  borderRadius: 12,
+  borderRadius: 14,
   color: T.text,
-  padding: "10px 14px",
+  padding: "11px 16px",
   fontSize: 14,
   outline: "none",
   width: "100%",
@@ -827,8 +838,8 @@ var Badge = function Badge(_ref) {
       background: bg || T.accentDim,
       color: color || T.accent,
       border: "1px solid ".concat(color || T.accent, "30"),
-      borderRadius: 20,
-      padding: "3px 10px",
+      borderRadius: 24,
+      padding: "3px 12px",
       fontSize: 12,
       fontWeight: 600,
       whiteSpace: "nowrap"
@@ -857,12 +868,12 @@ var Btn = function Btn(_ref3) {
     alignItems: "center",
     gap: 6,
     border: "1px solid transparent",
-    borderRadius: 12,
+    borderRadius: 14,
     cursor: disabled ? "not-allowed" : "pointer",
     fontWeight: 600,
     fontSize: small ? 12 : 14,
     transition: "all 0.15s",
-    padding: small ? "7px 14px" : "10px 18px",
+    padding: small ? "8px 16px" : "11px 20px",
     opacity: disabled ? 0.4 : 1,
     fontFamily: "inherit",
     letterSpacing: "0.01em"
@@ -974,9 +985,10 @@ var Card = function Card(_ref5) {
     style: _objectSpread({
       background: T.card,
       border: "1px solid ".concat(T.border),
-      borderRadius: 16,
-      padding: 20,
-      boxShadow: "0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)"
+      borderRadius: 20,
+      padding: 22,
+      boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+      transition: "box-shadow 0.2s"
     }, s)
   }, children);
 };
@@ -1059,8 +1071,8 @@ var Toast = function Toast(_ref7) {
       color: T.text,
       border: "1px solid ".concat(type === "error" ? T.red : T.green),
       borderLeft: "4px solid ".concat(type === "error" ? T.red : T.green),
-      padding: "12px 18px",
-      borderRadius: 4,
+      padding: "14px 20px",
+      borderRadius: 14,
       fontWeight: 600,
       fontSize: 13,
       boxShadow: "0 4px 16px rgba(0,0,0,0.14)",
@@ -5700,7 +5712,16 @@ function SettingsView(_ref20) {
         setLicErr(""); setLicOk("");
         var result = verificarCodigo(newLic);
         if (!result.valid) { setLicErr(result.error || "Código inválido"); return; }
+        // Preservar clientId permanente — datos y sesión NO se pierden
+        var permClientId = localStorage.getItem("trp_clientId");
+        if (!permClientId) {
+          permClientId = result.clientId;
+          localStorage.setItem("trp_clientId", permClientId);
+        }
+        // Solo actualizar la licencia, NO tocar sesión ni datos
         localStorage.setItem("trp_license", JSON.stringify({ code: newLic.trim().toUpperCase() }));
+        // Mantener sesión activa
+        localStorage.setItem("trp_session_" + permClientId, "active");
         setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Recarga para aplicar." : "✅ Demo activado — " + result.daysLeft + " días restantes. Recarga para aplicar.");
         setNewLic("");
       };
@@ -5999,7 +6020,8 @@ function App(_appProps) {
       height: "100dvh",
       background: T.bg,
       color: T.text,
-      fontFamily: "'Inter', system-ui, sans-serif",
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+      letterSpacing: "-0.01em",
       overflow: "hidden"
     }
   }, toast && /*#__PURE__*/React.createElement(Toast, toast),
@@ -6007,11 +6029,11 @@ function App(_appProps) {
     style: {
       width: isSidebarExpanded ? 230 : 60,
       minWidth: isSidebarExpanded ? 230 : 60,
-      background: T.surface,
+      background: "linear-gradient(180deg, ".concat(T.surface, " 0%, ").concat(T.card, " 100%)"),
       borderRight: "1px solid ".concat(T.border),
       display: "flex",
       flexDirection: "column",
-      transition: "width 0.25s, min-width 0.25s",
+      transition: "width 0.3s cubic-bezier(0.4,0,0.2,1), min-width 0.3s cubic-bezier(0.4,0,0.2,1)",
       overflow: "hidden",
       zIndex: 50,
       color: T.text
@@ -6028,13 +6050,14 @@ function App(_appProps) {
     style: {
       width: 34,
       height: 34,
-      background: settings.logo ? "transparent" : T.accent,
-      borderRadius: 4,
+      background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)",
+      borderRadius: 12,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       flexShrink: 0,
-      overflow: "hidden"
+      overflow: "hidden",
+      boxShadow: "0 4px 12px rgba(16,224,138,0.25)"
     }
   }, settings.logo ? /*#__PURE__*/React.createElement("img", {
     src: settings.logo,
@@ -6043,10 +6066,10 @@ function App(_appProps) {
   }) : /*#__PURE__*/React.createElement(Smartphone, { size: 19, color: "#fff" })),
   isSidebarExpanded && /*#__PURE__*/React.createElement("div", null,
     /*#__PURE__*/React.createElement("div", {
-      style: { fontSize: 13, fontWeight: 700, color: T.text, letterSpacing: "-0.01em" }
+      style: { fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: "-0.03em" }
     }, settings.storeName || "TechRepair Pro"),
     /*#__PURE__*/React.createElement("div", {
-      style: { fontSize: 9, color: T.accent, letterSpacing: "0.08em", fontWeight: 600 }
+      style: { fontSize: 9, color: T.accent, letterSpacing: "0.12em", fontWeight: 600, textTransform: "uppercase" }
     }, settings.storeSubtitle || "GESTIÓN TALLER")
   )),
   /*#__PURE__*/React.createElement("nav", {
@@ -6072,7 +6095,9 @@ function App(_appProps) {
         transition: "all 0.1s",
         fontFamily: "inherit",
         position: "relative",
-        borderLeft: view === item.id ? "3px solid ".concat(T.accent) : "3px solid transparent",
+        borderLeft: "none",
+          background: view === item.id ? "linear-gradient(90deg, ".concat(T.accent, "20, ").concat(T.accent, "08)") : "transparent",
+          boxShadow: view === item.id ? "inset 3px 0 0 ".concat(T.accent) : "none",
         minHeight: 44
       }
     }, /*#__PURE__*/React.createElement("span", { style: { flexShrink: 0 } }, item.icon),
@@ -6127,10 +6152,10 @@ function App(_appProps) {
     style: { background: "none", border: "none", color: T.muted, cursor: "pointer", padding: 4, display: "flex", minHeight: 44, alignItems: "center" }
   }, /*#__PURE__*/React.createElement(Menu, { size: 19 })),
   isMobile && /*#__PURE__*/React.createElement("div", {
-    style: { width: 28, height: 28, background: settings.logo ? "transparent" : T.accent, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }
+    style: { width: 28, height: 28, background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }
   }, settings.logo ? /*#__PURE__*/React.createElement("img", { src: settings.logo, alt: "logo", style: { width: "100%", height: "100%", objectFit: "cover" } }) : /*#__PURE__*/React.createElement(Smartphone, { size: 14, color: "#fff" })),
   /*#__PURE__*/React.createElement("h1", {
-    style: { margin: 0, fontSize: isMobile ? 15 : 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
+    style: { margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.03em" }
   }, ((_navItems$find = navItems.find(function (n) { return n.id === view; })) === null || _navItems$find === void 0 ? void 0 : _navItems$find.label) || "Dashboard"),
   /*#__PURE__*/React.createElement("div", { style: { flex: 1 } }),
   !isMobile && lowStock.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -6158,7 +6183,7 @@ function App(_appProps) {
 
   /*#__PURE__*/React.createElement("main", {
     className: "trp-scroll",
-    style: { flex: 1, overflow: "auto", padding: isMobile ? 12 : 22 }
+    style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24 }
   },
   view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile }),
   view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify }),
@@ -6285,20 +6310,27 @@ function LicenseGate(_ref) {
   var activar = function() {
     var result = verificarCodigo(code);
     if (!result.valid) { setError(result.error); return; }
+    // Preservar clientId permanente — nunca cambia aunque se renueve
+    var permClientId = localStorage.getItem("trp_clientId");
+    if (!permClientId) {
+      permClientId = result.clientId;
+      localStorage.setItem("trp_clientId", permClientId);
+    }
+    result.clientId = permClientId;
     localStorage.setItem("trp_license", JSON.stringify({ code: code.trim().toUpperCase(), type: result.type, daysLeft: result.daysLeft, saved: new Date().toISOString() }));
     onActivated(result);
   };
 
   return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter',system-ui,sans-serif" }
+    style: { minHeight: "100dvh", background: "linear-gradient(135deg,#090E1A 0%,#0F1729 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'DM Sans',system-ui,sans-serif" }
   }, /*#__PURE__*/React.createElement("div", {
-    style: { background: "#fff", borderRadius: 8, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", padding: 40, width: "100%", maxWidth: 420, textAlign: "center" }
+    style: { background: "rgba(20,30,50,0.9)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 24, boxShadow: "0 24px 80px rgba(0,0,0,0.5)", padding: 40, width: "100%", maxWidth: 420, textAlign: "center" }
   },
-    /*#__PURE__*/React.createElement("div", { style: { width: 64, height: 64, background: "#0067C0", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" } },
+    /*#__PURE__*/React.createElement("div", { style: { width: 64, height: 64, background: "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", boxShadow: "0 8px 24px rgba(16,224,138,0.3)" } },
       /*#__PURE__*/React.createElement(Smartphone, { size: 30, color: "#fff" })
     ),
-    /*#__PURE__*/React.createElement("h1", { style: { fontSize: 22, fontWeight: 700, color: "#1C1C1C", marginBottom: 6 } }, "TechRepair Pro"),
-    /*#__PURE__*/React.createElement("p", { style: { fontSize: 13, color: "#606060", marginBottom: 28 } }, "Ingresa tu código de acceso para continuar"),
+    /*#__PURE__*/React.createElement("h1", { style: { fontSize: 24, fontWeight: 800, color: "#F0F4FF", marginBottom: 6, letterSpacing: "-0.03em" } }, "TechRepair Pro"),
+    /*#__PURE__*/React.createElement("p", { style: { fontSize: 14, color: "#7A8EAA", marginBottom: 28 } }, "Ingresa tu código de acceso para continuar"),
     /*#__PURE__*/React.createElement("input", {
       type: "text", placeholder: "Ej: DEMO-20260527-ABC12345",
       value: code,
@@ -6343,7 +6375,7 @@ function DemoBanner(_ref2) {
 
 function ExpiredScreen() {
   return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter',system-ui,sans-serif" }
+    style: { minHeight: "100dvh", background: "linear-gradient(135deg,#090E1A 0%,#0F1729 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'DM Sans',system-ui,sans-serif" }
   }, /*#__PURE__*/React.createElement("div", {
     style: { background: "#fff", borderRadius: 8, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", padding: 40, width: "100%", maxWidth: 400, textAlign: "center" }
   },
@@ -6518,10 +6550,10 @@ function UserLoginGate(_ref) {
   var lsKey = "trp_auth_" + clientId;
 
   useEffect(function() {
-    // Verificar si ya hay sesión activa
+    // Si ya hay sesión activa, entrar directo sin pedir nada
     var session = localStorage.getItem("trp_session_" + clientId);
-    if (session === "active") { onAuth(true); return; }
-    // Cargar datos de auth
+    if (session === "active") { setLoading(false); onAuth(true); return; }
+    // Cargar datos de auth para saber si mostrar login o crear cuenta
     if (aRef) {
       aRef.get().then(function(doc) {
         setAuthData(doc.exists ? doc.data() : null);
@@ -6585,20 +6617,20 @@ function UserLoginGate(_ref) {
     style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center" }
   }, /*#__PURE__*/React.createElement(RefreshCw, { size: 28, color: "#0067C0" }));
 
-  var IS2 = { width: "100%", padding: "11px 14px", border: "1px solid #E0E0E0", borderBottom: "2px solid #0067C0", borderRadius: 4, fontSize: 15, outline: "none", fontFamily: "inherit", marginBottom: 10, boxSizing: "border-box" };
-  var BtnPrimary = { width: "100%", padding: "12px", background: "#0067C0", color: "#fff", border: "none", borderRadius: 4, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 };
-  var BtnLink = { background: "none", border: "none", color: "#0067C0", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" };
+  var IS2 = { width: "100%", padding: "13px 16px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, fontSize: 15, outline: "none", fontFamily: "inherit", marginBottom: 10, boxSizing: "border-box", background: "rgba(255,255,255,0.06)", color: "#F0F4FF" };
+  var BtnPrimary = { width: "100%", padding: "14px", background: "linear-gradient(135deg,#10E08A,#0DD87A)", color: "#0D1B35", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", marginBottom: 10, boxShadow: "0 4px 16px rgba(16,224,138,0.3)", letterSpacing: "-0.02em" };
+  var BtnLink = { background: "none", border: "none", color: "#10E08A", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "none", opacity: 0.8 };
 
   return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter',system-ui,sans-serif" }
+    style: { minHeight: "100dvh", background: "linear-gradient(135deg,#090E1A 0%,#0F1729 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'DM Sans',system-ui,sans-serif" }
   }, /*#__PURE__*/React.createElement("div", {
-    style: { background: "#fff", borderRadius: 8, boxShadow: "0 8px 32px rgba(0,0,0,0.12)", padding: 36, width: "100%", maxWidth: 400 }
+    style: { background: "rgba(20,30,50,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 24, boxShadow: "0 24px 80px rgba(0,0,0,0.5)", padding: 36, width: "100%", maxWidth: 400 }
   },
     /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", marginBottom: 24 } },
-      /*#__PURE__*/React.createElement("div", { style: { width: 56, height: 56, background: "#0067C0", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" } },
+      /*#__PURE__*/React.createElement("div", { style: { width: 56, height: 56, background: "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", boxShadow: "0 8px 24px rgba(16,224,138,0.25)" } },
         /*#__PURE__*/React.createElement(Smartphone, { size: 26, color: "#fff" })
       ),
-      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 20, color: "#1C1C1C" } }, "TechRepair Pro"),
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 800, fontSize: 22, color: "#F0F4FF", letterSpacing: "-0.03em" } }, "TechRepair Pro"),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: "#606060", marginTop: 4 } },
         mode === "crear" ? "Crea tu cuenta para comenzar" :
         mode === "reset" ? "Restablecer contraseña" : "Inicia sesión en tu cuenta"
@@ -6650,17 +6682,28 @@ function Root() {
   if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
 
   useEffect(function() {
+    // clientId PERMANENTE — nunca cambia aunque se renueve la licencia
+    var permClientId = localStorage.getItem("trp_clientId");
     var saved = localStorage.getItem("trp_license");
     if (saved) {
       try {
         var lic = JSON.parse(saved);
         var result = verificarCodigo(lic.code || "");
         if (result.valid) {
+          // Si no hay clientId permanente, usar el del código actual
+          if (!permClientId) {
+            permClientId = result.clientId;
+            localStorage.setItem("trp_clientId", permClientId);
+          }
+          // Siempre usar el clientId permanente
+          result.clientId = permClientId;
           setLicense(result);
-          // Verificar si ya hay sesión activa
-          var session = localStorage.getItem("trp_session_" + result.clientId);
+          // Verificar sesión activa
+          var session = localStorage.getItem("trp_session_" + permClientId);
           if (session === "active") setAuthed(true);
-        } else localStorage.removeItem("trp_license");
+        } else {
+          localStorage.removeItem("trp_license");
+        }
       } catch(e) { localStorage.removeItem("trp_license"); }
     }
     setChecking(false);
