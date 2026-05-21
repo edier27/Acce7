@@ -6542,183 +6542,295 @@ function _resetCode(clientId) {
   return _hash(normalized + "RESET" + _LS).slice(0, 6).toUpperCase();
 }
 
-function UserLoginGate(_ref) {
-  var clientId = _ref.clientId, onAuth = _ref.onAuth, licenseInfo = _ref.license;
-  var _u1 = useState(null), _ua1 = _slicedToArray(_u1, 2), authData = _ua1[0], setAuthData = _ua1[1];
-  var _u2 = useState(true), _ua2 = _slicedToArray(_u2, 2), loading = _ua2[0], setLoading = _ua2[1];
-  var _u3 = useState("login"), _ua3 = _slicedToArray(_u3, 2), mode = _ua3[0], setMode = _ua3[1];
-  var _u4 = useState(""), _ua4 = _slicedToArray(_u4, 2), user = _ua4[0], setUser = _ua4[1];
-  var _u5 = useState(""), _ua5 = _slicedToArray(_u5, 2), pwd = _ua5[0], setPwd = _ua5[1];
-  var _u6 = useState(""), _ua6 = _slicedToArray(_u6, 2), pwd2 = _ua6[0], setPwd2 = _ua6[1];
-  var _u7 = useState(""), _ua7 = _slicedToArray(_u7, 2), error = _ua7[0], setError = _ua7[1];
-  var _u8 = useState(""), _ua8 = _slicedToArray(_u8, 2), resetCode = _ua8[0], setResetCode = _ua8[1];
+// ─── ESTILOS COMPARTIDOS PARA PANTALLAS DE AUTH ──────────
+var _AS = {
+  page: { minHeight:"100dvh", background:"linear-gradient(135deg,#090E1A 0%,#0F1729 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"'DM Sans',system-ui,sans-serif" },
+  card: { background:"rgba(20,30,50,0.95)", backdropFilter:"blur(20px)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:24, boxShadow:"0 24px 80px rgba(0,0,0,0.5)", padding:36, width:"100%", maxWidth:420 },
+  logo: { width:56, height:56, background:"linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius:16, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 14px", boxShadow:"0 8px 24px rgba(16,224,138,0.25)" },
+  title: { fontWeight:800, fontSize:22, color:"#F0F4FF", letterSpacing:"-0.03em", textAlign:"center" },
+  sub: { fontSize:13, color:"#7A8EAA", textAlign:"center", marginTop:4, marginBottom:24 },
+  input: { width:"100%", padding:"13px 16px", border:"1px solid rgba(255,255,255,0.1)", borderRadius:14, fontSize:15, outline:"none", fontFamily:"inherit", marginBottom:10, boxSizing:"border-box", background:"rgba(255,255,255,0.06)", color:"#F0F4FF" },
+  btn: { width:"100%", padding:"14px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:14, fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", marginBottom:8, boxShadow:"0 4px 16px rgba(16,224,138,0.3)", letterSpacing:"-0.02em" },
+  btnGhost: { width:"100%", padding:"12px", background:"rgba(255,255,255,0.06)", color:"#F0F4FF", border:"1px solid rgba(255,255,255,0.12)", borderRadius:14, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:8 },
+  err: { background:"rgba(239,68,68,0.12)", color:"#FF8080", borderRadius:10, padding:"10px 14px", fontSize:13, marginBottom:12 },
+  link: { background:"none", border:"none", color:"#10E08A", fontSize:13, cursor:"pointer", fontFamily:"inherit", opacity:0.8, textDecoration:"none" }
+};
 
-  var aRef = _authRef(clientId);
-  var lsKey = "trp_auth_" + clientId;
-
-  useEffect(function() {
-    // Si ya hay sesión activa, entrar directo sin pedir nada
-    // clientId viene del código → misma sesión en cualquier dispositivo con el mismo código
-    var session = localStorage.getItem("trp_session_" + clientId);
-    if (session === "active") { setLoading(false); onAuth(true); return; }
-    // Cargar datos de auth para saber si mostrar login o crear cuenta
-    if (aRef) {
-      aRef.get().then(function(doc) {
-        setAuthData(doc.exists ? doc.data() : null);
-        setMode(doc.exists ? "login" : "crear");
-        setLoading(false);
-      }).catch(function() {
-        var local = localStorage.getItem(lsKey);
-        setAuthData(local ? JSON.parse(local) : null);
-        setMode(local ? "login" : "crear");
-        setLoading(false);
-      });
-    } else {
-      var local = localStorage.getItem(lsKey);
-      setAuthData(local ? JSON.parse(local) : null);
-      setMode(local ? "login" : "crear");
-      setLoading(false);
-    }
-  }, []);
-
-  var guardarAuth = function(data) {
-    if (data === null) {
-      if (aRef) aRef.delete().catch(function(){});
-      try { localStorage.removeItem(lsKey); } catch(e) {}
-    } else {
-      if (aRef) aRef.set(data).catch(function(){});
-      try { localStorage.setItem(lsKey, JSON.stringify(data)); } catch(e) {}
-    }
-  };
-
-  var handleCrear = function() {
-    if (!user.trim()) { setError("Ingresa un nombre de usuario"); return; }
-    if (pwd.length < 4) { setError("La contraseña debe tener al menos 4 caracteres"); return; }
-    if (pwd !== pwd2) { setError("Las contraseñas no coinciden"); return; }
-    var data = { username: user.trim().toLowerCase(), passwordHash: _hashPwd(pwd, clientId), createdAt: new Date().toISOString() };
-    guardarAuth(data);
-    localStorage.setItem("trp_session_" + clientId, "active");
-    onAuth(true);
-  };
-
-  var handleLogin = function() {
-    if (!authData) { setError("No hay cuenta registrada"); return; }
-    if (user.trim().toLowerCase() !== authData.username) { setError("Usuario incorrecto"); return; }
-    if (_hashPwd(pwd, clientId) !== authData.passwordHash) { setError("Contraseña incorrecta"); return; }
-    localStorage.setItem("trp_session_" + clientId, "active");
-    onAuth(true);
-  };
-
-  var handleReset = function() {
-    var normalizedClientId = clientId.trim().toUpperCase().replace(/-/g, "_");
-    if (resetCode.trim().toUpperCase() !== _resetCode(normalizedClientId)) {
-      setError("Código de recuperación incorrecto");
-      return;
-    }
-    // Marcar acceso temporal por recuperación (no borra datos)
-    try { localStorage.setItem("trp_bypass_" + clientId, "true"); } catch(e) {}
-    localStorage.setItem("trp_session_" + clientId, "active");
-    onAuth(true);
-  };
-
-  if (loading) return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center" }
-  }, /*#__PURE__*/React.createElement(RefreshCw, { size: 28, color: "#0067C0" }));
-
-  var IS2 = { width: "100%", padding: "13px 16px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, fontSize: 15, outline: "none", fontFamily: "inherit", marginBottom: 10, boxSizing: "border-box", background: "rgba(255,255,255,0.06)", color: "#F0F4FF" };
-  var BtnPrimary = { width: "100%", padding: "14px", background: "linear-gradient(135deg,#10E08A,#0DD87A)", color: "#0D1B35", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", marginBottom: 10, boxShadow: "0 4px 16px rgba(16,224,138,0.3)", letterSpacing: "-0.02em" };
-  var BtnLink = { background: "none", border: "none", color: "#10E08A", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "none", opacity: 0.8 };
-
-  return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight: "100dvh", background: "linear-gradient(135deg,#090E1A 0%,#0F1729 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'DM Sans',system-ui,sans-serif" }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: { background: "rgba(20,30,50,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 24, boxShadow: "0 24px 80px rgba(0,0,0,0.5)", padding: 36, width: "100%", maxWidth: 400 }
-  },
-    /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", marginBottom: 24 } },
-      /*#__PURE__*/React.createElement("div", { style: { width: 56, height: 56, background: "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", boxShadow: "0 8px 24px rgba(16,224,138,0.25)" } },
-        /*#__PURE__*/React.createElement(Smartphone, { size: 26, color: "#fff" })
-      ),
-      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 800, fontSize: 22, color: "#F0F4FF", letterSpacing: "-0.03em" } }, "TechRepair Pro"),
-      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: "#606060", marginTop: 4 } },
-        mode === "crear" ? "Crea tu cuenta para comenzar" :
-        mode === "reset" ? "Restablecer contraseña" : "Inicia sesión en tu cuenta"
-      )
-    ),
-
-    error && /*#__PURE__*/React.createElement("div", { style: { background: "#FEE7E5", color: "#C42B1C", borderRadius: 4, padding: "10px 14px", fontSize: 13, marginBottom: 12 } }, error),
-
-    mode === "login" && /*#__PURE__*/React.createElement(React.Fragment, null,
-      /*#__PURE__*/React.createElement("input", { type: "text", placeholder: "Usuario", value: user, onChange: function(e){ setUser(e.target.value); setError(""); }, onKeyDown: function(e){ if(e.key==="Enter") handleLogin(); }, style: IS2 }),
-      /*#__PURE__*/React.createElement("input", { type: "password", placeholder: "Contraseña", value: pwd, onChange: function(e){ setPwd(e.target.value); setError(""); }, onKeyDown: function(e){ if(e.key==="Enter") handleLogin(); }, style: IS2 }),
-      /*#__PURE__*/React.createElement("button", { onClick: handleLogin, style: BtnPrimary }, "Iniciar sesión"),
-      /*#__PURE__*/React.createElement("div", { style: { textAlign: "center" } },
-        /*#__PURE__*/React.createElement("button", { onClick: function(){ setMode("reset"); setError(""); }, style: BtnLink }, "¿Olvidaste tu contraseña?")
-      )
-    ),
-
-    mode === "crear" && /*#__PURE__*/React.createElement(React.Fragment, null,
-      /*#__PURE__*/React.createElement("input", { type: "text", placeholder: "Nombre de usuario", value: user, onChange: function(e){ setUser(e.target.value); setError(""); }, style: IS2 }),
-      /*#__PURE__*/React.createElement("input", { type: "password", placeholder: "Contraseña (mín. 4 caracteres)", value: pwd, onChange: function(e){ setPwd(e.target.value); setError(""); }, style: IS2 }),
-      /*#__PURE__*/React.createElement("input", { type: "password", placeholder: "Confirmar contraseña", value: pwd2, onChange: function(e){ setPwd2(e.target.value); setError(""); }, onKeyDown: function(e){ if(e.key==="Enter") handleCrear(); }, style: IS2 }),
-      /*#__PURE__*/React.createElement("button", { onClick: handleCrear, style: BtnPrimary }, "Crear cuenta")
-    ),
-
-    mode === "reset" && /*#__PURE__*/React.createElement(React.Fragment, null,
-      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: "#606060", marginBottom: 14, lineHeight: 1.5 } },
-        "Solicita tu código de recuperación a ", /*#__PURE__*/React.createElement("strong", null, "GlobalAcce"), " por WhatsApp. Una vez que lo tengas, ingrésalo aquí."
-      ),
-      /*#__PURE__*/React.createElement("a", {
-        href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20necesito%20restablecer%20mi%20contrase%C3%B1a%20de%20TechRepair%20Pro.%20Mi%20c%C3%B3digo%20es%3A%20" + clientId.replace(/_/g, "-"),
-        target: "_blank",
-        style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#25D366", color: "#fff", padding: "10px", borderRadius: 4, fontWeight: 600, fontSize: 13, textDecoration: "none", marginBottom: 14 }
-      }, "📱 Solicitar código por WhatsApp"),
-      /*#__PURE__*/React.createElement("input", { type: "text", placeholder: "Código de recuperación", value: resetCode, onChange: function(e){ setResetCode(e.target.value.toUpperCase()); setError(""); }, style: IS2 }),
-      /*#__PURE__*/React.createElement("button", { onClick: handleReset, style: BtnPrimary }, "Restablecer y crear nueva cuenta"),
-      /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", marginTop: 4 } },
-        /*#__PURE__*/React.createElement("button", { onClick: function(){ setMode("login"); setError(""); }, style: BtnLink }, "← Volver al login")
-      )
-    )
-  ));
+// ─── AUTH HELPERS ─────────────────────────────────────────
+function _getAuthRef(clientId) {
+  try {
+    if (window.__firebaseDB) return window.__firebaseDB.collection("clientes").doc(clientId + "_auth");
+  } catch(e) {}
+  return null;
+}
+function _hashPwd(pwd, clientId) {
+  return _hash(pwd.trim() + clientId + "PWD2024");
+}
+function _resetCode(clientId) {
+  var n = clientId.trim().toUpperCase().replace(/-/g, "_");
+  return _hash(n + "RESET" + _LS).slice(0, 6).toUpperCase();
+}
+function _saveAuth(clientId, data) {
+  var ref = _getAuthRef(clientId);
+  if (ref) ref.set(data).catch(function(){});
+  try { localStorage.setItem("trp_auth_" + clientId, JSON.stringify(data)); } catch(e) {}
+}
+function _loadAuthLocal(clientId) {
+  try { return JSON.parse(localStorage.getItem("trp_auth_" + clientId) || "null"); } catch(e) { return null; }
 }
 
+// ─── ROOT COMPONENT ───────────────────────────────────────
 function Root() {
-  var _ur1 = useState(null), _rr1 = _slicedToArray(_ur1, 2), license = _rr1[0], setLicense = _rr1[1];
-  var _ur2 = useState(true), _rr2 = _slicedToArray(_ur2, 2), checking = _rr2[0], setChecking = _rr2[1];
-  var _ur3 = useState(false), _rr3 = _slicedToArray(_ur3, 2), authed = _ur3[0], setAuthed = _ur3[1];
+  // Estados principales
+  var _rs1 = useState(null), _rsa1 = _slicedToArray(_rs1, 2), license = _rsa1[0], setLicense = _rsa1[1];
+  var _rs2 = useState(null), _rsa2 = _slicedToArray(_rs2, 2), account = _rsa2[0], setAccount = _rsa2[1];
+  var _rs3 = useState(true), _rsa3 = _slicedToArray(_rs3, 2), checking = _rsa3[0], setChecking = _rsa3[1];
+  var _rs4 = useState(false), _rsa4 = _slicedToArray(_rs4, 2), loggedIn = _rs4[0], setLoggedIn = _rsa4[1];
 
   var isAdmin = window.location.search.includes("admin=globalacce");
   if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
 
   useEffect(function() {
-    var saved = localStorage.getItem("trp_license");
-    if (saved) {
-      try {
-        var lic = JSON.parse(saved);
-        var result = verificarCodigo(lic.code || "");
-        if (result.valid) {
-          // clientId SIEMPRE del código — mismo código = mismos datos en cualquier dispositivo
-          setLicense(result);
-          var session = localStorage.getItem("trp_session_" + result.clientId);
-          if (session === "active") setAuthed(true);
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem("trp_license") || "null"); } catch(e) {}
+    if (saved && saved.code) {
+      var result = verificarCodigo(saved.code);
+      if (result.valid) {
+        setLicense(result);
+        // Cargar cuenta desde localStorage
+        var auth = _loadAuthLocal(result.clientId);
+        if (auth) {
+          setAccount(auth);
+          // Si hay sesión activa, entrar directo
+          var sess = localStorage.getItem("trp_session_" + result.clientId);
+          if (sess === "active") setLoggedIn(true);
         } else {
-          localStorage.removeItem("trp_license");
+          // Intentar cargar desde Firebase
+          var ref = _getAuthRef(result.clientId);
+          if (ref) {
+            ref.get().then(function(doc) {
+              if (doc.exists) {
+                var fbAuth = doc.data();
+                setAccount(fbAuth);
+                try { localStorage.setItem("trp_auth_" + result.clientId, JSON.stringify(fbAuth)); } catch(e) {}
+              }
+              setChecking(false);
+            }).catch(function() { setChecking(false); });
+            return;
+          }
         }
-      } catch(e) { localStorage.removeItem("trp_license"); }
+      } else {
+        // Código expirado pero puede haber cuenta guardada — guardar el clientId para renovación
+        setLicense({ expired: true, code: saved.code, clientId: result.clientId || saved.code.replace(/-/g,"_") });
+        var auth2 = _loadAuthLocal(result.clientId || saved.code.replace(/-/g,"_"));
+        if (auth2) setAccount(auth2);
+      }
     }
     setChecking(false);
   }, []);
 
+  // Callback cuando se crea/actualiza la cuenta
+  var onAccountCreated = function(auth, licResult) {
+    setAccount(auth);
+    if (licResult) setLicense(licResult);
+    setLoggedIn(true);
+  };
+
+  // Callback cuando se renueva la licencia
+  var onRenewed = function(newLic) {
+    setLicense(newLic);
+    setLoggedIn(true);
+  };
+
   if (checking) return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight: "100dvh", background: "#F3F3F3", display: "flex", alignItems: "center", justifyContent: "center" }
-  }, /*#__PURE__*/React.createElement(RefreshCw, { size: 28, color: "#0067C0" }));
+    style: { minHeight:"100dvh", background:"#090E1A", display:"flex", alignItems:"center", justifyContent:"center" }
+  }, /*#__PURE__*/React.createElement(RefreshCw, { size: 28, color: "#10E08A" }));
 
-  if (!license) return /*#__PURE__*/React.createElement(LicenseGate, { onActivated: setLicense });
-  if (license.type === "expired") return /*#__PURE__*/React.createElement(ExpiredScreen, null);
-  if (!authed) return /*#__PURE__*/React.createElement(UserLoginGate, { clientId: license.clientId || "demo", license: license, onAuth: setAuthed });
+  // 1. Sin código → pedir código
+  if (!license) return /*#__PURE__*/React.createElement(LicenseGate, { onActivated: function(lic) { setLicense(lic); } });
 
-  return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100dvh" } },
+  // 2. Código expirado + cuenta existe → pantalla de renovación
+  if (license.expired && account) return /*#__PURE__*/React.createElement(RenewalScreen, { account: account, clientId: license.clientId, onRenewed: onRenewed });
+
+  // 3. Código expirado + sin cuenta → pedir código nuevo
+  if (license.expired && !account) return /*#__PURE__*/React.createElement(LicenseGate, { onActivated: function(lic) { setLicense(lic); }, expiredMsg: true });
+
+  // 4. Sin cuenta → crear cuenta
+  if (!account) return /*#__PURE__*/React.createElement(CreateAccountScreen, { license: license, onCreated: onAccountCreated });
+
+  // 5. Con cuenta pero sin login → login
+  if (!loggedIn) return /*#__PURE__*/React.createElement(LoginScreen, {
+    account: account, clientId: license.clientId,
+    onLogin: function() { localStorage.setItem("trp_session_" + license.clientId, "active"); setLoggedIn(true); },
+    onForgot: function() {}
+  });
+
+  // 6. Todo OK → App
+  return /*#__PURE__*/React.createElement("div", { style: { display:"flex", flexDirection:"column", height:"100dvh" } },
     license.type === "demo" && /*#__PURE__*/React.createElement(DemoBanner, { daysLeft: license.daysLeft }),
-    /*#__PURE__*/React.createElement(App, { clientId: license.clientId || "demo" })
+    /*#__PURE__*/React.createElement(App, { clientId: license.clientId })
+  );
+}
+
+// ─── CREAR CUENTA (primera vez) ───────────────────────────
+function CreateAccountScreen(_ref) {
+  var license = _ref.license, onCreated = _ref.onCreated;
+  var _c1 = useState(""), _ca1 = _slicedToArray(_c1, 2), user = _ca1[0], setUser = _ca1[1];
+  var _c2 = useState(""), _ca2 = _slicedToArray(_c2, 2), pwd = _ca2[0], setPwd = _ca2[1];
+  var _c3 = useState(""), _ca3 = _slicedToArray(_c3, 2), pwd2 = _ca3[0], setPwd2 = _ca3[1];
+  var _c4 = useState(""), _ca4 = _slicedToArray(_c4, 2), err = _ca4[0], setErr = _ca4[1];
+
+  var crear = function() {
+    if (!user.trim()) { setErr("Ingresa un nombre de usuario"); return; }
+    if (pwd.length < 4) { setErr("La contraseña debe tener al menos 4 caracteres"); return; }
+    if (pwd !== pwd2) { setErr("Las contraseñas no coinciden"); return; }
+    var auth = { username: user.trim().toLowerCase(), passwordHash: _hashPwd(pwd, license.clientId), createdAt: new Date().toISOString() };
+    _saveAuth(license.clientId, auth);
+    localStorage.setItem("trp_session_" + license.clientId, "active");
+    localStorage.setItem("trp_license", JSON.stringify({ code: license.code || "" }));
+    onCreated(auth, license);
+  };
+
+  return /*#__PURE__*/React.createElement("div", { style: _AS.page },
+    /*#__PURE__*/React.createElement("div", { style: _AS.card },
+      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size: 26, color: "#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Crear tu cuenta"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.sub },
+        license.type === "demo"
+          ? "Demo activo — " + license.daysLeft + " días. Crea tu cuenta para comenzar."
+          : "Licencia Pro activa. Crea tu cuenta de acceso."
+      ),
+      err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
+      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Nombre de usuario", value:user, onChange:function(e){setUser(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña (mín. 4 caracteres)", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Confirmar contraseña", value:pwd2, onChange:function(e){setPwd2(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")crear();}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("button", { onClick:crear, style:_AS.btn }, "Crear cuenta y entrar"),
+      /*#__PURE__*/React.createElement("div", { style:{fontSize:11,color:"#7A8EAA",textAlign:"center",marginTop:4} },
+        "Tu usuario y contraseña son permanentes — úsalos siempre para ingresar."
+      )
+    )
+  );
+}
+
+// ─── LOGIN (cuenta existente) ──────────────────────────────
+function LoginScreen(_ref) {
+  var account = _ref.account, clientId = _ref.clientId, onLogin = _ref.onLogin;
+  var _l1 = useState(""), _la1 = _slicedToArray(_l1, 2), user = _la1[0], setUser = _la1[1];
+  var _l2 = useState(""), _la2 = _slicedToArray(_l2, 2), pwd = _la2[0], setPwd = _la2[1];
+  var _l3 = useState(""), _la3 = _slicedToArray(_l3, 2), err = _la3[0], setErr = _la3[1];
+  var _l4 = useState(false), _la4 = _slicedToArray(_l4, 2), resetMode = _la4[0], setResetMode = _la4[1];
+  var _l5 = useState(""), _la5 = _slicedToArray(_l5, 2), resetCode = _la5[0], setResetCode = _la5[1];
+  var _l6 = useState(""), _la6 = _slicedToArray(_l6, 2), newPwd = _la6[0], setNewPwd = _la6[1];
+  var _l7 = useState(""), _la7 = _slicedToArray(_l7, 2), newPwd2 = _la7[0], setNewPwd2 = _la7[1];
+
+  var login = function() {
+    if (user.trim().toLowerCase() !== account.username) { setErr("Usuario incorrecto"); return; }
+    if (_hashPwd(pwd, clientId) !== account.passwordHash) { setErr("Contraseña incorrecta"); return; }
+    onLogin();
+  };
+
+  var handleReset = function() {
+    var norm = clientId.trim().toUpperCase().replace(/-/g,"_");
+    if (resetCode.trim().toUpperCase() !== _resetCode(norm)) { setErr("Código de recuperación incorrecto"); return; }
+    if (newPwd.length < 4) { setErr("La contraseña debe tener al menos 4 caracteres"); return; }
+    if (newPwd !== newPwd2) { setErr("Las contraseñas no coinciden"); return; }
+    var updated = _objectSpread(_objectSpread({}, account), {}, { passwordHash: _hashPwd(newPwd, clientId) });
+    _saveAuth(clientId, updated);
+    localStorage.setItem("trp_session_" + clientId, "active");
+    onLogin();
+  };
+
+  if (resetMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
+    /*#__PURE__*/React.createElement("div", { style: _AS.card },
+      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size: 26, color: "#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Restablecer contraseña"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Solicita el código de recuperación a GlobalAcce por WhatsApp"),
+      err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
+      /*#__PURE__*/React.createElement("a", {
+        href: "https://wa.me/" + WHATSAPP + "?text=Necesito%20restablecer%20mi%20contrase%C3%B1a.%20Usuario%3A%20" + account.username,
+        target: "_blank",
+        style: { display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#25D366", color:"#fff", padding:"12px", borderRadius:14, fontWeight:700, fontSize:14, textDecoration:"none", marginBottom:12 }
+      }, "📱 Solicitar código por WhatsApp"),
+      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Código de recuperación (6 caracteres)", value:resetCode, onChange:function(e){setResetCode(e.target.value.toUpperCase());setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Nueva contraseña", value:newPwd, onChange:function(e){setNewPwd(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Confirmar nueva contraseña", value:newPwd2, onChange:function(e){setNewPwd2(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("button", { onClick:handleReset, style:_AS.btn }, "Restablecer y entrar"),
+      /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(false);setErr("");}, style:_AS.btnGhost }, "← Volver al login")
+    )
+  );
+
+  return /*#__PURE__*/React.createElement("div", { style: _AS.page },
+    /*#__PURE__*/React.createElement("div", { style: _AS.card },
+      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size: 26, color: "#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "TechRepair Pro"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Inicia sesión para continuar"),
+      err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
+      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Usuario", value:user, onChange:function(e){setUser(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")login();}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")login();}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("button", { onClick:login, style:_AS.btn }, "Ingresar"),
+      /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:4} },
+        /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(true);setErr("");}, style:_AS.link }, "¿Olvidaste tu contraseña?")
+      )
+    )
+  );
+}
+
+// ─── RENOVACIÓN (demo expirado, tiene cuenta) ─────────────
+function RenewalScreen(_ref) {
+  var account = _ref.account, clientId = _ref.clientId, onRenewed = _ref.onRenewed;
+  var _rn1 = useState(""), _rna1 = _slicedToArray(_rn1, 2), newCode = _rna1[0], setNewCode = _rna1[1];
+  var _rn2 = useState(""), _rna2 = _slicedToArray(_rn2, 2), err = _rna2[0], setErr = _rna2[1];
+  var _rn3 = useState(""), _rna3 = _slicedToArray(_rn3, 2), pwd = _rna3[0], setPwd = _rna3[1];
+  var _rn4 = useState(false), _rna4 = _slicedToArray(_rn4, 2), loginOk = _rna4[0], setLoginOk = _rna4[1];
+
+  var checkLogin = function() {
+    if (_hashPwd(pwd, clientId) !== account.passwordHash) { setErr("Contraseña incorrecta"); return; }
+    setLoginOk(true); setErr("");
+  };
+
+  var renovar = function() {
+    var result = verificarCodigo(newCode);
+    if (!result.valid) { setErr(result.error || "Código inválido"); return; }
+    // Mantener mismo clientId para preservar datos
+    result.clientId = clientId;
+    localStorage.setItem("trp_license", JSON.stringify({ code: newCode.trim().toUpperCase() }));
+    localStorage.setItem("trp_session_" + clientId, "active");
+    // Migrar datos al nuevo clientId si es diferente
+    if (result.clientId !== clientId) {
+      var oldData = localStorage.getItem("trp_data_" + clientId);
+      if (oldData) localStorage.setItem("trp_data_" + result.clientId, oldData);
+    }
+    onRenewed(result);
+  };
+
+  return /*#__PURE__*/React.createElement("div", { style: _AS.page },
+    /*#__PURE__*/React.createElement("div", { style: _AS.card },
+      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size: 26, color: "#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Hola, " + account.username + " 👋"),
+      !loginOk
+        ? /*#__PURE__*/React.createElement(React.Fragment, null,
+            /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Tu demo ha expirado. Ingresa tu contraseña para continuar."),
+            err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
+            /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Tu contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")checkLogin();}, style:_AS.input }),
+            /*#__PURE__*/React.createElement("button", { onClick:checkLogin, style:_AS.btn }, "Continuar"),
+            /*#__PURE__*/React.createElement("a", {
+              href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20mi%20demo%20expir%C3%B3%2C%20quiero%20activar%20TechRepair%20Pro",
+              target:"_blank",
+              style:{ display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#25D366",color:"#fff",padding:"12px",borderRadius:14,fontWeight:700,fontSize:14,textDecoration:"none",marginTop:4 }
+            }, "📱 Contactar para activar — " + PRECIO)
+          )
+        : /*#__PURE__*/React.createElement(React.Fragment, null,
+            /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Ingresa tu nuevo código de activación para continuar."),
+            err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
+            /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Código de activación", value:newCode, onChange:function(e){setNewCode(e.target.value.toUpperCase());setErr("");}, onKeyDown:function(e){if(e.key==="Enter")renovar();}, style:_AS.input }),
+            /*#__PURE__*/React.createElement("button", { onClick:renovar, style:_AS.btn }, "Activar y entrar"),
+            /*#__PURE__*/React.createElement("a", {
+              href: "https://wa.me/" + WHATSAPP + "?text=Hola%2C%20necesito%20un%20c%C3%B3digo%20de%20activaci%C3%B3n%20para%20TechRepair%20Pro",
+              target:"_blank",
+              style:{ display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#25D366",color:"#fff",padding:"12px",borderRadius:14,fontWeight:700,fontSize:14,textDecoration:"none",marginTop:4 }
+            }, "📱 Solicitar código — " + PRECIO)
+          )
+    )
   );
 }
 
