@@ -6191,10 +6191,8 @@ function App(_appProps) {
     title: "Listas para entregar",
     style: { width: 10, height: 10, borderRadius: "50%", background: T.green, flexShrink: 0, cursor: "pointer" }
   }),
-  // Banner de días restantes demo/trial
-  lic.daysLeft && !lic.permanent && /*#__PURE__*/React.createElement("div", {
-    style: { display:"flex", alignItems:"center", gap:6, background: lic.daysLeft <= 2 ? "rgba(196,43,28,0.1)" : "rgba(0,103,192,0.1)", border:"1px solid " + (lic.daysLeft <= 2 ? "rgba(196,43,28,0.3)" : "rgba(0,103,192,0.3)"), borderRadius:4, padding:"4px 10px", fontSize:11, color: lic.daysLeft <= 2 ? T.red : T.accent, fontWeight:600, flexShrink:0 }
-  }, "⏱ Demo: ", lic.daysLeft, " día", lic.daysLeft !== 1 ? "s" : "", " restante", lic.daysLeft !== 1 ? "s" : "")),
+  // Banner de días restantes demo/trial — mostrado en DemoBanner (Root level)
+  ),
 
   /*#__PURE__*/React.createElement("main", {
     className: "trp-scroll",
