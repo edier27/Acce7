@@ -57,8 +57,10 @@
         messagingSenderId: "779307465490",
         appId: "1:779307465490:web:848a554272501bbaf251cb"
       };
-      firebase.initializeApp(firebaseConfig);
-      var __db = firebase.firestore();
+      var _existingApp = firebase.apps && firebase.apps.length > 0 ? firebase.apps[0] : null;
+      var _fbApp = _existingApp || firebase.initializeApp(firebaseConfig);
+      var __db = _fbApp.firestore();
+      window.__firebaseDB = __db;
       __dataRef = __db.collection("trp_data").doc("main");
       __firebaseOK = true;
     } catch(e) {
@@ -5833,25 +5835,20 @@ function useWindowSize() {
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var _navItems$find;
-  var _licState = useState(function() { return _licCheck(); }),
-    _licStateA = _slicedToArray(_licState, 2),
-    lic = _licStateA[0], setLic = _licStateA[1];
-
-  // Pantalla de login si no hay licencia
-  if (!lic.ok && lic.type !== "expired") {
-    return /*#__PURE__*/React.createElement(LicLoginScreen, { onActivate: function(r) { setLic(r); } });
+  // Licencia gestionada por Root — aquí siempre hay acceso válido
+  // Referencia Firebase única por cliente (useRef para estabilidad entre renders)
+  var _cdrRef = React.useRef(null);
+  if (_cdrRef.current === null || _cdrRef.current._key !== clientId) {
+    try {
+      if (__firebaseOK && typeof firebase !== "undefined") {
+        var _fbInst = (window.__firebaseDB || firebase.firestore());
+        var _newRef = _fbInst.collection("clientes").doc(clientId);
+        _newRef._key = clientId;
+        _cdrRef.current = _newRef;
+      }
+    } catch(e) { console.warn("clientDataRef error:", e); }
   }
-  // Pantalla de expirado
-  if (!lic.ok && lic.type === "expired") {
-    return /*#__PURE__*/React.createElement(LicExpiredScreen, null);
-  }
-  // Referencia Firebase única por cliente
-  var clientDataRef = null;
-  try {
-    if (__firebaseOK && typeof firebase !== "undefined") {
-      clientDataRef = firebase.firestore().collection("clientes").doc(clientId);
-    }
-  } catch(e) { console.warn("clientDataRef error:", e); }
+  var clientDataRef = _cdrRef.current;
   var _useState59 = useState(null),
     _useState60 = _slicedToArray(_useState59, 2),
     data = _useState60[0],
@@ -5910,19 +5907,21 @@ function App(_appProps) {
       }, function(error) {
         console.warn("Error Firebase, usando localStorage:", error);
         try {
-          var _lsKey2 = "trp_data_" + clientId; var stored = localStorage.getItem(_lsKey2);
-          setData(stored ? JSON.parse(stored) : INIT);
+          var stored = localStorage.getItem("trp_data_" + clientId);
+          if (stored) { setData(_objectSpread(_objectSpread({}, INIT), JSON.parse(stored))); }
+          else { setData(INIT); }
         } catch(e) { setData(INIT); }
       });
       return function() { unsubscribe(); };
     } else {
       // Modo offline: usar localStorage
       try {
-        var _lsKey2 = "trp_data_" + clientId; var stored = localStorage.getItem(_lsKey2);
-        setData(stored ? JSON.parse(stored) : INIT);
+        var stored = localStorage.getItem("trp_data_" + clientId);
+        if (stored) { setData(_objectSpread(_objectSpread({}, INIT), JSON.parse(stored))); }
+        else { setData(INIT); }
       } catch(e) { setData(INIT); }
     }
-  }, []);
+  }, [clientId]);
   var save = function save(d) {
     setData(d);
     // Guardar en Firebase si está disponible
@@ -5933,7 +5932,7 @@ function App(_appProps) {
       }).catch(function(e) { console.warn("Error guardando en Firebase:", e); });
     }
     // Siempre guardar en localStorage como respaldo
-    try { localStorage.setItem("trp_data_v2", JSON.stringify(d)); } catch(e) {}
+    try { localStorage.setItem("trp_data_" + clientId, JSON.stringify(d)); } catch(e) {}
   };
   var openCatalog = function openCatalog() {
     var base = window.location.href.split("#")[0];
