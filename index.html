@@ -6387,7 +6387,7 @@ function verificarCodigo(raw) {
     return { valid: true, type: "demo", daysLeft: 1, minsLeft: minsLeft, clientId: clientId, isTest: true };
   }
 
-  if ((p[0] === "DEMO" || p[0] === "TRIAL") && p.length === 3) {
+  if ((p[0] === "DEMO" || p[0] === "TRIAL" || p[0] === "ANUAL") && p.length === 3) {
     var dateStr = p[1], hash = p[2];
     if (_hash(dateStr + _LS) !== hash) return { valid: false, error: "Código inválido." };
     var exp = new Date(dateStr.slice(0,4)+"-"+dateStr.slice(4,6)+"-"+dateStr.slice(6,8)+"T23:59:59");
@@ -6444,12 +6444,12 @@ function AdminPanel() {
       var h2 = _hash(id + "PRO" + _LS);
       code = "PRO-" + id + "-" + h2;
     } else {
-      var days = tipo === "trial" ? 30 : DIAS_DEMO;
+      var days = tipo === "trial" ? 30 : tipo === "anual" ? 365 : DIAS_DEMO;
       var exp = new Date(now.getTime() + days * 86400000);
       var dateStr = exp.getFullYear().toString() +
         String(exp.getMonth()+1).padStart(2,"0") +
         String(exp.getDate()).padStart(2,"0");
-      var prefix = tipo === "trial" ? "TRIAL" : "DEMO";
+      var prefix = tipo === "trial" ? "TRIAL" : tipo === "anual" ? "ANUAL" : "DEMO";
       var h = _hash(dateStr + _LS);
       code = prefix + "-" + dateStr + "-" + h;
     }
@@ -6489,6 +6489,7 @@ function AdminPanel() {
         },
           /*#__PURE__*/React.createElement("option", { value:"demo" }, "DEMO — " + DIAS_DEMO + " días"),
           /*#__PURE__*/React.createElement("option", { value:"trial" }, "TRIAL — 30 días"),
+          /*#__PURE__*/React.createElement("option", { value:"anual" }, "ANUAL — 1 año"),
           /*#__PURE__*/React.createElement("option", { value:"pro" }, "PRO — Permanente"),
           /*#__PURE__*/React.createElement("option", { value:"test" }, "🧪 TEST — 10 minutos (para probar)")
         ),
@@ -6539,6 +6540,7 @@ function AdminPanel() {
         [
           "DEMO: válido " + DIAS_DEMO + " días desde que el cliente activa.",
           "TRIAL: válido 30 días desde que el cliente activa.",
+          "ANUAL: válido 1 año (365 días) desde que el cliente activa.",
           "PRO: acceso permanente sin vencimiento.",
           "TEST: válido exactamente 10 minutos — solo para probar el flujo de vencimiento.",
           "Cuando vence → cliente ingresa usuario y contraseña → ingresa nuevo código → acceso restaurado.",
