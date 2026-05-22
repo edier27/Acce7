@@ -6048,7 +6048,7 @@ function App(_appProps) {
   };
   var openCatalog = function openCatalog() {
     var base = window.location.href.split("#")[0].split("?")[0];
-    window.open(base + "?client=" + encodeURIComponent(clientId) + "#catalog", "_blank");
+    window.open(base + "?mode=catalog&client=" + encodeURIComponent(clientId), "_blank");
   };
   var notify = function notify(msg) {
     var type = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "success";
@@ -6934,7 +6934,7 @@ function PublicCatalogLoader(_ref) {
   return /*#__PURE__*/React.createElement(PublicView, {
     data: pubData,
     settings: pubData.settings || _objectSpread({}, DEFAULT_SETTINGS),
-    onBack: function() { window.location.hash = ""; window.location.reload(); }
+    onBack: function() { window.location.href = window.location.href.split("?")[0]; }
   });
 }
 
@@ -6944,11 +6944,12 @@ function Root() {
   var _r3 = useState("login"), _ra3 = _slicedToArray(_r3, 2), screen = _ra3[0], setScreen = _ra3[1];
 
   var isAdmin = window.location.search.includes("admin=globalacce");
-  var isCatalog = window.location.hash === "#catalog";
+  var _qpMode = new URLSearchParams(window.location.search).get("mode");
+  var isCatalog = _qpMode === "catalog" || window.location.hash === "#catalog";
 
   useEffect(function() {
     // Admin y catálogo no necesitan auth
-    if (isAdmin || isCatalog) { setChecking(false); return; }
+    if (isAdmin || isCatalog) { setChecking(false); return; } // sin auth
     // Intentar auto-login desde sesión guardada
     var lastUser = localStorage.getItem("trp_current_user");
     if (lastUser) {
@@ -7006,8 +7007,9 @@ function Root() {
   // ─── Retornos especiales (admin y catálogo público) ──────
   if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
   if (isCatalog) {
-    var _urlP = new URLSearchParams(window.location.search);
-    return /*#__PURE__*/React.createElement(PublicCatalogLoader, { clientId: _urlP.get("client") });
+    var _urlPC = new URLSearchParams(window.location.search);
+    var _catId = _urlPC.get("client");
+    return /*#__PURE__*/React.createElement(PublicCatalogLoader, { clientId: _catId });
   }
 
   if (checking) return /*#__PURE__*/React.createElement("div", {
