@@ -5834,6 +5834,59 @@ function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var onLogout = _appProps && _appProps.onLogout ? _appProps.onLogout : function(){};
   var _navItems$find;
+
+  // ─── TEMPORIZADOR DE INACTIVIDAD (10 minutos) ──────────
+  var _it1 = useState(false), _ita1 = _slicedToArray(_it1, 2), showIdleWarn = _ita1[0], setShowIdleWarn = _ita1[1];
+  var _it2 = useState(60), _ita2 = _slicedToArray(_it2, 2), idleCountdown = _ita2[0], setIdleCountdown = _ita2[1];
+  var _idleTimer = React.useRef(null);
+  var _warnTimer = React.useRef(null);
+  var _countTimer = React.useRef(null);
+
+  var IDLE_MINUTES = 10;
+  var WARN_SECONDS = 60; // aviso 1 minuto antes
+
+  var resetIdleTimer = function() {
+    // Limpiar timers anteriores
+    if (_idleTimer.current) clearTimeout(_idleTimer.current);
+    if (_warnTimer.current) clearTimeout(_warnTimer.current);
+    if (_countTimer.current) clearInterval(_countTimer.current);
+    setShowIdleWarn(false);
+    setIdleCountdown(WARN_SECONDS);
+
+    // Timer de advertencia (a los 9 minutos)
+    _warnTimer.current = setTimeout(function() {
+      setShowIdleWarn(true);
+      setIdleCountdown(WARN_SECONDS);
+      // Cuenta regresiva de 60 segundos
+      _countTimer.current = setInterval(function() {
+        setIdleCountdown(function(prev) {
+          if (prev <= 1) { clearInterval(_countTimer.current); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    }, (IDLE_MINUTES * 60 - WARN_SECONDS) * 1000);
+
+    // Timer de logout (a los 10 minutos)
+    _idleTimer.current = setTimeout(function() {
+      clearInterval(_countTimer.current);
+      var lastUser = localStorage.getItem("trp_current_user");
+      if (lastUser) { try { localStorage.removeItem("trp_session_" + lastUser); } catch(e) {} }
+      onLogout();
+    }, IDLE_MINUTES * 60 * 1000);
+  };
+
+  useEffect(function() {
+    var events = ["mousemove","mousedown","keypress","scroll","touchstart","click"];
+    var handler = function() { resetIdleTimer(); };
+    events.forEach(function(e) { document.addEventListener(e, handler, true); });
+    resetIdleTimer(); // iniciar
+    return function() {
+      events.forEach(function(e) { document.removeEventListener(e, handler, true); });
+      if (_idleTimer.current) clearTimeout(_idleTimer.current);
+      if (_warnTimer.current) clearTimeout(_warnTimer.current);
+      if (_countTimer.current) clearInterval(_countTimer.current);
+    };
+  }, []);
   // Licencia gestionada por Root — aquí siempre hay acceso válido
   // Referencia Firebase única por cliente (useRef para estabilidad entre renders)
   var _cdrRef = React.useRef(null);
@@ -6284,7 +6337,27 @@ function App(_appProps) {
     item.alert && /*#__PURE__*/React.createElement("span", {
       style: { position: "absolute", top: 7, right: "calc(50% - 16px)", width: 7, height: 7, background: T.yellow, borderRadius: "50%", border: "2px solid ".concat(T.surface) }
     }));
-  }))));
+  })),
+
+  // ─── Aviso de inactividad ───────────────────────────────
+  showIdleWarn && /*#__PURE__*/React.createElement("div", {
+    style: { position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background:T.card, border:"1px solid ".concat(T.border), borderRadius:20, padding:32, maxWidth:360, width:"90%", textAlign:"center", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }
+  },
+    /*#__PURE__*/React.createElement("div", { style:{fontSize:48, marginBottom:12} }, "⏱️"),
+    /*#__PURE__*/React.createElement("div", { style:{fontWeight:800, fontSize:20, color:T.text, marginBottom:8, letterSpacing:"-0.02em"} }, "¿Sigues ahí?"),
+    /*#__PURE__*/React.createElement("div", { style:{color:T.muted, fontSize:14, marginBottom:20} },
+      "La sesión se cerrará en ",
+      /*#__PURE__*/React.createElement("strong", { style:{color:idleCountdown <= 10 ? T.red : T.accent, fontSize:20} }, idleCountdown),
+      " segundos por inactividad."
+    ),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: function(){ resetIdleTimer(); },
+      style:{ width:"100%", padding:"13px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:12, fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }
+    }, "✅ Continuar trabajando")
+  ))
+  ));
 }
 
 // ─── SISTEMA DE LICENCIAS ──────────────────────────────────
@@ -6819,7 +6892,10 @@ function Root() {
   };
 
   var onLogin = function(userData) {
+    // Guardar sesión y usuario en localStorage para que persista al recargar
     localStorage.setItem("trp_session_" + userData.username, "active");
+    localStorage.setItem("trp_current_user", userData.username);
+    try { localStorage.setItem("trp_user_" + userData.username, JSON.stringify(userData)); } catch(e) {}
     _checkLicenseAndEnter(userData);
   };
 
