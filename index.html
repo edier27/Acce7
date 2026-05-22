@@ -1716,14 +1716,7 @@ function RepairsView(_ref9) {
         fontSize: 11,
         color: T.muted
       }
-    }, r.phone,
-        r.phone && /*#__PURE__*/React.createElement("a", {
-          href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=Hola%20" + encodeURIComponent(r.customer||"") + "%2C%20su%20reparaci%C3%B3n%20en%20ACCE%20PRO.",
-          target: "_blank",
-          onClick: function(e){ e.stopPropagation(); },
-          style: { display:"inline-flex", marginLeft:6, background:"#25D366", color:"#fff", padding:"2px 7px", borderRadius:6, fontSize:11, fontWeight:700, textDecoration:"none" }
-        }, "📱")
-      )), /*#__PURE__*/React.createElement("td", {
+    }, r.phone)), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "11px 14px",
         color: T.dim,
@@ -2059,28 +2052,95 @@ function RepairModal(_ref0) {
         color: T.text
       }
     }, form.notes)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap"
-      }
-    }, !["Entregado", "Cancelado"].includes(form.status) && /*#__PURE__*/React.createElement(Btn, {
-      icon: /*#__PURE__*/React.createElement(ChevronRight, {
-        size: 15
-      }),
+      style: { display: "flex", gap: 8, flexWrap: "wrap" }
+    },
+    !["Entregado", "Cancelado"].includes(form.status) && /*#__PURE__*/React.createElement(Btn, {
+      icon: /*#__PURE__*/React.createElement(ChevronRight, { size: 15 }),
       onClick: advanceStatus
-    }, "Avanzar \u2192 ", STATUSES[STATUSES.indexOf(form.status) + 1]), /*#__PURE__*/React.createElement(Btn, {
+    }, "Avanzar → ", STATUSES[STATUSES.indexOf(form.status) + 1]),
+    /*#__PURE__*/React.createElement(Btn, {
       variant: "ghost",
-      icon: /*#__PURE__*/React.createElement(Edit2, {
-        size: 15
-      }),
-      onClick: function onClick() {
-        return setModal({
-          mode: "edit",
-          repair: _objectSpread({}, form)
-        });
+      icon: /*#__PURE__*/React.createElement(Edit2, { size: 15 }),
+      onClick: function onClick() { return setModal({ mode: "edit", repair: _objectSpread({}, form) }); }
+    }, "Editar"),
+    form.phone && /*#__PURE__*/React.createElement("a", {
+      href: "https://wa.me/57" + form.phone.replace(/\D/g,"") + "?text=" + encodeURIComponent(
+        "Hola " + form.customer + ", le informamos sobre su reparación en ACCE PRO.\n\n" +
+        "📱 Equipo: " + form.device + "\n" +
+        "🔧 Estado: " + form.status + "\n" +
+        "💰 Costo: $" + (form.cost || 0).toLocaleString("es-CO") + "\n\n" +
+        "Gracias por preferirnos."
+      ),
+      target: "_blank",
+      style: { display:"inline-flex", alignItems:"center", gap:6, background:"#25D366", color:"#fff", padding:"8px 14px", borderRadius:12, fontSize:13, fontWeight:700, textDecoration:"none", cursor:"pointer" }
+    }, "📱 WhatsApp"),
+    /*#__PURE__*/React.createElement(Btn, {
+      variant: "ghost",
+      icon: /*#__PURE__*/React.createElement(Printer, { size: 15 }),
+      onClick: function() {
+        var settings2 = {};
+        try { settings2 = JSON.parse(localStorage.getItem("trp_settings_v1") || "{}"); } catch(e) {}
+        var storeName = settings2.storeName || "ACCE PRO";
+        var advances2 = form.advances || [];
+        var totalAb = advances2.reduce(function(s,a){ return s+(a.amount||0); }, 0);
+        var pendiente2 = (form.cost||0) - totalAb;
+        var win = window.open("", "_blank");
+        win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recibo #' + form.id.slice(-4) + '</title><style>');
+        win.document.write('@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap");');
+        win.document.write('*{box-sizing:border-box;margin:0;padding:0}');
+        win.document.write('body{font-family:"Inter",Arial,sans-serif;max-width:380px;margin:24px auto;padding:24px;font-size:13px;color:#1a1a2e;background:#fff}');
+        win.document.write('.logo{text-align:center;margin-bottom:16px}');
+        win.document.write('.logo h1{font-size:22px;font-weight:800;color:#10E08A;letter-spacing:-0.03em}');
+        win.document.write('.logo p{font-size:11px;color:#666;margin-top:2px}');
+        win.document.write('.divider{border:none;border-top:2px dashed #e0e0e0;margin:14px 0}');
+        win.document.write('.title{background:linear-gradient(135deg,#10E08A20,#4F8EFF20);border:1px solid #10E08A40;border-radius:8px;padding:10px 14px;text-align:center;margin-bottom:14px}');
+        win.document.write('.title span{font-size:11px;color:#666;display:block}');
+        win.document.write('.title b{font-size:18px;font-weight:800;color:#1a1a2e}');
+        win.document.write('.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px dashed #f0f0f0;gap:8px}');
+        win.document.write('.row .label{color:#666;font-size:12px;flex-shrink:0}');
+        win.document.write('.row .value{font-weight:600;color:#1a1a2e;text-align:right;font-size:13px}');
+        win.document.write('.section-title{font-size:10px;font-weight:700;color:#10E08A;text-transform:uppercase;letter-spacing:0.08em;margin:12px 0 6px}');
+        win.document.write('.total-row{display:flex;justify-content:space-between;padding:9px 12px;border-radius:8px;margin:4px 0;font-weight:700}');
+        win.document.write('.total-row.main{background:#1a1a2e;color:#fff;font-size:15px}');
+        win.document.write('.total-row.abono{background:#10E08A20;color:#10a860}');
+        win.document.write('.total-row.pending{background:#FF6B3520;color:#e55}');
+        win.document.write('.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}');
+        win.document.write('.badge.paid{background:#10E08A20;color:#10a860;border:1px solid #10E08A40}');
+        win.document.write('.badge.pending{background:#FF6B3520;color:#e55;border:1px solid #FF6B3540}');
+        win.document.write('.footer{text-align:center;margin-top:20px;padding-top:14px;border-top:1px dashed #e0e0e0;font-size:11px;color:#888;line-height:1.6}');
+        win.document.write('@media print{body{margin:0;padding:16px}}');
+        win.document.write('</style></head><body>');
+        win.document.write('<div class="logo"><h1>' + storeName + '</h1><p>Sistema de Gestión ACCE PRO</p></div>');
+        win.document.write('<div class="title"><span>Recibo de Reparación</span><b>#' + (form.id||"").slice(-6).toUpperCase() + '</b></div>');
+        win.document.write('<div class="section-title">📋 Información del cliente</div>');
+        win.document.write('<div class="row"><span class="label">Cliente</span><span class="value">' + form.customer + '</span></div>');
+        if (form.phone) win.document.write('<div class="row"><span class="label">Teléfono</span><span class="value">' + form.phone + '</span></div>');
+        win.document.write('<div class="row"><span class="label">Fecha</span><span class="value">' + form.date + '</span></div>');
+        win.document.write('<div class="section-title">📱 Detalle del equipo</div>');
+        win.document.write('<div class="row"><span class="label">Equipo</span><span class="value">' + form.device + '</span></div>');
+        win.document.write('<div class="row"><span class="label">Problema</span><span class="value">' + form.problem + '</span></div>');
+        win.document.write('<div class="row"><span class="label">Categoría</span><span class="value">' + (form.category||"") + '</span></div>');
+        win.document.write('<div class="row"><span class="label">Estado</span><span class="value">' + form.status + '</span></div>');
+        if (form.technician) win.document.write('<div class="row"><span class="label">Técnico</span><span class="value">' + form.technician + '</span></div>');
+        if (form.notes) win.document.write('<div class="row"><span class="label">Diagnóstico</span><span class="value" style="max-width:200px">' + form.notes + '</span></div>');
+        win.document.write('<div class="section-title">💰 Resumen de pago</div>');
+        win.document.write('<div class="total-row main"><span>Costo Total</span><span>$' + (form.cost||0).toLocaleString("es-CO") + '</span></div>');
+        if (advances2.length > 0) {
+          advances2.forEach(function(a) {
+            win.document.write('<div class="total-row abono"><span>✅ Abono ' + a.date + (a.note?" · "+a.note:"") + '</span><span>$' + (a.amount||0).toLocaleString("es-CO") + '</span></div>');
+          });
+          win.document.write('<div class="total-row abono"><span>Total Abonado</span><span>$' + totalAb.toLocaleString("es-CO") + '</span></div>');
+          win.document.write('<div class="total-row ' + (pendiente2>0?"pending":"abono") + '"><span>' + (pendiente2>0?"⏳ Saldo Pendiente":"✅ Saldo Pagado") + '</span><span>$' + pendiente2.toLocaleString("es-CO") + '</span></div>');
+        } else {
+          win.document.write('<div style="margin-top:8px;text-align:center"><span class="badge ' + (form.paid?"paid":"pending") + '">' + (form.paid?"✅ PAGADO COMPLETO":"⏳ PAGO PENDIENTE") + '</span></div>');
+        }
+        win.document.write('<div class="footer">Gracias por preferirnos 🙏<br><b>' + storeName + '</b><br>Generado el ' + new Date().toLocaleDateString("es-CO") + '</div>');
+        win.document.write('</body></html>');
+        win.document.close();
+        win.print();
       }
-    }, "Editar"))));
+    }, "🖨️ Imprimir Recibo")
+    )));
   }
   return /*#__PURE__*/React.createElement(ModalWrap, {
     title: isNew ? "Nueva Orden de Reparación" : "Editar Orden",
