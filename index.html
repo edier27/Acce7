@@ -6303,6 +6303,17 @@ function verificarCodigo(raw) {
   var c = raw.trim().toUpperCase();
   var p = c.split("-");
   var clientId = c.replace(/-/g, "_");
+
+  // TEST-{minutosExpiry}-{hash} → expira en minutos exactos
+  if (p[0] === "TEST" && p.length === 3) {
+    var expMin = parseInt(p[1]), hashT = p[2];
+    if (_hash(p[1] + "TEST" + _LS) !== hashT) return { valid: false, error: "Código inválido." };
+    var nowMin = Math.floor(Date.now() / 60000);
+    if (nowMin > expMin) return { valid: false, error: "Código de prueba expirado.", expired: true };
+    var minsLeft = expMin - nowMin;
+    return { valid: true, type: "demo", daysLeft: 1, minsLeft: minsLeft, clientId: clientId, isTest: true };
+  }
+
   if ((p[0] === "DEMO" || p[0] === "TRIAL") && p.length === 3) {
     var dateStr = p[1], hash = p[2];
     if (_hash(dateStr + _LS) !== hash) return { valid: false, error: "Código inválido." };
@@ -6321,7 +6332,138 @@ function verificarCodigo(raw) {
   return { valid: false, error: "Código inválido. Verifica e intenta de nuevo." };
 }
 
-// ─── ESTILOS COMPARTIDOS AUTH ─────────────────────────────
+// ─── PANEL DE ADMINISTRACIÓN ──────────────────────────────
+function AdminPanel() {
+  var _a1 = useState("demo"), _aa1 = _slicedToArray(_a1, 2), tipo = _aa1[0], setTipo = _aa1[1];
+  var _a2 = useState(null), _aa2 = _slicedToArray(_a2, 2), codigoGen = _aa2[0], setCodigoGen = _aa2[1];
+  var _a3 = useState(""), _aa3 = _slicedToArray(_a3, 2), rcUser = _aa3[0], setRcUser = _aa3[1];
+  var _a4 = useState(""), _aa4 = _slicedToArray(_a4, 2), rcOut = _aa4[0], setRcOut = _aa4[1];
+  var _a5 = useState(false), _aa5 = _slicedToArray(_a5, 2), copied = _aa5[0], setCopied = _aa5[1];
+
+  var generar = function() {
+    var code;
+    var now = new Date();
+
+    if (tipo === "test") {
+      // Expira en 10 minutos exactos
+      var expMin = Math.floor((Date.now() + 10 * 60 * 1000) / 60000).toString();
+      var hT = _hash(expMin + "TEST" + _LS);
+      code = "TEST-" + expMin + "-" + hT;
+    } else if (tipo === "pro") {
+      var id = Math.random().toString(36).slice(2,8).toUpperCase();
+      var h2 = _hash(id + "PRO" + _LS);
+      code = "PRO-" + id + "-" + h2;
+    } else {
+      var days = tipo === "trial" ? 30 : DIAS_DEMO;
+      var exp = new Date(now.getTime() + days * 86400000);
+      var dateStr = exp.getFullYear().toString() +
+        String(exp.getMonth()+1).padStart(2,"0") +
+        String(exp.getDate()).padStart(2,"0");
+      var prefix = tipo === "trial" ? "TRIAL" : "DEMO";
+      var h = _hash(dateStr + _LS);
+      code = prefix + "-" + dateStr + "-" + h;
+    }
+    setCodigoGen(code);
+    setCopied(false);
+  };
+
+  var copiar = function() {
+    if (codigoGen) {
+      navigator.clipboard.writeText(codigoGen).then(function(){ setCopied(true); setTimeout(function(){ setCopied(false); }, 2000); });
+    }
+  };
+
+  var cardStyle = { background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", marginBottom:16 };
+  var lblStyle = { fontSize:12, fontWeight:600, color:"#606060", marginBottom:6, display:"block" };
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight:"100dvh", background:"#F0F2F5", fontFamily:"'DM Sans',system-ui,sans-serif", padding:20 }
+  },
+    /*#__PURE__*/React.createElement("div", { style:{ maxWidth:520, margin:"0 auto" } },
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:12, marginBottom:20 } },
+        /*#__PURE__*/React.createElement("div", { style:{ width:40, height:40, background:"linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" } },
+          /*#__PURE__*/React.createElement(Smartphone, { size:20, color:"#fff" })
+        ),
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:800, fontSize:18, color:"#0D1B35", letterSpacing:"-0.03em" } }, "Panel Admin"),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B" } }, "TechRepair Pro — GlobalAcce")
+        )
+      ),
+
+      /*#__PURE__*/React.createElement("div", { style: cardStyle },
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:14, color:"#0D1B35" } }, "🔑 Generar código de activación"),
+        /*#__PURE__*/React.createElement("label", { style: lblStyle }, "Tipo de licencia"),
+        /*#__PURE__*/React.createElement("select", {
+          value: tipo, onChange: function(e){ setTipo(e.target.value); setCodigoGen(null); },
+          style:{ width:"100%", padding:"10px 12px", border:"1px solid #E2E8F4", borderRadius:10, fontSize:14, marginBottom:12, fontFamily:"inherit", background:"#fff" }
+        },
+          /*#__PURE__*/React.createElement("option", { value:"demo" }, "DEMO — " + DIAS_DEMO + " días"),
+          /*#__PURE__*/React.createElement("option", { value:"trial" }, "TRIAL — 30 días"),
+          /*#__PURE__*/React.createElement("option", { value:"pro" }, "PRO — Permanente"),
+          /*#__PURE__*/React.createElement("option", { value:"test" }, "🧪 TEST — 10 minutos (para probar)")
+        ),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: generar,
+          style:{ width:"100%", padding:"12px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:10, fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }
+        }, "Generar código"),
+        codigoGen && /*#__PURE__*/React.createElement("div", { style:{ marginTop:12, padding:"14px", background:"#F0FDF4", border:"1px solid #10E08A40", borderRadius:10 } },
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:6 } }, "Código generado — compártelo con tu cliente:"),
+          /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:16, fontWeight:700, color:"#0D1B35", letterSpacing:"0.08em", wordBreak:"break-all", marginBottom:10 } }, codigoGen),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: copiar,
+            style:{ padding:"8px 16px", background: copied?"#10E08A":"#0D1B35", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
+          }, copied ? "✅ Copiado" : "Copiar código"),
+          /*#__PURE__*/React.createElement("a", {
+            href:"https://wa.me/?text=" + encodeURIComponent("Tu código de activación para TechRepair Pro:\n\n" + codigoGen + "\n\nPrecio: " + PRECIO),
+            target:"_blank",
+            style:{ display:"inline-flex", alignItems:"center", gap:6, marginLeft:8, padding:"8px 14px", background:"#25D366", color:"#fff", borderRadius:8, fontSize:13, fontWeight:600, textDecoration:"none" }
+          }, "📱 Enviar por WhatsApp")
+        )
+      ),
+
+      /*#__PURE__*/React.createElement("div", { style: cardStyle },
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:6, color:"#0D1B35" } }, "🔐 Código de recuperación de contraseña"),
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B", marginBottom:12 } },
+          "Ingresa el ", /*#__PURE__*/React.createElement("strong", null, "nombre de usuario"), " del cliente para obtener su código de recuperación:"
+        ),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
+          /*#__PURE__*/React.createElement("input", {
+            type:"text", placeholder:"Nombre de usuario del cliente",
+            value: rcUser, onChange: function(e){ setRcUser(e.target.value.toLowerCase()); setRcOut(""); },
+            style:{ flex:1, padding:"10px 12px", border:"1px solid #E2E8F4", borderRadius:10, fontSize:14, fontFamily:"inherit" }
+          }),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function(){ if(rcUser.trim()) setRcOut(_resetCode(rcUser.trim())); },
+            style:{ padding:"10px 16px", background:"#0D1B35", color:"#fff", border:"none", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:700, fontFamily:"inherit" }
+          }, "Obtener")
+        ),
+        rcOut && /*#__PURE__*/React.createElement("div", { style:{ marginTop:10, padding:"12px 16px", background:"#F0FDF4", border:"1px solid #10E08A40", borderRadius:10, textAlign:"center" } },
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:4 } }, "Código de recuperación para " + rcUser + ":"),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:24, fontWeight:800, letterSpacing:"0.2em", color:"#10E08A" } }, rcOut),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#94A3B8", marginTop:4 } }, "Envíaselo al cliente por WhatsApp")
+        )
+      ),
+
+      /*#__PURE__*/React.createElement("div", { style: cardStyle },
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:10, color:"#0D1B35" } }, "ℹ️ Información"),
+        [
+          "DEMO: válido " + DIAS_DEMO + " días desde que el cliente activa.",
+          "TRIAL: válido 30 días desde que el cliente activa.",
+          "PRO: acceso permanente sin vencimiento.",
+          "TEST: válido exactamente 10 minutos — solo para probar el flujo de vencimiento.",
+          "Cuando vence → cliente ingresa usuario y contraseña → ingresa nuevo código → acceso restaurado.",
+          "El código de recuperación se genera con el NOMBRE DE USUARIO del cliente."
+        ].map(function(txt, i) {
+          return /*#__PURE__*/React.createElement("div", { key:i, style:{ fontSize:12, color:"#606060", marginBottom:6, display:"flex", gap:6 } },
+            /*#__PURE__*/React.createElement("span", { style:{ color:"#10E08A", flexShrink:0 } }, "•"), txt
+          );
+        })
+      )
+    )
+  );
+}
+
+
 var _AS = {
   page: { minHeight:"100dvh", background:"linear-gradient(135deg,#090E1A 0%,#0F1729 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"'DM Sans',system-ui,sans-serif" },
   card: { background:"rgba(20,30,50,0.95)", backdropFilter:"blur(20px)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:24, boxShadow:"0 24px 80px rgba(0,0,0,0.5)", padding:36, width:"100%", maxWidth:420 },
