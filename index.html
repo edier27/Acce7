@@ -488,12 +488,15 @@ var LICENSE_MASTER = "GLOBALACCE-MASTER-2025"; // código tuyo para admin
 // Genera código pro: PRO-XXXXX (permanente)
 // Genera código trial: TRIAL-XXXXX-DD (válido DD días)
 
-function _licVerify(code) {
+// ── _licVerify: verifica código y lo registra en Firebase (uso único) ──
+async function _licVerify(code) {
   if (!code) return { ok: false, type: null };
   var c = code.trim().toUpperCase();
-  // Código maestro del dueño
+
+  // Código maestro del dueño — siempre funciona
   if (c === LICENSE_MASTER) return { ok: true, type: "master", label: "Administrador", permanent: true };
-  // Verificar en localStorage si ya fue activado
+
+  // Si ya está activado en ESTE dispositivo → OK directamente
   var stored = null;
   try { stored = JSON.parse(localStorage.getItem("trp_lic_v1") || "null"); } catch(e) {}
   if (stored && stored.code === c) {
@@ -503,10 +506,36 @@ function _licVerify(code) {
     if (now < stored.expires) return { ok: true, type: stored.type, label: stored.label, daysLeft: diff };
     return { ok: false, type: "expired", label: stored.label };
   }
-  // Validar formato y activar
-  var demoMatch = c.match(/^DEMO-([A-Z0-9]{5})$/);
-  var proMatch = c.match(/^PRO-([A-Z0-9]{5})$/);
+
+  // Validar formato
+  var demoMatch  = c.match(/^DEMO-([A-Z0-9]{5})$/);
+  var proMatch   = c.match(/^PRO-([A-Z0-9]{5})$/);
   var trialMatch = c.match(/^TRIAL-([A-Z0-9]{5})-(\d{1,3})$/);
+  if (!demoMatch && !proMatch && !trialMatch) return { ok: false, type: "invalid" };
+
+  // ── Verificar en Firebase si el código ya fue usado en otro dispositivo ──
+  if (window.__firebaseOK && typeof firebase !== "undefined") {
+    try {
+      var db = firebase.apps[0].firestore();
+      var codeKey = "LIC_" + c.replace(/[^A-Z0-9]/g, "_");
+      var docRef  = db.collection("licenses").doc(codeKey);
+      var doc     = await docRef.get();
+      if (doc.exists && doc.data() && doc.data().used) {
+        return { ok: false, type: "already_used" };
+      }
+      // Marcar como usado en Firebase antes de activar
+      await docRef.set({
+        used: true,
+        code: c,
+        activatedAt: Date.now(),
+        device: (navigator.userAgent || "").substring(0, 120)
+      });
+    } catch(fbErr) {
+      console.warn("[TRP] Firebase license check falló, modo offline:", fbErr);
+    }
+  }
+
+  // ── Activar localmente ──
   if (demoMatch) {
     var expires = Date.now() + LICENSE_DEMO_DAYS * 86400000;
     var lic = { code: c, type: "demo", label: "Demo " + LICENSE_DEMO_DAYS + " días", expires: expires, permanent: false };
@@ -543,7 +572,18 @@ function _licCheck_OLD() {
 function _licClear() {
   try { localStorage.removeItem("trp_lic_v1"); } catch(e) {}
 }
-function _licCheck() { return { ok: true, type: "pro", permanent: true }; }
+function _licCheck() {
+  try {
+    var stored = JSON.parse(localStorage.getItem("trp_lic_v1") || "null");
+    if (!stored) return { ok: false, type: null };
+    if (stored.code === LICENSE_MASTER || stored.type === "master") return { ok: true, type: "master", label: "Administrador", permanent: true };
+    if (stored.permanent) return { ok: true, type: stored.type, label: stored.label, permanent: true };
+    var now = Date.now();
+    var diff = Math.ceil((stored.expires - now) / 86400000);
+    if (now < stored.expires) return { ok: true, type: stored.type, label: stored.label, daysLeft: diff };
+    return { ok: false, type: "expired", label: stored.label };
+  } catch(e) { return { ok: false, type: null }; }
+}
 
 // Generador de códigos (para usar en consola del navegador)
 // Escribe en consola: generarCodigoDemo() o generarCodigoPro()
@@ -586,14 +626,14 @@ function LicLoginScreen(_ref) {
   var _ul = useState(false), _ula = _slicedToArray(_ul, 2), loading = _ula[0], setLoading = _ula[1];
   var handleActivate = function() {
     setLoading(true); setError("");
-    setTimeout(function() {
-      var result = _licVerify(code);
+    _licVerify(code).then(function(result) {
       if (result.ok) { onActivate(result); }
-      else if (result.type === "expired") { setError("Este código ya expiró. Contacta a GlobalAcce para renovar."); }
-      else if (result.type === "invalid") { setError("Código inválido. Verifica que lo escribiste correctamente."); }
+      else if (result.type === "already_used") { setError("\u274c Este código ya fue activado en otro dispositivo. Solicita un código nuevo a GlobalAcce."); }
+      else if (result.type === "expired")      { setError("Este código ya expiró. Contacta a GlobalAcce para renovar."); }
+      else if (result.type === "invalid")      { setError("Código inválido. Verifica que lo escribiste correctamente."); }
       else { setError("Código no reconocido. Contacta a GlobalAcce."); }
       setLoading(false);
-    }, 600);
+    }).catch(function() { setError("Error al verificar. Intenta de nuevo."); setLoading(false); });
   };
   return /*#__PURE__*/React.createElement("div", {
     style:{ position:"fixed", inset:0, background:"#F3F3F3", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"'Inter',system-ui,sans-serif", padding:24 }
