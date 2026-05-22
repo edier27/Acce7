@@ -683,7 +683,8 @@ var INIT = {
     paid: false,
     date: "2026-05-15",
     notes: "Cliente quiere pantalla original",
-    technician: "Técnico Principal"
+    technician: "Técnico Principal",
+    advances: []
   }, {
     id: uid(),
     customer: "María López",
@@ -696,7 +697,8 @@ var INIT = {
     paid: true,
     date: "2026-05-14",
     notes: "Puerto USB-C dañado",
-    technician: "Técnico Principal"
+    technician: "Técnico Principal",
+    advances: []
   }, {
     id: uid(),
     customer: "Juan Pérez",
@@ -709,7 +711,8 @@ var INIT = {
     paid: false,
     date: "2026-05-17",
     notes: "",
-    technician: "Técnico Principal"
+    technician: "Técnico Principal",
+    advances: []
   }],
   inventory: [{
     id: uid(),
@@ -1099,15 +1102,21 @@ function DashboardView(_ref8) {
     setView = _ref8.setView,
     _ref8$isMobile = _ref8.isMobile,
     isMobile = _ref8$isMobile === void 0 ? false : _ref8$isMobile;
+  // Calcular ingresos incluyendo abonos parciales
   var paid = data.repairs.filter(function (r) {
     return r.paid;
   }).reduce(function (a, r) {
     return a + r.cost;
   }, 0);
+  // Agregar abonos de reparaciones no completamente pagadas
+  var totalAbonos = data.repairs.filter(function(r) { return !r.paid && r.advances && r.advances.length > 0; })
+    .reduce(function(a, r) { return a + (r.advances||[]).reduce(function(s,adv){ return s+(adv.amount||0); }, 0); }, 0);
+  var paidTotal = paid + totalAbonos;
   var pending = data.repairs.filter(function (r) {
     return !r.paid && r.status !== "Cancelado";
   }).reduce(function (a, r) {
-    return a + r.cost;
+    var advSum = (r.advances||[]).reduce(function(s,adv){ return s+(adv.amount||0); }, 0);
+    return a + Math.max(0, r.cost - advSum);
   }, 0);
   var active = data.repairs.filter(function (r) {
     return !["Entregado", "Cancelado"].includes(r.status);
@@ -1128,7 +1137,7 @@ function DashboardView(_ref8) {
     })
   }, {
     label: "Ingresos Cobrados",
-    value: fmt(paid),
+    value: fmt(paidTotal),
     sub: "".concat(fmt(pending), " pendiente"),
     color: T.green,
     icon: /*#__PURE__*/React.createElement(DollarSign, {
@@ -1759,7 +1768,14 @@ function RepairsView(_ref9) {
         fontSize: 11,
         color: T.muted
       }
-    }, r.phone)), /*#__PURE__*/React.createElement("td", {
+    }, r.phone,
+        r.phone && /*#__PURE__*/React.createElement("a", {
+          href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=Hola%20" + encodeURIComponent(r.customer||"") + "%2C%20su%20reparaci%C3%B3n%20en%20ACCE%20PRO.",
+          target: "_blank",
+          onClick: function(e){ e.stopPropagation(); },
+          style: { display:"inline-flex", marginLeft:6, background:"#25D366", color:"#fff", padding:"2px 7px", borderRadius:6, fontSize:11, fontWeight:700, textDecoration:"none" }
+        }, "📱")
+      )), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "11px 14px",
         color: T.dim,
@@ -1879,15 +1895,73 @@ function RepairModal(_ref0) {
     data = _ref0.data,
     save = _ref0.save,
     notify = _ref0.notify;
-  var _useState7 = useState(modal.repair),
+  var _useState7 = useState(modal.repair ? Object.assign({ advances: [] }, modal.repair) : { advances: [] }),
     _useState8 = _slicedToArray(_useState7, 2),
     form = _useState8[0],
     setForm = _useState8[1];
+
+  // Búsqueda de cliente
+  var _cs1 = useState(""), _csa1 = _slicedToArray(_cs1, 2), custSearch = _csa1[0], setCustSearch = _csa1[1];
+  var _cs2 = useState(false), _csa2 = _slicedToArray(_cs2, 2), showDropdown = _csa2[0], setShowDropdown = _csa2[1];
+
+  // Nuevo abono
+  var _ab1 = useState(""), _aba1 = _slicedToArray(_ab1, 2), abonoMonto = _aba1[0], setAbonoMonto = _aba1[1];
+  var _ab2 = useState(""), _aba2 = _slicedToArray(_ab2, 2), abonoNota = _aba2[0], setAbonoNota = _aba2[1];
+
+  // Nuevo cliente inline
+  var _nc1 = useState(false), _nca1 = _slicedToArray(_nc1, 2), showNewCust = _nc1[0], setShowNewCust = _nca1[1];
+  var _nc2 = useState(""), _nca2 = _slicedToArray(_nc2, 2), newCustName = _nca2[0], setNewCustName = _nca2[1];
+  var _nc3 = useState(""), _nca3 = _slicedToArray(_nc3, 2), newCustPhone = _nca3[0], setNewCustPhone = _nca3[1];
+  var _nc4 = useState(""), _nca4 = _slicedToArray(_nc4, 2), newCustEmail = _nca4[0], setNewCustEmail = _nca4[1];
+  var _nc5 = useState(""), _nca5 = _slicedToArray(_nc5, 2), newCustCity = _nca5[0], setNewCustCity = _nca5[1];
+
+  var advances = form.advances || [];
+  var totalAbonos = advances.reduce(function(s, a) { return s + (Number(a.amount)||0); }, 0);
+  var pendiente = (form.cost || 0) - totalAbonos;
+
   var set = function set(k, v) {
     return setForm(function (f) {
       return _objectSpread(_objectSpread({}, f), {}, _defineProperty({}, k, v));
     });
   };
+
+  // Clientes filtrados para búsqueda
+  var filteredCusts = custSearch.length >= 2
+    ? data.customers.filter(function(c) {
+        return c.name.toLowerCase().includes(custSearch.toLowerCase()) ||
+               (c.phone && c.phone.includes(custSearch));
+      }).slice(0, 6)
+    : [];
+
+  // Seleccionar cliente del dropdown
+  var selectCust = function(c) {
+    set("customer", c.name);
+    set("phone", c.phone || "");
+    setCustSearch(c.name);
+    setShowDropdown(false);
+  };
+
+  // Agregar abono
+  var addAbono = function() {
+    if (!abonoMonto || Number(abonoMonto) <= 0) { notify("Ingresa un monto válido", "error"); return; }
+    var newAdv = { id: uid(), amount: Number(abonoMonto), date: new Date().toISOString().slice(0,10), note: abonoNota || "Abono" };
+    set("advances", [].concat(advances, [newAdv]));
+    setAbonoMonto(""); setAbonoNota("");
+    // Si el total cubre el costo, marcar como pagado
+    if (totalAbonos + Number(abonoMonto) >= (form.cost || 0)) set("paid", true);
+  };
+
+  // Crear cliente nuevo inline
+  var saveNewCust = function() {
+    if (!newCustName.trim()) { notify("Ingresa el nombre", "error"); return; }
+    var newC = { id: uid(), name: newCustName.trim(), phone: newCustPhone, email: newCustEmail, city: newCustCity, notes: "" };
+    save(_objectSpread(_objectSpread({}, data), {}, { customers: [].concat(_toConsumableArray(data.customers), [newC]) }));
+    set("customer", newC.name); set("phone", newC.phone);
+    setCustSearch(newC.name);
+    setShowNewCust(false); setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustCity("");
+    notify("✅ Cliente creado y seleccionado");
+  };
+
   var isView = modal.mode === "view",
     isNew = modal.mode === "add";
   var handleSave = function handleSave() {
@@ -1898,9 +1972,7 @@ function RepairModal(_ref0) {
     var repairs = isNew ? [].concat(_toConsumableArray(data.repairs), [form]) : data.repairs.map(function (r) {
       return r.id === form.id ? form : r;
     });
-    save(_objectSpread(_objectSpread({}, data), {}, {
-      repairs: repairs
-    }));
+    save(_objectSpread(_objectSpread({}, data), {}, { repairs: repairs }));
     notify(isNew ? "Orden creada exitosamente" : "Orden actualizada");
     setModal(null);
   };
@@ -2064,149 +2136,150 @@ function RepairModal(_ref0) {
   }
   return /*#__PURE__*/React.createElement(ModalWrap, {
     title: isNew ? "Nueva Orden de Reparación" : "Editar Orden",
-    onClose: function onClose() {
-      return setModal(null);
-    },
+    onClose: function onClose() { return setModal(null); },
     wide: true
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: 14
-    }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Cliente *",
-    value: form.customer,
-    onChange: function onChange(v) {
-      return set("customer", v);
-    },
-    placeholder: "Nombre completo",
-    required: true
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Tel\xE9fono",
-    value: form.phone,
-    onChange: function onChange(v) {
-      return set("phone", v);
-    },
-    placeholder: "3001234567"
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Equipo *",
-    value: form.device,
-    onChange: function onChange(v) {
-      return set("device", v);
-    },
-    placeholder: "Samsung Galaxy S21",
-    required: true
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Categor\xEDa",
-    value: form.category,
-    onChange: function onChange(v) {
-      return set("category", v);
-    },
-    options: REPAIR_CATS
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Problema *",
-    value: form.problem,
-    onChange: function onChange(v) {
-      return set("problem", v);
-    },
-    placeholder: "Descripci\xF3n del problema",
-    required: true
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Estado",
-    value: form.status,
-    onChange: function onChange(v) {
-      return set("status", v);
-    },
-    options: STATUSES
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Costo (COP)",
-    value: form.cost,
-    onChange: function onChange(v) {
-      return set("cost", Number(v));
-    },
-    type: "number",
-    placeholder: "150000"
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Fecha",
-    value: form.date,
-    onChange: function onChange(v) {
-      return set("date", v);
-    },
-    type: "date"
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "T\xE9cnico",
-    value: form.technician,
-    onChange: function onChange(v) {
-      return set("technician", v);
-    },
-    placeholder: "Nombre del t\xE9cnico"
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 5
-    }
-  }, /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 11,
-      fontWeight: 600,
-      color: T.muted,
-      textTransform: "uppercase",
-      letterSpacing: "0.06em"
-    }
-  }, "Estado de Pago"), /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      return set("paid", !form.paid);
-    },
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      background: form.paid ? "rgba(0,200,150,0.1)" : T.surface,
-      border: "1px solid ".concat(form.paid ? T.green : T.border),
-      borderRadius: 8,
-      padding: "9px 13px",
-      color: form.paid ? T.green : T.muted,
-      cursor: "pointer",
-      fontSize: 14,
-      fontWeight: 600,
-      fontFamily: "inherit"
-    }
-  }, form.paid ? /*#__PURE__*/React.createElement(CheckCircle, {
-    size: 16
-  }) : /*#__PURE__*/React.createElement(XCircle, {
-    size: 16
-  }), " ", form.paid ? "Sí, pagado" : "Sin pagar"))), /*#__PURE__*/React.createElement(Field, {
-    label: "Notas / Diagn\xF3stico",
-    value: form.notes,
-    onChange: function onChange(v) {
-      return set("notes", v);
-    },
-    textarea: true,
-    placeholder: "Diagn\xF3stico, repuestos usados, observaciones del cliente..."
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleSave,
-    icon: /*#__PURE__*/React.createElement(Check, {
-      size: 15
-    })
-  }, isNew ? "Crear Orden" : "Guardar Cambios"), /*#__PURE__*/React.createElement(Btn, {
-    variant: "ghost",
-    onClick: function onClick() {
-      return setModal(null);
-    }
-  }, "Cancelar"))));
+  }, /*#__PURE__*/React.createElement("div", { style: { display:"flex", flexDirection:"column", gap:14 } },
+
+    // ─── Búsqueda de cliente con autocomplete ───────────────
+    /*#__PURE__*/React.createElement("div", { style:{ gridColumn:"1/-1" } },
+      /*#__PURE__*/React.createElement("label", { style:{ fontSize:11, fontWeight:600, color:T.muted, textTransform:"uppercase", letterSpacing:"0.06em", display:"block", marginBottom:5 } }, "Cliente *"),
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, position:"relative" } },
+        /*#__PURE__*/React.createElement("div", { style:{ flex:1, position:"relative" } },
+          /*#__PURE__*/React.createElement("input", {
+            type:"text",
+            placeholder:"Buscar cliente registrado o escribir nombre...",
+            value: custSearch || form.customer || "",
+            onChange: function(e) {
+              var v = e.target.value;
+              setCustSearch(v); set("customer", v); setShowDropdown(true);
+            },
+            onFocus: function(){ setShowDropdown(true); },
+            onBlur: function(){ setTimeout(function(){ setShowDropdown(false); }, 200); },
+            style: Object.assign({}, IS, { width:"100%", paddingRight:36 })
+          }),
+          custSearch.length >= 1 && /*#__PURE__*/React.createElement("span", { style:{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", color:T.muted, fontSize:16 } }, "🔍"),
+          showDropdown && filteredCusts.length > 0 && /*#__PURE__*/React.createElement("div", {
+            style:{ position:"absolute", top:"100%", left:0, right:0, background:T.card, border:"1px solid ".concat(T.border), borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,0.15)", zIndex:100, maxHeight:200, overflowY:"auto", marginTop:4 }
+          }, filteredCusts.map(function(c) {
+            return /*#__PURE__*/React.createElement("div", {
+              key:c.id,
+              onMouseDown: function(){ selectCust(c); },
+              style:{ padding:"10px 14px", cursor:"pointer", borderBottom:"1px solid ".concat(T.border), display:"flex", justifyContent:"space-between", alignItems:"center" }
+            },
+              /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("div", { style:{ fontWeight:600, color:T.text, fontSize:14 } }, c.name),
+                /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:T.muted } }, c.phone, c.city ? " · "+c.city : "")
+              ),
+              /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:T.accent, fontWeight:600 } }, "Seleccionar")
+            );
+          }))
+        ),
+        // Botón + crear cliente
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function(){ setShowNewCust(!showNewCust); },
+          title: "Crear nuevo cliente",
+          style:{ width:42, height:42, background: showNewCust ? T.accent : T.surface, color: showNewCust ? "#000" : T.accent, border:"2px solid ".concat(T.accent), borderRadius:12, cursor:"pointer", fontSize:22, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }
+        }, "+"),
+        // Botón WhatsApp si hay teléfono
+        form.phone && /*#__PURE__*/React.createElement("a", {
+          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text=Hola%20"+encodeURIComponent(form.customer)+"%2C%20le%20informamos%20sobre%20su%20reparaci%C3%B3n%20en%20ACCE%20PRO.",
+          target:"_blank",
+          title:"Contactar por WhatsApp",
+          style:{ width:42, height:42, background:"#25D366", color:"#fff", border:"none", borderRadius:12, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }
+        }, "📱")
+      ),
+
+      // Mini formulario nuevo cliente
+      showNewCust && /*#__PURE__*/React.createElement("div", {
+        style:{ marginTop:10, padding:14, background:T.accentDim, border:"1px solid ".concat(T.accent,"40"), borderRadius:12 }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, color:T.accent, fontSize:13, marginBottom:10 } }, "➕ Crear cliente nuevo"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 } },
+          /*#__PURE__*/React.createElement("input", { placeholder:"Nombre *", value:newCustName, onChange:function(e){setNewCustName(e.target.value);}, style:Object.assign({},IS,{fontSize:13}) }),
+          /*#__PURE__*/React.createElement("input", { placeholder:"Teléfono", value:newCustPhone, onChange:function(e){setNewCustPhone(e.target.value);}, style:Object.assign({},IS,{fontSize:13}) }),
+          /*#__PURE__*/React.createElement("input", { placeholder:"Email", value:newCustEmail, onChange:function(e){setNewCustEmail(e.target.value);}, style:Object.assign({},IS,{fontSize:13}) }),
+          /*#__PURE__*/React.createElement("input", { placeholder:"Ciudad", value:newCustCity, onChange:function(e){setNewCustCity(e.target.value);}, style:Object.assign({},IS,{fontSize:13}) })
+        ),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
+          /*#__PURE__*/React.createElement(Btn, { onClick:saveNewCust, small:true }, "✅ Guardar y seleccionar"),
+          /*#__PURE__*/React.createElement(Btn, { variant:"ghost", small:true, onClick:function(){setShowNewCust(false);} }, "Cancelar")
+        )
+      )
+    ),
+
+    // ─── Resto de campos ────────────────────────────────────
+    /*#__PURE__*/React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 } },
+      /*#__PURE__*/React.createElement(Field, { label:"Teléfono", value:form.phone, onChange:function(v){return set("phone",v);}, placeholder:"3001234567" }),
+      /*#__PURE__*/React.createElement(Field, { label:"Equipo *", value:form.device, onChange:function(v){return set("device",v);}, placeholder:"Samsung Galaxy S21", required:true }),
+      /*#__PURE__*/React.createElement(Field, { label:"Categoría", value:form.category, onChange:function(v){return set("category",v);}, options:REPAIR_CATS }),
+      /*#__PURE__*/React.createElement(Field, { label:"Problema *", value:form.problem, onChange:function(v){return set("problem",v);}, placeholder:"Descripción del problema", required:true }),
+      /*#__PURE__*/React.createElement(Field, { label:"Estado", value:form.status, onChange:function(v){return set("status",v);}, options:STATUSES }),
+      /*#__PURE__*/React.createElement(Field, { label:"Costo total (COP)", value:form.cost, onChange:function(v){return set("cost",Number(v));}, type:"number", placeholder:"150000" }),
+      /*#__PURE__*/React.createElement(Field, { label:"Fecha", value:form.date, onChange:function(v){return set("date",v);}, type:"date" }),
+      /*#__PURE__*/React.createElement(Field, { label:"Técnico", value:form.technician, onChange:function(v){return set("technician",v);}, placeholder:"Nombre del técnico" }),
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:5 } },
+        /*#__PURE__*/React.createElement("label", { style:{ fontSize:11, fontWeight:600, color:T.muted, textTransform:"uppercase", letterSpacing:"0.06em" } }, "Estado de Pago"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick:function(){ return set("paid",!form.paid); },
+          style:{ display:"flex", alignItems:"center", gap:8, background:form.paid?"rgba(0,200,150,0.1)":T.surface, border:"1px solid ".concat(form.paid?T.green:T.border), borderRadius:8, padding:"9px 13px", color:form.paid?T.green:T.muted, cursor:"pointer", fontSize:14, fontWeight:600, fontFamily:"inherit" }
+        }, form.paid ? /*#__PURE__*/React.createElement(CheckCircle,{size:16}) : /*#__PURE__*/React.createElement(XCircle,{size:16}), " ", form.paid?"✅ Pagado completo":"⏳ Sin pagar")
+      )
+    ),
+
+    /*#__PURE__*/React.createElement(Field, { label:"Notas / Diagnóstico", value:form.notes, onChange:function(v){return set("notes",v);}, textarea:true, placeholder:"Diagnóstico, repuestos usados, observaciones..." }),
+
+    // ─── ABONOS ─────────────────────────────────────────────
+    /*#__PURE__*/React.createElement("div", { style:{ background:T.surface, border:"1px solid ".concat(T.border), borderRadius:14, padding:14 } },
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 } },
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, color:T.text, fontSize:14 } }, "💰 Abonos / Pagos parciales"),
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, color: pendiente > 0 ? T.yellow : T.green, fontWeight:700 } },
+          pendiente > 0 ? "Pendiente: "+fmt(pendiente) : "✅ Pagado"
+        )
+      ),
+      // Lista de abonos
+      advances.length > 0 && /*#__PURE__*/React.createElement("div", { style:{ marginBottom:10 } },
+        advances.map(function(adv, i) {
+          return /*#__PURE__*/React.createElement("div", {
+            key:adv.id||i,
+            style:{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:T.card, borderRadius:8, marginBottom:6, fontSize:13 }
+          },
+            /*#__PURE__*/React.createElement("div", null,
+              /*#__PURE__*/React.createElement("span", { style:{ fontWeight:700, color:T.green } }, fmt(adv.amount)),
+              /*#__PURE__*/React.createElement("span", { style:{ color:T.muted, marginLeft:8 } }, adv.note),
+              /*#__PURE__*/React.createElement("span", { style:{ color:T.dim, marginLeft:8, fontSize:11 } }, adv.date)
+            ),
+            /*#__PURE__*/React.createElement("button", {
+              onClick:function(){ set("advances", advances.filter(function(_,j){return j!==i;})); },
+              style:{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:16, padding:"0 4px" }
+            }, "×")
+          );
+        }),
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:T.muted, textAlign:"right", marginTop:4 } },
+          "Total abonado: ", /*#__PURE__*/React.createElement("strong", { style:{color:T.green} }, fmt(totalAbonos))
+        )
+      ),
+      // Agregar nuevo abono
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
+        /*#__PURE__*/React.createElement("input", {
+          type:"number", placeholder:"Monto abono", value:abonoMonto,
+          onChange:function(e){setAbonoMonto(e.target.value);},
+          style:Object.assign({},IS,{flex:1,fontSize:13})
+        }),
+        /*#__PURE__*/React.createElement("input", {
+          type:"text", placeholder:"Nota (ej: efectivo)", value:abonoNota,
+          onChange:function(e){setAbonoNota(e.target.value);},
+          onKeyDown:function(e){if(e.key==="Enter")addAbono();},
+          style:Object.assign({},IS,{flex:1,fontSize:13})
+        }),
+        /*#__PURE__*/React.createElement(Btn, { onClick:addAbono, small:true, icon:/*#__PURE__*/React.createElement(Plus,{size:14}) }, "Abonar")
+      )
+    ),
+
+    /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
+      /*#__PURE__*/React.createElement(Btn, { onClick:handleSave, icon:/*#__PURE__*/React.createElement(Check,{size:15}) }, isNew?"Crear Orden":"Guardar Cambios"),
+      /*#__PURE__*/React.createElement(Btn, { variant:"ghost", onClick:function(){return setModal(null);} }, "Cancelar")
+    )
+  ));
 }
 
 // ─── INVENTORY ───────────────────────────────────────────
@@ -3473,7 +3546,13 @@ function CustomersView(_ref15) {
           customer: _objectSpread({}, c)
         });
       }
-    }, "Editar"), /*#__PURE__*/React.createElement(Btn, {
+    }, "Editar"),
+    c.phone && /*#__PURE__*/React.createElement("a", {
+      href: "https://wa.me/57" + c.phone.replace(/\D/g,"") + "?text=Hola%20" + encodeURIComponent(c.name) + "%2C%20le%20contactamos%20desde%20ACCE%20PRO.",
+      target: "_blank",
+      style: { display:"inline-flex", alignItems:"center", gap:5, background:"#25D366", color:"#fff", padding:"5px 10px", borderRadius:8, fontSize:12, fontWeight:600, textDecoration:"none", minHeight:32 }
+    }, "📱 WhatsApp"),
+    /*#__PURE__*/React.createElement(Btn, {
       small: true,
       variant: "danger",
       icon: /*#__PURE__*/React.createElement(Trash2, {
@@ -6020,8 +6099,8 @@ function App(_appProps) {
     }
   };
   var openCatalog = function openCatalog() {
-    var base = window.location.href.split("#")[0];
-    window.open(base + "#catalog", "_blank");
+    var base = window.location.href.split("#")[0].split("?")[0];
+    window.open(base + "?client=" + encodeURIComponent(clientId) + "#catalog", "_blank");
   };
   var notify = function notify(msg) {
     var type = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "success";
@@ -6858,16 +6937,70 @@ function ExpiredScreen(_ref) {
 }
 
 // ─── ROOT COMPONENT ────────────────────────────────────────
+// ─── CATÁLOGO PÚBLICO (sin login) ─────────────────────────
+function PublicCatalogLoader(_ref) {
+  var clientId = _ref.clientId;
+  var _pc1 = useState(null), _pca1 = _slicedToArray(_pc1, 2), pubData = _pca1[0], setPubData = _pca1[1];
+  var _pc2 = useState(true), _pca2 = _slicedToArray(_pc2, 2), loading = _pca2[0], setLoading = _pca2[1];
+  var _pc3 = useState(false), _pca3 = _slicedToArray(_pc3, 2), publicMode = _pca3[0], setPublicMode = _pca3[1];
+
+  useEffect(function() {
+    if (!clientId) { setLoading(false); return; }
+    // Cargar datos del cliente desde Firebase sin necesidad de login
+    try {
+      var db = window.__firebaseDB;
+      if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+        db = firebase.apps[0].firestore();
+      if (db) {
+        db.collection("clientes").doc(clientId).get().then(function(doc) {
+          if (doc.exists && doc.data().appData) {
+            try {
+              var d = JSON.parse(doc.data().appData);
+              setPubData(_objectSpread(_objectSpread({}, INIT), d));
+            } catch(e) { setPubData(INIT); }
+          } else {
+            setPubData(INIT);
+          }
+          setLoading(false);
+          setPublicMode(true);
+        }).catch(function() { setPubData(INIT); setLoading(false); setPublicMode(true); });
+      } else {
+        setPubData(INIT); setLoading(false); setPublicMode(true);
+      }
+    } catch(e) { setPubData(INIT); setLoading(false); setPublicMode(true); }
+  }, [clientId]);
+
+  if (loading) return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight:"100dvh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 }
+  },
+    /*#__PURE__*/React.createElement(RefreshCw, { size:28, color:T.accent }),
+    /*#__PURE__*/React.createElement("div", { style:{color:T.muted,fontSize:13} }, "Cargando catálogo...")
+  );
+
+  if (!pubData || !clientId) return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight:"100dvh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center" }
+  }, /*#__PURE__*/React.createElement("div", { style:{color:T.muted,fontSize:14,textAlign:"center"} },
+    "Catálogo no disponible."
+  ));
+
+  return /*#__PURE__*/React.createElement(PublicView, {
+    data: pubData,
+    settings: pubData.settings || _objectSpread({}, DEFAULT_SETTINGS),
+    onBack: function() { window.location.hash = ""; window.location.reload(); }
+  });
+}
+
 function Root() {
   var _r1 = useState(null), _ra1 = _slicedToArray(_r1, 2), currentUser = _ra1[0], setCurrentUser = _ra1[1];
   var _r2 = useState(true), _ra2 = _slicedToArray(_r2, 2), checking = _ra2[0], setChecking = _ra2[1];
   var _r3 = useState("login"), _ra3 = _slicedToArray(_r3, 2), screen = _ra3[0], setScreen = _ra3[1];
-  // screen: "login" | "create" | "app" | "expired"
 
   var isAdmin = window.location.search.includes("admin=globalacce");
-  if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
+  var isCatalog = window.location.hash === "#catalog";
 
   useEffect(function() {
+    // Admin y catálogo no necesitan auth
+    if (isAdmin || isCatalog) { setChecking(false); return; }
     // Intentar auto-login desde sesión guardada
     var lastUser = localStorage.getItem("trp_current_user");
     if (lastUser) {
@@ -6889,6 +7022,13 @@ function Root() {
     if (!licCheck.valid) {
       setCurrentUser(userData);
       setScreen("expired");
+
+  // Early returns after all hooks
+  if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
+  if (isCatalog) {
+    var _urlP = new URLSearchParams(window.location.search);
+    return /*#__PURE__*/React.createElement(PublicCatalogLoader, { clientId: _urlP.get("client") });
+  }
     } else {
       userData.clientId = userData.clientId || licCheck.clientId;
       setCurrentUser(userData);
