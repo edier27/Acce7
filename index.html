@@ -5716,9 +5716,13 @@ function SettingsView(_ref20) {
         var lastUser = localStorage.getItem("trp_current_user");
         var userData = lastUser ? _loadUserLocal(lastUser) : null;
         if (userData) {
+          // clientId PERMANENTE — nunca cambia al renovar licencia
+          var permId = localStorage.getItem("trp_permanent_clientId_" + userData.username) || userData.clientId;
+          localStorage.setItem("trp_permanent_clientId_" + userData.username, permId);
           var updated = Object.assign({}, userData, {
             licenseCode: newLic.trim().toUpperCase(),
-            licenseType: result.type
+            licenseType: result.type,
+            clientId: permId
           });
           _saveUser(updated);
           setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Recarga para aplicar." : "✅ Demo activado — " + result.daysLeft + " días. Recarga para aplicar.");
@@ -6498,10 +6502,17 @@ function CreateAccountScreen(_ref) {
     // Verificar que el usuario no exista ya
     var ref = _getUserRef(norm);
     var finalizarCreacion = function() {
+      // clientId PERMANENTE — se guarda una vez y nunca cambia
+      // aunque la licencia venza o se renueve con otro código
+      var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + norm);
+      if (!permanentClientId) {
+        permanentClientId = licResult.clientId;
+        localStorage.setItem("trp_permanent_clientId_" + norm, permanentClientId);
+      }
       var userData = {
         username: norm,
         passwordHash: _hashPwd(pwd, norm),
-        clientId: licResult.clientId,
+        clientId: permanentClientId,
         licenseCode: code.trim().toUpperCase(),
         licenseType: licResult.type,
         createdAt: new Date().toISOString()
@@ -6557,11 +6568,16 @@ function ExpiredScreen(_ref) {
     var result = verificarCodigo(newCode.trim());
     if (!result.valid) { setErr(result.error || "Código inválido"); return; }
     setLoading(true);
-    // Actualizar licencia en la cuenta — mantener mismo clientId (datos intactos)
+    // clientId PERMANENTE — nunca cambia al renovar
+    var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + currentUser.username);
+    if (!permanentClientId) {
+      permanentClientId = currentUser.clientId;
+      localStorage.setItem("trp_permanent_clientId_" + currentUser.username, permanentClientId);
+    }
     var updated = Object.assign({}, currentUser, {
       licenseCode: newCode.trim().toUpperCase(),
       licenseType: result.type,
-      clientId: currentUser.clientId  // NUNCA cambiar el clientId
+      clientId: permanentClientId  // SIEMPRE el mismo
     });
     _saveUser(updated);
     localStorage.setItem("trp_session_" + currentUser.username, "active");
