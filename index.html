@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>TechRepair Pro</title>
+  <title>ACCE PRO</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
     *{box-sizing:border-box;margin:0;padding:0}
@@ -565,10 +565,10 @@ function LicExpiredScreen() {
   },
     /*#__PURE__*/React.createElement("div", { style:{ fontSize:64, marginBottom:16 } }, "⏰"),
     /*#__PURE__*/React.createElement("div", { style:{ fontSize:22, fontWeight:700, color:"#1C1C1C", marginBottom:8 } }, "Tu período de prueba ha finalizado"),
-    /*#__PURE__*/React.createElement("div", { style:{ fontSize:15, color:"#606060", marginBottom:6, maxWidth:400 } }, "Esperamos que hayas disfrutado el demo de TechRepair Pro."),
+    /*#__PURE__*/React.createElement("div", { style:{ fontSize:15, color:"#606060", marginBottom:6, maxWidth:400 } }, "Esperamos que hayas disfrutado el demo de ACCE PRO."),
     /*#__PURE__*/React.createElement("div", { style:{ fontSize:15, color:"#606060", marginBottom:32, maxWidth:400 } }, "Activa tu licencia por solo ", /*#__PURE__*/React.createElement("strong", { style:{color:"#0067C0"} }, LICENSE_PRICE), " y sigue gestionando tu taller sin límites."),
     /*#__PURE__*/React.createElement("a", {
-      href: "https://wa.me/" + LICENSE_WA + "?text=" + encodeURIComponent("Hola, quiero activar TechRepair Pro. ¿Cómo procedo?"),
+      href: "https://wa.me/" + LICENSE_WA + "?text=" + encodeURIComponent("Hola, quiero activar ACCE PRO. ¿Cómo procedo?"),
       target: "_blank",
       style:{ display:"inline-flex", alignItems:"center", gap:10, background:"#25D366", color:"#fff", padding:"14px 28px", borderRadius:6, fontWeight:700, fontSize:16, textDecoration:"none", marginBottom:16, boxShadow:"0 2px 8px rgba(0,0,0,0.15)" }
     }, "💬 Contactar por WhatsApp"),
@@ -600,7 +600,7 @@ function LicLoginScreen(_ref) {
       style:{ background:"#fff", border:"1px solid #E0E0E0", borderRadius:8, padding:"40px 36px", width:"100%", maxWidth:420, boxShadow:"0 4px 24px rgba(0,0,0,0.08)", textAlign:"center" }
     },
       /*#__PURE__*/React.createElement("div", { style:{fontSize:48, marginBottom:12} }, "🔧"),
-      /*#__PURE__*/React.createElement("div", { style:{fontSize:22, fontWeight:700, color:"#1C1C1C", marginBottom:4} }, "TechRepair Pro"),
+      /*#__PURE__*/React.createElement("div", { style:{fontSize:22, fontWeight:700, color:"#1C1C1C", marginBottom:4} }, "ACCE PRO"),
       /*#__PURE__*/React.createElement("div", { style:{fontSize:13, color:"#606060", marginBottom:28} }, "Ingresa tu código de acceso para continuar"),
       /*#__PURE__*/React.createElement("input", {
         type:"text", value:code, placeholder:"Ej: DEMO-AB12C",
@@ -616,7 +616,7 @@ function LicLoginScreen(_ref) {
       /*#__PURE__*/React.createElement("div", { style:{borderTop:"1px solid #E0E0E0", paddingTop:16} },
         /*#__PURE__*/React.createElement("div", { style:{fontSize:12, color:"#9B9B9B", marginBottom:8} }, "¿No tienes código? Solicita tu demo gratis"),
         /*#__PURE__*/React.createElement("a", {
-          href: "https://wa.me/" + LICENSE_WA + "?text=" + encodeURIComponent("Hola, me interesa probar TechRepair Pro. ¿Pueden darme un código demo?"),
+          href: "https://wa.me/" + LICENSE_WA + "?text=" + encodeURIComponent("Hola, me interesa probar ACCE PRO. ¿Pueden darme un código demo?"),
           target:"_blank",
           style:{ display:"inline-flex", alignItems:"center", gap:6, background:"#25D366", color:"#fff", padding:"9px 18px", borderRadius:4, fontWeight:600, fontSize:13, textDecoration:"none" }
         }, "💬 Solicitar demo por WhatsApp")
@@ -627,7 +627,7 @@ function LicLoginScreen(_ref) {
 }
 
 var DEFAULT_SETTINGS = {
-  storeName: "TechRepair Pro",
+  storeName: "ACCE PRO",
   storeSubtitle: "GESTIÓN TALLER",
   logo: "",
   address: "",
@@ -3760,7 +3760,7 @@ function PublicView(_ref17) {
       fontWeight: 800,
       letterSpacing: "-0.02em"
     }
-  }, cfg && cfg.storeName || "TechRepair Pro"), /*#__PURE__*/React.createElement("div", {
+  }, cfg && cfg.storeName || "ACCE PRO"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 9,
       color: T.accent,
@@ -4560,7 +4560,7 @@ var PAYMENT_METHODS = ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarje
 
 // ── RECEIPT PRINT HELPER ─────────────────────────
 function printReceipt(sale) {
-  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "TechRepair Pro";
+  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ACCE PRO";
   var items = sale.items.map(function (i) {
     return "<tr><td style=\"padding:4px 8px;border-bottom:1px dashed #ddd\">".concat(i.name, "</td><td style=\"padding:4px 8px;border-bottom:1px dashed #ddd;text-align:center\">").concat(i.qty, "</td><td style=\"padding:4px 8px;border-bottom:1px dashed #ddd;text-align:right\">").concat(new Intl.NumberFormat("es-CO", {
       style: "currency",
@@ -5488,7 +5488,7 @@ function SettingsView(_ref20) {
     onChange: function onChange(v) {
       return set("storeName", v);
     },
-    placeholder: "TechRepair Pro"
+    placeholder: "ACCE PRO"
   }), /*#__PURE__*/React.createElement(Field, {
     label: "Subt\xEDtulo / Slogan",
     value: form.storeSubtitle,
@@ -6051,7 +6051,7 @@ function App(_appProps) {
     style: {
       animation: "spin 1s linear infinite"
     }
-  }), /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}"), "Cargando TechRepair Pro...");
+  }), /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}"), "Cargando ACCE PRO...");
   if (publicMode) return /*#__PURE__*/React.createElement(PublicView, {
     data: data,
     settings: settings,
@@ -6167,7 +6167,7 @@ function App(_appProps) {
   isSidebarExpanded && /*#__PURE__*/React.createElement("div", null,
     /*#__PURE__*/React.createElement("div", {
       style: { fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: "-0.03em" }
-    }, settings.storeName || "TechRepair Pro"),
+    }, settings.storeName || "ACCE PRO"),
     /*#__PURE__*/React.createElement("div", {
       style: { fontSize: 9, color: T.accent, letterSpacing: "0.12em", fontWeight: 600, textTransform: "uppercase" }
     }, settings.storeSubtitle || "GESTIÓN TALLER")
@@ -6476,7 +6476,7 @@ function AdminPanel() {
         ),
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { style:{ fontWeight:800, fontSize:18, color:"#0D1B35", letterSpacing:"-0.03em" } }, "Panel Admin"),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B" } }, "TechRepair Pro — GlobalAcce")
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B" } }, "ACCE PRO — GlobalAcce")
         )
       ),
 
@@ -6504,7 +6504,7 @@ function AdminPanel() {
             style:{ padding:"8px 16px", background: copied?"#10E08A":"#0D1B35", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
           }, copied ? "✅ Copiado" : "Copiar código"),
           /*#__PURE__*/React.createElement("a", {
-            href:"https://wa.me/?text=" + encodeURIComponent("Tu código de activación para TechRepair Pro:\n\n" + codigoGen + "\n\nPrecio: " + PRECIO),
+            href:"https://wa.me/?text=" + encodeURIComponent("Tu código de activación para ACCE PRO:\n\n" + codigoGen + "\n\nPrecio: " + PRECIO),
             target:"_blank",
             style:{ display:"inline-flex", alignItems:"center", gap:6, marginLeft:8, padding:"8px 14px", background:"#25D366", color:"#fff", borderRadius:8, fontSize:13, fontWeight:600, textDecoration:"none" }
           }, "📱 Enviar por WhatsApp")
@@ -6696,7 +6696,7 @@ function LoginScreen(_ref) {
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
       /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:24, color:"#fff" })),
-      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "TechRepair Pro"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "ACCE PRO"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Inicia sesión en tu cuenta"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
       /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Usuario", value:user, onChange:function(e){setUser(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();}, style:_AS.input }),
@@ -6791,7 +6791,7 @@ function CreateAccountScreen(_ref) {
 
 // ─── PANTALLA: LICENCIA VENCIDA (software bloqueado) ──────
 function ExpiredScreen(_ref) {
-  var currentUser = _ref.currentUser, onRenewed = _ref.onRenewed;
+  var currentUser = _ref.currentUser, onRenewed = _ref.onRenewed, onBack = _ref.onBack;
   var _e1 = useState(""), _ea1 = _slicedToArray(_e1, 2), newCode = _ea1[0], setNewCode = _ea1[1];
   var _e2 = useState(""), _ea2 = _slicedToArray(_e2, 2), err = _ea2[0], setErr = _ea2[1];
   var _e3 = useState(false), _ea3 = _slicedToArray(_e3, 2), loading = _ea3[0], setLoading = _ea3[1];
@@ -6845,8 +6845,12 @@ function ExpiredScreen(_ref) {
       /*#__PURE__*/React.createElement("a", {
         href:"https://wa.me/"+WHATSAPP+"?text=Hola%2C%20mi%20licencia%20venci%C3%B3.%20Usuario%3A%20"+encodeURIComponent(currentUser.username)+"%20Precio%3A%20"+encodeURIComponent(PRECIO),
         target:"_blank",
-        style:{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#25D366", color:"#fff", padding:"12px", borderRadius:14, fontWeight:700, fontSize:14, textDecoration:"none" }
-      }, "📱 Solicitar código — "+PRECIO)
+        style:{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#25D366", color:"#fff", padding:"12px", borderRadius:14, fontWeight:700, fontSize:14, textDecoration:"none", marginBottom:10 }
+      }, "📱 Solicitar código — "+PRECIO),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: function(){ onBack && onBack(); },
+        style:{ width:"100%", padding:"12px", background:"rgba(255,255,255,0.06)", color:"#F0F4FF", border:"1px solid rgba(255,255,255,0.12)", borderRadius:14, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
+      }, "← Volver a iniciar sesión")
     )
   );
 }
@@ -6934,7 +6938,8 @@ function Root() {
 
   if (screen === "expired") return /*#__PURE__*/React.createElement(ExpiredScreen, {
     currentUser: currentUser,
-    onRenewed: onRenewed
+    onRenewed: onRenewed,
+    onBack: function(){ setCurrentUser(null); setScreen("login"); }
   });
 
   // screen === "app"
