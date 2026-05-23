@@ -517,8 +517,8 @@ async function _licVerify(code) {
   if (window.__firebaseOK && typeof firebase !== "undefined") {
     try {
       var db = firebase.apps[0].firestore();
-      var codeKey = "LIC_" + c.replace(/[^A-Z0-9]/g, "_");
-      var docRef  = db.collection("trp_codes").doc(codeKey);
+      var codeKey = "code_LIC_" + c.replace(/[^A-Z0-9]/g, "_");
+      var docRef  = db.collection("trp_users").doc(codeKey);
       var doc     = await docRef.get();
       if (doc.exists && doc.data() && doc.data().used) {
         return { ok: false, type: "already_used" };
@@ -5846,8 +5846,8 @@ function SettingsView(_ref20) {
           try {
             var fbDbS = window.__firebaseDB;
             if (fbDbS) {
-              var codeKeyS = "LIC_" + newLic.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-              fbDbS.collection("trp_codes").doc(codeKeyS).set({
+              var codeKeyS = "code_LIC_" + newLic.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+              fbDbS.collection("trp_users").doc(codeKeyS).set({
                 used: true, usedBy: userData.username,
                 usedAt: new Date().toISOString(), codeType: result.type
               });
@@ -6630,9 +6630,9 @@ function AdminPanel() {
     setCodigos(function(prev) {
       var newArr = prev.map(function(x){ return _objectSpread({}, x); });
       prev.forEach(function(item, idx) {
-        var codeKey = "LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
+        var codeKey = "code_LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
         // onSnapshot: escucha cambios en tiempo real
-        db.collection("trp_codes").doc(codeKey).onSnapshot(function(doc) {
+        db.collection("trp_users").doc(codeKey).onSnapshot(function(doc) {
           if (doc.exists && (doc.data().usedBy || doc.data().used)) {
             setCodigos(function(latest) {
               var updated = latest.map(function(x, i) {
@@ -7060,8 +7060,8 @@ function CreateAccountScreen(_ref) {
       try {
         var fbDb2 = window.__firebaseDB;
         if (fbDb2) {
-          var codeKey2 = "LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-          fbDb2.collection("trp_codes").doc(codeKey2).set({
+          var codeKey2 = "code_LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+          fbDb2.collection("trp_users").doc(codeKey2).set({
             used: true, usedBy: norm, usedAt: new Date().toISOString(), codeType: licResult.type
           });
         }
@@ -7071,17 +7071,35 @@ function CreateAccountScreen(_ref) {
       setLoading(false);
       onCreated(userData);
     };
-    if (ref) {
-      ref.get().then(function(doc) {
-        if (doc.exists) {
-          setErr("Este usuario ya existe. Inicia sesión o usa otro nombre."); setLoading(false);
-        } else {
-          finalizarCreacion();
-        }
-      }).catch(function(){ finalizarCreacion(); });
-    } else {
-      finalizarCreacion();
-    }
+    // ── Verificar si el código ya fue usado por OTRA cuenta ──
+    var _checkAndCreate = function() {
+      if (ref) {
+        ref.get().then(function(doc) {
+          if (doc.exists) {
+            setErr("Este usuario ya existe. Inicia sesión o usa otro nombre."); setLoading(false);
+          } else {
+            finalizarCreacion();
+          }
+        }).catch(function(){ finalizarCreacion(); });
+      } else {
+        finalizarCreacion();
+      }
+    };
+    try {
+      var fbChk = window.__firebaseDB;
+      if (fbChk) {
+        var chkKey = "code_LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+        fbChk.collection("trp_users").doc(chkKey).get().then(function(chkDoc) {
+          if (chkDoc.exists && chkDoc.data().usedBy && chkDoc.data().usedBy !== norm) {
+            setErr("❌ Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce."); setLoading(false);
+          } else {
+            _checkAndCreate();
+          }
+        }).catch(function(){ _checkAndCreate(); });
+      } else {
+        _checkAndCreate();
+      }
+    } catch(e){ _checkAndCreate(); }
   };
 
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
@@ -7121,8 +7139,8 @@ function ExpiredScreen(_ref) {
     try {
       var fbDbR = window.__firebaseDB;
       if (fbDbR) {
-        var codeKeyR = "LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-        fbDbR.collection("trp_codes").doc(codeKeyR).set({
+        var codeKeyR = "code_LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+        fbDbR.collection("trp_users").doc(codeKeyR).set({
           used: true, usedBy: currentUser.username, usedAt: new Date().toISOString(), codeType: result.type
         }).catch(function(){});
       }
