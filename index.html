@@ -6063,6 +6063,15 @@ function App(_appProps) {
   useEffect(function () {
     var lsKey = "trp_data_" + clientId;
 
+    // ── TIMEOUT DE RESCATE: si en 6s no cargó nada, arrancar con INIT ──
+    var _dataLoaded = false;
+    var _rescueTimer = setTimeout(function() {
+      if (!_dataLoaded) {
+        console.warn("[TRP] Timeout — arrancando con datos vacíos");
+        setData(INIT);
+      }
+    }, 6000);
+
     // ── PASO 1: localStorage es la fuente de verdad principal ──
     var localData = null;
     try {
@@ -6075,6 +6084,8 @@ function App(_appProps) {
     if (localData && (localData.repairs || localData.products || localData.inventory)) {
       setData(_objectSpread(_objectSpread({}, INIT), localData));
       _hasLocalData = true;
+      _dataLoaded = true;
+      clearTimeout(_rescueTimer);
       // Subir datos locales a Firebase para mantenerlos sincronizados
       if (clientDataRef) {
         clientDataRef.set({
@@ -6108,21 +6119,25 @@ function App(_appProps) {
             } catch(e) {}
             _fbApplied = true;
             _hasLocalData = true;
+            _dataLoaded = true;
+            clearTimeout(_rescueTimer);
             console.log("[TRP] Datos cargados desde Firebase (dispositivo nuevo)");
           } catch(e) { console.warn("[TRP] Error leyendo Firebase:", e); }
         } else if (!doc.exists) {
           // Firebase vacío y sin datos locales → empezar desde cero
           setData(INIT);
+          _dataLoaded = true;
+          clearTimeout(_rescueTimer);
           _fbApplied = true;
         }
       }, function(error) {
         console.warn("[TRP] Firebase no disponible, usando modo offline", error);
-        if (!_hasLocalData) setData(INIT);
+        if (!_hasLocalData) { setData(INIT); _dataLoaded = true; clearTimeout(_rescueTimer); }
       });
       return function() { unsubscribe(); };
     } else {
       // Sin Firebase — usar datos locales o INIT
-      if (!_hasLocalData) setData(INIT);
+      if (!_hasLocalData) { setData(INIT); _dataLoaded = true; clearTimeout(_rescueTimer); }
     }
   }, [clientId]);
   var save = function save(d) {
