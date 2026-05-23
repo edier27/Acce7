@@ -714,7 +714,7 @@ var today = function today() {
 };
 var INIT = {
   repairs: [{
-    id: uid(),
+    id: "init_inv_001",
     customer: "Carlos Ramírez",
     phone: "3001234567",
     device: "Samsung Galaxy S21",
@@ -728,7 +728,7 @@ var INIT = {
     technician: "Técnico Principal",
     advances: []
   }, {
-    id: uid(),
+    id: "init_inv_002",
     customer: "María López",
     phone: "3109876543",
     device: "iPhone 13",
@@ -742,7 +742,7 @@ var INIT = {
     technician: "Técnico Principal",
     advances: []
   }, {
-    id: uid(),
+    id: "init_inv_003",
     customer: "Juan Pérez",
     phone: "3205551234",
     device: "Xiaomi Redmi Note 12",
@@ -757,7 +757,7 @@ var INIT = {
     advances: []
   }],
   inventory: [{
-    id: uid(),
+    id: "init_inv_004",
     name: "Pantalla Samsung Galaxy S21",
     category: "Pantallas",
     brand: "OEM Samsung",
@@ -766,7 +766,7 @@ var INIT = {
     cost: 120000,
     price: 180000
   }, {
-    id: uid(),
+    id: "init_inv_005",
     name: "Batería iPhone 13",
     category: "Baterías",
     brand: "Original Apple",
@@ -775,7 +775,7 @@ var INIT = {
     cost: 45000,
     price: 75000
   }, {
-    id: uid(),
+    id: "init_prod_001",
     name: "Puerto USB-C Universal",
     category: "Conectores",
     brand: "Genérico",
@@ -784,7 +784,7 @@ var INIT = {
     cost: 8000,
     price: 20000
   }, {
-    id: uid(),
+    id: "init_prod_002",
     name: "Pantalla Xiaomi Note 12",
     category: "Pantallas",
     brand: "OEM Xiaomi",
@@ -793,7 +793,7 @@ var INIT = {
     cost: 55000,
     price: 90000
   }, {
-    id: uid(),
+    id: "init_prod_003",
     name: "Batería Samsung A54",
     category: "Baterías",
     brand: "OEM Samsung",
@@ -803,7 +803,7 @@ var INIT = {
     price: 60000
   }],
   products: [{
-    id: uid(),
+    id: "init_cust_001",
     name: "Funda Silicona Premium iPhone 15",
     category: "Fundas",
     price: 35000,
@@ -814,7 +814,7 @@ var INIT = {
     featured: true,
     active: true
   }, {
-    id: uid(),
+    id: "init_cust_002",
     name: "Cargador Inalámbrico 15W",
     category: "Cargadores",
     price: 65000,
@@ -825,7 +825,7 @@ var INIT = {
     featured: false,
     active: true
   }, {
-    id: uid(),
+    id: "init_rep_001",
     name: "Vidrio Templado 9H Pro",
     category: "Vidrios templados",
     price: 15000,
@@ -837,21 +837,21 @@ var INIT = {
     active: true
   }],
   customers: [{
-    id: uid(),
+    id: "init_rep_002",
     name: "Carlos Ramírez",
     phone: "3001234567",
     email: "carlos@gmail.com",
     city: "Neiva",
     notes: ""
   }, {
-    id: uid(),
+    id: "init_sale_001",
     name: "María López",
     phone: "3109876543",
     email: "maria@hotmail.com",
     city: "Paicol",
     notes: ""
   }, {
-    id: uid(),
+    id: "init_item_013",
     name: "Juan Pérez",
     phone: "3205551234",
     email: "juan@gmail.com",
@@ -1058,7 +1058,7 @@ var ModalWrap = function ModalWrap(_ref6) {
       padding: _mw ? 0 : 16
     },
     onClick: function onClick(e) {
-      return e.target === e.currentTarget && onClose();
+      return void 0;
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1145,28 +1145,28 @@ function DashboardView(_ref8) {
     _ref8$isMobile = _ref8.isMobile,
     isMobile = _ref8$isMobile === void 0 ? false : _ref8$isMobile;
   // Calcular ingresos incluyendo abonos parciales
-  var paid = data.repairs.filter(function (r) {
+  var paid = (data.repairs || []).filter(function (r) {
     return r.paid;
   }).reduce(function (a, r) {
     return a + r.cost;
   }, 0);
   // Agregar abonos de reparaciones no completamente pagadas
-  var totalAbonos = data.repairs.filter(function(r) { return !r.paid && r.advances && r.advances.length > 0; })
+  var totalAbonos = (data.repairs || []).filter(function(r) { return !r.paid && r.advances && r.advances.length > 0; })
     .reduce(function(a, r) { return a + (r.advances||[]).reduce(function(s,adv){ return s+(adv.amount||0); }, 0); }, 0);
   var paidTotal = paid + totalAbonos;
-  var pending = data.repairs.filter(function (r) {
+  var pending = (data.repairs || []).filter(function (r) {
     return !r.paid && r.status !== "Cancelado";
   }).reduce(function (a, r) {
     var advSum = (r.advances||[]).reduce(function(s,adv){ return s+(adv.amount||0); }, 0);
     return a + Math.max(0, r.cost - advSum);
   }, 0);
-  var active = data.repairs.filter(function (r) {
+  var active = (data.repairs || []).filter(function (r) {
     return !["Entregado", "Cancelado"].includes(r.status);
   });
-  var ready = data.repairs.filter(function (r) {
+  var ready = (data.repairs || []).filter(function (r) {
     return r.status === "Listo";
   });
-  var lowStock = data.inventory.filter(function (i) {
+  var lowStock = (data.inventory || []).filter(function (i) {
     return i.qty <= i.minQty;
   });
   var stats = [{
@@ -1187,7 +1187,7 @@ function DashboardView(_ref8) {
     })
   }, {
     label: "Clientes Registrados",
-    value: data.customers.length,
+    value: (data.customers || []).length,
     sub: "".concat(data.repairs.length, " \xF3rdenes totales"),
     color: T.purple,
     icon: /*#__PURE__*/React.createElement(Users, {
@@ -1195,7 +1195,7 @@ function DashboardView(_ref8) {
     })
   }, {
     label: "Productos Activos",
-    value: data.products.filter(function (p) {
+    value: (data.products || []).filter(function (p) {
       return p.active;
     }).length,
     sub: "en catálogo público",
@@ -1292,7 +1292,7 @@ function DashboardView(_ref8) {
       flexWrap: "wrap"
     }
   }, STATUSES.map(function (st) {
-    var count = data.repairs.filter(function (r) {
+    var count = (data.repairs || []).filter(function (r) {
       return r.status === st;
     }).length;
     return /*#__PURE__*/React.createElement("div", {
@@ -1343,8 +1343,8 @@ function DashboardView(_ref8) {
           var _md = new Date(_now.getFullYear(), _now.getMonth() - _mi, 1);
           var _mk = _md.getFullYear() + "-" + String(_md.getMonth() + 1).padStart(2, "0");
           var _mlbl = _md.toLocaleDateString("es", { month: "short" }).replace(".", "");
-          var _mcob = data.repairs.filter(function(r) { return r.date && r.date.startsWith(_mk) && r.paid; }).reduce(function(a, r) { return a + r.cost; }, 0);
-          var _mpend = data.repairs.filter(function(r) { return r.date && r.date.startsWith(_mk) && !r.paid && r.status !== "Cancelado"; }).reduce(function(a, r) { return a + r.cost; }, 0);
+          var _mcob = (data.repairs || []).filter(function(r) { return r.date && r.date.startsWith(_mk) && r.paid; }).reduce(function(a, r) { return a + r.cost; }, 0);
+          var _mpend = (data.repairs || []).filter(function(r) { return r.date && r.date.startsWith(_mk) && !r.paid && r.status !== "Cancelado"; }).reduce(function(a, r) { return a + r.cost; }, 0);
           _months.push({ label: _mlbl, cob: _mcob, pend: _mpend });
         }
         var _maxV = Math.max.apply(null, _months.map(function(m) { return m.cob + m.pend; }).concat([1]));
@@ -1440,7 +1440,7 @@ function DashboardView(_ref8) {
       }, "Distribución actual de órdenes"),
       (function() {
         var _statusData = STATUSES.map(function(st) {
-          return { st: st, count: data.repairs.filter(function(r) { return r.status === st; }).length, color: S_COLOR[st], bg: S_BG[st] };
+          return { st: st, count: (data.repairs || []).filter(function(r) { return r.status === st; }).length, color: S_COLOR[st], bg: S_BG[st] };
         }).filter(function(s) { return s.count > 0; });
         var _totalR = _statusData.reduce(function(a, s) { return a + s.count; }, 0) || 1;
         var _cx = 90, _cy = 90, _ro = 72, _ri = 48;
@@ -1626,7 +1626,7 @@ function RepairsView(_ref9) {
     notes: "",
     technician: "Técnico Principal"
   };
-  var filtered = data.repairs.filter(function (r) {
+  var filtered = (data.repairs || []).filter(function (r) {
     var q = search.toLowerCase();
     return (!q || r.customer.toLowerCase().includes(q) || r.device.toLowerCase().includes(q) || r.phone.includes(q)) && (!filterStatus || r.status === filterStatus);
   }).sort(function (a, b) {
@@ -1635,7 +1635,7 @@ function RepairsView(_ref9) {
   var del = function del(id) {
     if (!confirm("¿Eliminar esta orden?")) return;
     save(_objectSpread(_objectSpread({}, data), {}, {
-      repairs: data.repairs.filter(function (r) {
+      repairs: (data.repairs || []).filter(function (r) {
         return r.id !== id;
       })
     }));
@@ -1952,7 +1952,7 @@ function RepairModal(_ref0) {
 
   // Clientes filtrados para búsqueda
   var filteredCusts = custSearch.length >= 2
-    ? data.customers.filter(function(c) {
+    ? (data.customers || []).filter(function(c) {
         return c.name.toLowerCase().includes(custSearch.toLowerCase()) ||
                (c.phone && c.phone.includes(custSearch));
       }).slice(0, 6)
@@ -1994,7 +1994,7 @@ function RepairModal(_ref0) {
       notify("Completa los campos requeridos", "error");
       return;
     }
-    var repairs = isNew ? [].concat(_toConsumableArray(data.repairs), [form]) : data.repairs.map(function (r) {
+    var repairs = isNew ? [].concat(_toConsumableArray(data.repairs), [form]) : (data.repairs || []).map(function (r) {
       return r.id === form.id ? form : r;
     });
     save(_objectSpread(_objectSpread({}, data), {}, { repairs: repairs }));
@@ -2005,7 +2005,7 @@ function RepairModal(_ref0) {
     var idx = STATUSES.indexOf(form.status);
     if (idx < STATUSES.length - 2) {
       var next = STATUSES[idx + 1];
-      var repairs = data.repairs.map(function (r) {
+      var repairs = (data.repairs || []).map(function (r) {
         return r.id === form.id ? _objectSpread(_objectSpread({}, r), {}, {
           status: next
         }) : r;
@@ -2335,20 +2335,20 @@ function InventoryView(_ref11) {
     cost: "",
     price: ""
   };
-  var filtered = data.inventory.filter(function (i) {
+  var filtered = (data.inventory || []).filter(function (i) {
     return (!search || i.name.toLowerCase().includes(search.toLowerCase()) || i.brand.toLowerCase().includes(search.toLowerCase())) && (!filterCat || i.category === filterCat);
   });
   var del = function del(id) {
     if (!confirm("¿Eliminar este repuesto?")) return;
     save(_objectSpread(_objectSpread({}, data), {}, {
-      inventory: data.inventory.filter(function (i) {
+      inventory: (data.inventory || []).filter(function (i) {
         return i.id !== id;
       })
     }));
     notify("Repuesto eliminado");
   };
   var adjust = function adjust(id, d) {
-    var inventory = data.inventory.map(function (i) {
+    var inventory = (data.inventory || []).map(function (i) {
       return i.id === id ? _objectSpread(_objectSpread({}, i), {}, {
         qty: Math.max(0, i.qty + d)
       }) : i;
@@ -2357,10 +2357,10 @@ function InventoryView(_ref11) {
       inventory: inventory
     }));
   };
-  var totalValue = data.inventory.reduce(function (a, i) {
+  var totalValue = (data.inventory || []).reduce(function (a, i) {
     return a + i.qty * i.cost;
   }, 0);
-  var lowStockCount = data.inventory.filter(function (i) {
+  var lowStockCount = (data.inventory || []).filter(function (i) {
     return i.qty <= i.minQty;
   }).length;
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -2372,7 +2372,7 @@ function InventoryView(_ref11) {
     }
   }, [{
     l: "Total de referencias",
-    v: data.inventory.length,
+    v: (data.inventory || []).length,
     c: T.blue
   }, {
     l: "Valor en inventario",
@@ -2693,7 +2693,7 @@ function InventoryModal(_ref12) {
       cost: Number(form.cost),
       price: Number(form.price)
     });
-    var inventory = isNew ? [].concat(_toConsumableArray(data.inventory), [item]) : data.inventory.map(function (i) {
+    var inventory = isNew ? [].concat(_toConsumableArray(data.inventory || []), [item]) : (data.inventory || []).map(function (i) {
       return i.id === form.id ? item : i;
     });
     save(_objectSpread(_objectSpread({}, data), {}, {
@@ -2817,13 +2817,13 @@ function ProductsView(_ref13) {
     featured: false,
     active: true
   };
-  var filtered = data.products.filter(function (p) {
-    return !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase());
+  var filtered = (data.products || []).filter(function (p) {
+    return !search || (p.name||'').toLowerCase().includes(search.toLowerCase()) || (p.category||'').toLowerCase().includes(search.toLowerCase());
   });
   var del = function del(id) {
     if (!confirm("¿Eliminar este producto?")) return;
     save(_objectSpread(_objectSpread({}, data), {}, {
-      products: data.products.filter(function (p) {
+      products: (data.products || []).filter(function (p) {
         return p.id !== id;
       })
     }));
@@ -2831,7 +2831,7 @@ function ProductsView(_ref13) {
   };
   var toggle = function toggle(id, key) {
     return save(_objectSpread(_objectSpread({}, data), {}, {
-      products: data.products.map(function (p) {
+      products: (data.products || []).map(function (p) {
         return p.id === id ? _objectSpread(_objectSpread({}, p), {}, _defineProperty({}, key, !p[key])) : p;
       })
     }));
@@ -2991,7 +2991,7 @@ function ProductsView(_ref13) {
         color: T.green,
         marginBottom: 14
       }
-    }, fmt(p.price)), p.specs && p.specs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, fmt(Number(p.price)||0)), p.specs && p.specs.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 14
       }
@@ -3112,11 +3112,11 @@ function ProductModal(_ref14) {
         return s.trim();
       })
     });
-    var products = isNew ? [].concat(_toConsumableArray(data.products), [prod]) : data.products.map(function (p) {
+    var products = isNew ? [].concat(_toConsumableArray(data.products || []), [prod]) : (data.products || []).map(function (p) {
       return p.id === form.id ? prod : p;
     });
     // Sincronizar con inventario automáticamente
-    var inventory = _toConsumableArray(data.inventory);
+    var inventory = _toConsumableArray(data.inventory || []);
     var invIdx = inventory.findIndex(function (i) {
       return i.productId === prod.id || i.name.toLowerCase() === prod.name.toLowerCase();
     });
@@ -3391,18 +3391,18 @@ function CustomersView(_ref15) {
     city: "",
     notes: ""
   };
-  var filtered = data.customers.filter(function (c) {
+  var filtered = (data.customers || []).filter(function (c) {
     return !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search) || c.email.toLowerCase().includes(search.toLowerCase());
   });
   var repairCount = function repairCount(name) {
-    return data.repairs.filter(function (r) {
+    return (data.repairs || []).filter(function (r) {
       return r.customer === name;
     }).length;
   };
   var del = function del(id) {
     if (!confirm("¿Eliminar este cliente?")) return;
     save(_objectSpread(_objectSpread({}, data), {}, {
-      customers: data.customers.filter(function (c) {
+      customers: (data.customers || []).filter(function (c) {
         return c.id !== id;
       })
     }));
@@ -3629,7 +3629,7 @@ function CustomerModal(_ref16) {
       notify("El nombre es requerido", "error");
       return;
     }
-    var customers = isNew ? [].concat(_toConsumableArray(data.customers), [form]) : data.customers.map(function (c) {
+    var customers = isNew ? [].concat(_toConsumableArray(data.customers), [form]) : (data.customers || []).map(function (c) {
       return c.id === form.id ? form : c;
     });
     save(_objectSpread(_objectSpread({}, data), {}, {
@@ -3754,14 +3754,14 @@ function PublicView(_ref17) {
     _useState38 = _slicedToArray(_useState37, 2),
     ordered = _useState38[0],
     setOrdered = _useState38[1];
-  var products = data.products.filter(function (p) {
+  var products = (data.products || []).filter(function (p) {
     return p.active;
   });
-  var cats = _toConsumableArray(new Set(products.map(function (p) {
+  var cats = _toConsumableArray(new Set((products || []).map(function (p) {
     return p.category;
   })));
   var filtered = products.filter(function (p) {
-    return (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase())) && (!filterCat || p.category === filterCat);
+    return (!search || (p.name||'').toLowerCase().includes(search.toLowerCase()) || (p.category||'').toLowerCase().includes(search.toLowerCase())) && (!filterCat || p.category === filterCat);
   });
   var featured = products.filter(function (p) {
     return p.featured;
@@ -3781,7 +3781,7 @@ function PublicView(_ref17) {
     });
   };
   var cartTotal = cart.reduce(function (a, i) {
-    return a + i.price * i.qty;
+    return a + (Number(i.price)||0) * (i.qty||0);
   }, 0);
   var cartCount = cart.reduce(function (a, i) {
     return a + i.qty;
@@ -4509,7 +4509,7 @@ function PublicView(_ref17) {
         fontWeight: 800,
         color: "#10b981"
       }
-    }, fmt(p.price))));
+    }, fmt(Number(p.price)||0))));
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 15,
@@ -4560,7 +4560,7 @@ function PublicView(_ref17) {
       }
     }, /*#__PURE__*/React.createElement(ShoppingBag, {
       size: 44
-    })), p.stock <= 3 && p.stock > 0 && /*#__PURE__*/React.createElement("div", {
+    })), (p.stock||0) <= 3 && (p.stock||0) > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         position: "absolute",
         top: 8,
@@ -4572,7 +4572,7 @@ function PublicView(_ref17) {
         fontSize: 10,
         fontWeight: 700
       }
-    }, "\xA1\xDAltimas unidades!"), p.stock === 0 && /*#__PURE__*/React.createElement("div", {
+    }, "\xA1\xDAltimas unidades!"), (p.stock||0) === 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         position: "absolute",
         top: 8,
@@ -4617,27 +4617,27 @@ function PublicView(_ref17) {
         fontWeight: 800,
         color: "#10b981"
       }
-    }, fmt(p.price)), /*#__PURE__*/React.createElement("button", {
+    }, fmt(Number(p.price)||0)), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick(e) {
         e.stopPropagation();
-        if (p.stock > 0) {
+        if ((p.stock||0) > 0) {
           addToCart(p);
           setShowCart(true);
         }
       },
-      disabled: p.stock === 0,
+      disabled: (p.stock||0) === 0,
       style: {
-        background: p.stock === 0 ? "#e2e8f0" : "#07090f",
-        color: p.stock === 0 ? "#94a3b8" : "white",
+        background: (p.stock||0) === 0 ? "#e2e8f0" : "#07090f",
+        color: (p.stock||0) === 0 ? "#94a3b8" : "white",
         border: "none",
         borderRadius: 8,
         padding: "8px 13px",
         fontSize: 14,
         fontWeight: 700,
-        cursor: p.stock === 0 ? "not-allowed" : "pointer",
+        cursor: (p.stock||0) === 0 ? "not-allowed" : "pointer",
         fontFamily: "inherit"
       }
-    }, p.stock === 0 ? "Agotado" : "+ Carrito"))));
+    }, (p.stock||0) === 0 ? "Agotado" : "+ Carrito"))));
   }), filtered.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       gridColumn: "1/-1",
@@ -5074,8 +5074,8 @@ function SaleModal(_ref19) {
     };
 
     // Descontar del inventario
-    var inventory = _toConsumableArray(data.inventory);
-    var products = _toConsumableArray(data.products);
+    var inventory = _toConsumableArray(data.inventory || []);
+    var products = _toConsumableArray(data.products || []);
     var _iterator = _createForOfIteratorHelper(items),
       _step;
     try {
@@ -6076,31 +6076,51 @@ function App(_appProps) {
     }
 
     // ── PASO 2: Firebase en segundo plano para sincronizar ──
+    // Recuperar timestamp del último guardado local (persiste entre recargas)
+    var savedLocalTs = 0;
+    try { savedLocalTs = parseInt(localStorage.getItem("trp_data_ts_" + clientId) || "0", 10); } catch(e) {}
+    if (savedLocalTs > _trpLastSaveTs) _trpLastSaveTs = savedLocalTs;
+
     if (clientDataRef) {
       var unsubscribe = clientDataRef.onSnapshot(function(doc) {
         if (doc.exists && doc.data().appData) {
           // Ignorar si es nuestra propia sesión (evitar eco)
           if (doc.data().savedBy === _trpSessionId) return;
-          // Solo aplicar si Firebase es más reciente que nuestro último guardado
+          // Solo aplicar si Firebase es MÁS RECIENTE que nuestro último guardado local
           var fbTs = doc.data().updatedAt ? new Date(doc.data().updatedAt).getTime() : 0;
           if (fbTs <= _trpLastSaveTs) return;
           try {
             var d = JSON.parse(doc.data().appData);
             if (!d || !d.repairs) return;
-            // Protección: no aplicar si Firebase tiene menos datos que local
-            var localRepairs = (localData && localData.repairs) ? localData.repairs.length : 0;
-            if (d.repairs.length < localRepairs) {
-              console.warn("[TRP] Firebase tiene menos reparaciones — ignorado");
+            // Protección COMPLETA: no sobrescribir si Firebase tiene MENOS datos que local
+            var localRepairs   = (localData && localData.repairs)   ? localData.repairs.length   : 0;
+            var localProducts  = (localData && localData.products)  ? localData.products.length  : 0;
+            var localInventory = (localData && localData.inventory) ? localData.inventory.length : 0;
+            var localCustomers = (localData && localData.customers) ? localData.customers.length : 0;
+            var fbProducts  = (d.products)  ? d.products.length  : 0;
+            var fbInventory = (d.inventory) ? d.inventory.length : 0;
+            var fbCustomers = (d.customers) ? d.customers.length : 0;
+            if (d.repairs.length < localRepairs || fbProducts < localProducts ||
+                fbInventory < localInventory || fbCustomers < localCustomers) {
+              console.warn("[TRP] Firebase tiene menos datos que local — subiendo datos locales a Firebase");
+              if (localData) {
+                clientDataRef.set({
+                  appData: JSON.stringify(localData),
+                  updatedAt: new Date().toISOString(),
+                  savedBy: _trpSessionId
+                }).catch(function(){});
+              }
               return;
             }
             setData(_objectSpread(_objectSpread({}, INIT), d));
             localStorage.setItem(lsKey, JSON.stringify(d));
             localStorage.setItem("trp_data_ts_" + clientId, fbTs.toString());
-            console.log("[TRP] Datos sincronizados desde otro dispositivo");
-          } catch(e) {}
+            _trpLastSaveTs = fbTs;
+            console.log("[TRP] Datos sincronizados desde Firebase");
+          } catch(e) { console.warn("[TRP] Error parseando Firebase:", e); }
         } else if (!doc.exists) {
           // Firebase vacío — subir datos locales si existen
-          if (localData && localData.repairs && localData.repairs.length > 0) {
+          if (localData && (localData.repairs || localData.products)) {
             clientDataRef.set({
               appData: JSON.stringify(localData),
               updatedAt: new Date().toISOString(),
@@ -6176,13 +6196,13 @@ function App(_appProps) {
       return setPublicMode(false);
     }
   });
-  var lowStock = data.inventory.filter(function (i) {
+  var lowStock = (data.inventory || []).filter(function (i) {
     return i.qty <= i.minQty;
   });
-  var readyRepairs = data.repairs.filter(function (r) {
+  var readyRepairs = (data.repairs || []).filter(function (r) {
     return r.status === "Listo";
   });
-  var activeRepairs = data.repairs.filter(function (r) {
+  var activeRepairs = (data.repairs || []).filter(function (r) {
     return !["Entregado", "Cancelado"].includes(r.status);
   });
   var navItems = [{
