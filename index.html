@@ -4717,12 +4717,92 @@ function VentasView(_ref18) {
     _useState42 = _slicedToArray(_useState41, 2),
     dateFilter = _useState42[0],
     setDateFilter = _useState42[1];
+  var _useState43 = useState(false),
+    _useState44 = _slicedToArray(_useState43, 2),
+    showRegistros = _useState44[0],
+    setShowRegistros = _useState44[1];
   var sales = data.sales || [];
   var filtered = sales.filter(function (s) {
     return !dateFilter || s.date === dateFilter;
   }).sort(function (a, b) {
     return b.date.localeCompare(a.date) || b.id.localeCompare(a.id);
   });
+
+  var fmtNum = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
+
+  var imprimirRegistro = function(tipo) {
+    setShowRegistros(false);
+    var hoy = new Date();
+    var todayStr = hoy.toISOString().slice(0,10);
+    var mesStr = todayStr.slice(0,7);
+    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
+
+    var lista, titulo, subtitulo;
+    if (tipo === "diario") {
+      lista = sales.filter(function(s){ return s.date === todayStr; });
+      titulo = "Registro Diario";
+      subtitulo = new Date().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+    } else {
+      lista = sales.filter(function(s){ return s.date && s.date.startsWith(mesStr); });
+      titulo = "Registro Mensual";
+      subtitulo = new Date().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
+    }
+
+    lista = lista.sort(function(a,b){ return a.date.localeCompare(b.date) || (a.id||"").localeCompare(b.id||""); });
+    var total = lista.reduce(function(s,v){ return s+(v.total||0); }, 0);
+
+    var filas = lista.map(function(s, i){
+      var itemsStr = (s.items||[]).map(function(it){ return it.name+" x"+it.qty; }).join(", ");
+      var bg = i%2===0 ? "#fff" : "#f9fafb";
+      var td = "padding:7px 10px;border-bottom:1px solid #eee;font-size:12px";
+      return "<tr style='background:"+bg+"'>" +
+        "<td style='"+td+"'>"+(i+1)+"</td>" +
+        "<td style='"+td+"'>"+s.date+"</td>" +
+        "<td style='"+td+"'>"+(s.customer||"-")+"</td>" +
+        "<td style='"+td+";font-size:11px'>"+itemsStr+"</td>" +
+        "<td style='"+td+"'>"+(s.payment||"-")+"</td>" +
+        "<td style='"+td+";font-weight:700;text-align:right'>"+fmtNum(s.total)+"</td>" +
+        "</tr>";
+    }).join("");
+
+        var html = [
+      "<!DOCTYPE html><html><head>",
+      "<meta charset='UTF-8'>",
+      "<title>"+titulo+" - "+storeName+"</title>",
+      "<style>",
+      "*{margin:0;padding:0;box-sizing:border-box}",
+      "body{font-family:Arial,sans-serif;padding:24px;color:#0D1B35}",
+      "h1{font-size:20px;font-weight:800;margin-bottom:2px}",
+      "h2{font-size:14px;color:#64748B;font-weight:400;margin-bottom:6px}",
+      ".sub{font-size:12px;color:#94A3B8;margin-bottom:20px}",
+      "table{width:100%;border-collapse:collapse;margin-bottom:16px}",
+      "th{padding:9px 10px;background:#0D1B35;color:#fff;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}",
+      "th:last-child{text-align:right}",
+      ".total-box{background:#F0FDF4;border:1px solid #10E08A;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}",
+      ".total-label{font-size:13px;color:#64748B;font-weight:600}",
+      ".total-val{font-size:20px;font-weight:800;color:#10B981}",
+      ".empty{text-align:center;color:#94A3B8;padding:30px;font-size:14px}",
+      ".footer{text-align:center;margin-top:20px;color:#94A3B8;font-size:11px}",
+      "@media print{.no-print{display:none}}",
+      "</style></head><body>",
+      "<h1>"+storeName+"</h1>",
+      "<h2>"+titulo+"</h2>",
+      "<p class='sub'>"+subtitulo+" | "+lista.length+" venta(s)</p>",
+      "<table><thead><tr>",
+      "<th>#</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Pago</th><th style='text-align:right'>Total</th>",
+      "</tr></thead><tbody>",
+      (lista.length > 0 ? filas : "<tr><td colspan='6' class='empty'>No hay ventas registradas para este periodo</td></tr>"),
+      "</tbody></table>",
+      (lista.length > 0 ? "<div class='total-box'><span class='total-label'>TOTAL "+titulo.toUpperCase()+"</span><span class='total-val'>"+fmtNum(total)+"</span></div>" : ""),
+      "<div class='footer'>Generado el "+new Date().toLocaleString("es-CO")+"</div>",
+      "<div class='no-print' style='text-align:center;margin-top:20px'>",
+      "<button onclick='window.print()' style='padding:10px 28px;background:#0D1B35;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700'>Imprimir</button>",
+      "</div></body></html>"
+    ].join("");
+    win.document.write(html);
+    win.document.close();
+    setTimeout(function(){ win.focus(); }, 300);
+  };
   var totalHoy = sales.filter(function (s) {
     return s.date === today();
   }).reduce(function (a, s) {
@@ -4818,7 +4898,29 @@ function VentasView(_ref18) {
     style: {
       flex: 1
     }
-  }), /*#__PURE__*/React.createElement(Btn, {
+  }), /*#__PURE__*/React.createElement("div", { style:{ position:"relative" } },
+    /*#__PURE__*/React.createElement("button", {
+      onClick: function(){ setShowRegistros(function(v){ return !v; }); },
+      style:{ display:"flex", alignItems:"center", gap:6, padding:"9px 14px", background:"#F1F5F9", border:"1px solid #E2E8F4", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:700, fontFamily:"inherit", color:"#0D1B35" }
+    }, "📋 Registros ", /*#__PURE__*/React.createElement("span", { style:{ fontSize:10 } }, showRegistros ? "▲" : "▼")),
+    showRegistros && /*#__PURE__*/React.createElement("div", {
+      style:{ position:"absolute", right:0, top:"calc(100% + 6px)", background:"#fff", border:"1px solid #E2E8F4", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.12)", zIndex:999, minWidth:210, overflow:"hidden" }
+    },
+      [
+        { label:"🗓️ Registro Diario",    tipo:"diario",   desc:"Ventas de hoy" },
+        { label:"📆 Registro Mensual",   tipo:"mensual",  desc:"Ventas de este mes" }
+      ].map(function(op) {
+        return /*#__PURE__*/React.createElement("button", {
+          key: op.tipo,
+          onClick: function(){ imprimirRegistro(op.tipo); },
+          style:{ display:"block", width:"100%", padding:"12px 16px", background:"none", border:"none", textAlign:"left", cursor:"pointer", fontFamily:"inherit", borderBottom:"1px solid #F1F5F9" }
+        },
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#0D1B35" } }, op.label),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#94A3B8", marginTop:2 } }, op.desc)
+        );
+      })
+    )
+  ), /*#__PURE__*/React.createElement(Btn, {
     icon: /*#__PURE__*/React.createElement(Plus, {
       size: 15
     }),
