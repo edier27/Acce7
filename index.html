@@ -6301,180 +6301,268 @@ function CashflowView(_props) {
 }
 
 
-// ─── REPORTE GENERAL (Diario / Mensual) ──────────────────────────────────────
+// ─── REPORTE GENERAL (Diario / Mensual / Por Fecha) ─────────────────────────
 function ReporteView(_props) {
   var data = _props.data;
   var fmtR = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
 
-  var generarReporte = function(tipo) {
-    var hoy = new Date().toISOString().slice(0,10);
-    var mes = hoy.slice(0,7);
-    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
-    var isDiario = tipo === "diario";
-    var titulo   = isDiario ? "Reporte Diario" : "Reporte Mensual";
-    var subtitulo = isDiario
-      ? new Date().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"})
-      : new Date().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
-    var match = function(d){ return isDiario ? d===hoy : (d||"").startsWith(mes); };
+  var hoy = new Date().toISOString().slice(0,10);
 
-    // ── Ventas ──
-    var ventas = (data.sales||[]).filter(function(s){ return match(s.date); });
-    var totalVentas = ventas.reduce(function(a,s){ return a+(s.total||0); },0);
+  // ── Estados ──
+  var _s1 = useState(hoy),            _sa1 = _slicedToArray(_s1,2), fechaSel = _sa1[0], setFechaSel = _sa1[1];
+  var _s2 = useState("dia"),          _sa2 = _slicedToArray(_s2,2), modo = _sa2[0], setModo = _sa2[1];
+  var _s3 = useState(new Date()),     _sa3 = _slicedToArray(_s3,2), calMes = _sa3[0], setCalMes = _sa3[1];
+  var _s4 = useState(hoy.slice(0,7)), _sa4 = _slicedToArray(_s4,2), mesSel = _sa4[0], setMesSel = _sa4[1];
 
-    // ── Reparaciones entregadas ──
-    var reparaciones = (data.repairs||[]).filter(function(r){
-      var d = isDiario ? r.deliveryDate||r.date : r.deliveryDate||r.date;
-      return match(d) && (r.status==="Entregado"||r.status==="Listo");
-    });
-    var totalRep = reparaciones.reduce(function(a,r){ return a+(r.cost||0); },0);
-    var totalRepPagado = reparaciones.filter(function(r){return r.paid;}).reduce(function(a,r){return a+(r.cost||0);},0);
+  // ── Días con actividad (para resaltar en calendario) ──
+  var diasActivos = {};
+  [(data.sales||[]).map(function(x){return x.date;}),
+   (data.repairs||[]).map(function(x){return x.deliveryDate||x.date;}),
+   (data.cashflow||[]).map(function(x){return x.date;})
+  ].forEach(function(arr){ arr.forEach(function(d){ if(d) diasActivos[d]=(diasActivos[d]||0)+1; }); });
 
-    // ── Ingresos ──
-    var ingresos = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso" && match(e.date); });
-    var totalIngresos = ingresos.reduce(function(a,e){ return a+(e.amount||0); },0);
-
-    // ── Egresos ──
-    var egresos = (data.cashflow||[]).filter(function(e){ return e.type==="egreso" && match(e.date); });
-    var totalEgresos = egresos.reduce(function(a,e){ return a+(e.amount||0); },0);
-
-    var totalGeneral = totalVentas + totalRepPagado + totalIngresos - totalEgresos;
-
-    // ── Helpers HTML ──
-    var tHead = function(cols){ return "<tr>"+cols.map(function(h){ return "<th style=\"padding:8px 12px;background:#0D1B35;color:#fff;text-align:"+(h.right?"right":"left")+";font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em\">"+(h.label||h)+"</th>"; }).join("")+"</tr>"; };
-    var tdS  = "padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;";
-    var sec  = function(titulo, tabla){ return "<div style=\"margin-bottom:28px\"><h3 style=\"font-size:15px;font-weight:800;color:#0D1B35;margin:0 0 10px;border-left:4px solid #10E08A;padding-left:10px\">"+titulo+"</h3>"+tabla+"</div>"; };
-    var emptyRow = function(n){ return "<tr><td colspan=\""+n+"\" style=\"text-align:center;padding:18px;color:#94A3B8;font-size:13px\">Sin registros en este período</td></tr>"; };
-
-    // ── Tabla ventas ──
-    var tablaVentas = "<table style=\"width:100%;border-collapse:collapse\">"+
-      "<thead>"+tHead([{label:"#"},{label:"Fecha"},{label:"Cliente"},{label:"Productos"},{label:"Pago"},{label:"Total",right:true}])+"</thead><tbody>"+
-      (ventas.length ? ventas.map(function(s,i){
-        return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\">"+
-          "<td style=\""+tdS+"\">"+( i+1)+"</td>"+
-          "<td style=\""+tdS+"\">"+s.date+"</td>"+
-          "<td style=\""+tdS+"\">"+(s.customer||"—")+"</td>"+
-          "<td style=\""+tdS+";font-size:12px;max-width:180px\">"+(s.items||[]).map(function(it){return it.name+" x"+it.qty;}).join(", ")+"</td>"+
-          "<td style=\""+tdS+"\">"+(s.payment||"—")+"</td>"+
-          "<td style=\""+tdS+";font-weight:700;text-align:right;color:#10B981\">"+fmtR(s.total)+"</td></tr>";
-      }).join("") : emptyRow(6))+
-      "</tbody><tfoot><tr><td colspan=\"5\" style=\"padding:8px 12px;font-weight:700;font-size:13px\">Total Ventas</td><td style=\"padding:8px 12px;font-weight:800;text-align:right;color:#10B981;font-size:15px\">"+fmtR(totalVentas)+"</td></tr></tfoot></table>";
-
-    // ── Tabla reparaciones ──
-    var tablaRep = "<table style=\"width:100%;border-collapse:collapse\">"+
-      "<thead>"+tHead([{label:"Equipo"},{label:"Cliente"},{label:"Estado"},{label:"Técnico"},{label:"Costo",right:true},{label:"Pagado",right:true}])+"</thead><tbody>"+
-      (reparaciones.length ? reparaciones.map(function(r,i){
-        return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\">"+
-          "<td style=\""+tdS+"\">"+(r.device||"—")+"</td>"+
-          "<td style=\""+tdS+"\">"+(r.customer||"—")+"</td>"+
-          "<td style=\""+tdS+"\"><span style=\"background:"+(r.status==="Entregado"?"#d1fae5":"#fef9c3")+";color:"+(r.status==="Entregado"?"#065f46":"#92400e")+";padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700\">"+r.status+"</span></td>"+
-          "<td style=\""+tdS+"\">"+(r.technician||"—")+"</td>"+
-          "<td style=\""+tdS+";text-align:right\">"+fmtR(r.cost)+"</td>"+
-          "<td style=\""+tdS+";text-align:right;font-weight:700;color:"+(r.paid?"#10B981":"#EF4444")+"\">"+fmtR(r.paid?r.cost:0)+"</td></tr>";
-      }).join("") : emptyRow(6))+
-      "</tbody><tfoot><tr><td colspan=\"4\" style=\"padding:8px 12px;font-weight:700;font-size:13px\">Total Cobrado Reparaciones</td><td colspan=\"2\" style=\"padding:8px 12px;font-weight:800;text-align:right;color:#10B981;font-size:15px\">"+fmtR(totalRepPagado)+"</td></tr></tfoot></table>";
-
-    // ── Tabla ingresos ──
-    var tablaIng = "<table style=\"width:100%;border-collapse:collapse\">"+
-      "<thead>"+tHead([{label:"Fecha"},{label:"Descripción"},{label:"Categoría"},{label:"Monto",right:true}])+"</thead><tbody>"+
-      (ingresos.length ? ingresos.map(function(e,i){
-        return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\">"+
-          "<td style=\""+tdS+"\">"+e.date+"</td>"+
-          "<td style=\""+tdS+"\">"+(e.description||"—")+"</td>"+
-          "<td style=\""+tdS+"\">"+(e.category||"—")+"</td>"+
-          "<td style=\""+tdS+";text-align:right;font-weight:700;color:#10B981\">+"+fmtR(e.amount)+"</td></tr>";
-      }).join("") : emptyRow(4))+
-      "</tbody><tfoot><tr><td colspan=\"3\" style=\"padding:8px 12px;font-weight:700;font-size:13px\">Total Ingresos</td><td style=\"padding:8px 12px;font-weight:800;text-align:right;color:#10B981;font-size:15px\">"+fmtR(totalIngresos)+"</td></tr></tfoot></table>";
-
-    // ── Tabla egresos ──
-    var tablaEgr = "<table style=\"width:100%;border-collapse:collapse\">"+
-      "<thead>"+tHead([{label:"Fecha"},{label:"Descripción"},{label:"Categoría"},{label:"Monto",right:true}])+"</thead><tbody>"+
-      (egresos.length ? egresos.map(function(e,i){
-        return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\">"+
-          "<td style=\""+tdS+"\">"+e.date+"</td>"+
-          "<td style=\""+tdS+"\">"+(e.description||"—")+"</td>"+
-          "<td style=\""+tdS+"\">"+(e.category||"—")+"</td>"+
-          "<td style=\""+tdS+";text-align:right;font-weight:700;color:#EF4444\">-"+fmtR(e.amount)+"</td></tr>";
-      }).join("") : emptyRow(4))+
-      "</tbody><tfoot><tr><td colspan=\"3\" style=\"padding:8px 12px;font-weight:700;font-size:13px\">Total Egresos</td><td style=\"padding:8px 12px;font-weight:800;text-align:right;color:#EF4444;font-size:15px\">"+fmtR(totalEgresos)+"</td></tr></tfoot></table>";
-
-    // ── Balance final ──
-    var balanceColor = totalGeneral>=0?"#10B981":"#EF4444";
-    var balanceBox = "<div style=\"background:"+(totalGeneral>=0?"#d1fae5":"#fee2e2")+";border:2px solid "+(totalGeneral>=0?"#10B981":"#EF4444")+";border-radius:12px;padding:18px 22px;display:flex;justify-content:space-between;align-items:center;margin-top:8px\">"+
-      "<div><div style=\"font-size:13px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em\">Balance del Período</div>"+
-      "<div style=\"font-size:11px;color:#64748B;margin-top:3px\">Ventas + Reparaciones cobradas + Ingresos − Egresos</div></div>"+
-      "<div style=\"font-size:28px;font-weight:900;color:"+balanceColor+"\">"+fmtR(totalGeneral)+"</div></div>";
-
-    var resumen = "<div style=\"display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px\">"+
-      [
-        {l:"Ventas",      v:totalVentas,      c:"#10B981"},
-        {l:"Reparaciones",v:totalRepPagado,   c:"#8B5CF6"},
-        {l:"Ingresos",    v:totalIngresos,    c:"#4F8EFF"},
-        {l:"Egresos",     v:totalEgresos,     c:"#EF4444"}
-      ].map(function(x){
-        return "<div style=\"background:#f8fafc;border:1px solid #E2E8F4;border-radius:10px;padding:14px 16px\">"+
-          "<div style=\"font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:5px\">"+x.l+"</div>"+
-          "<div style=\"font-size:18px;font-weight:800;color:"+x.c+"\">"+fmtR(x.v)+"</div></div>";
-      }).join("")+"</div>";
-
-    var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>"+titulo+" — "+storeName+"</title>"+
-      "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;padding:28px;color:#0D1B35;background:#fff}"+
-      "h1{font-size:22px;font-weight:900;margin-bottom:2px}h2{font-size:14px;color:#64748B;font-weight:400;margin-bottom:4px}"+
-      ".sub{font-size:12px;color:#94A3B8;margin-bottom:24px}table{width:100%;border-collapse:collapse;margin-bottom:0}"+
-      "tfoot td{border-top:2px solid #e2e8f4;background:#f8fafc}@media print{.no-print{display:none}}</style></head><body>"+
-      "<h1>"+storeName+"</h1><h2>"+titulo+"</h2><p class=\"sub\">"+subtitulo+"</p>"+
-      resumen+
-      sec("📋 Ventas ("+ventas.length+")", tablaVentas)+
-      sec("🔧 Reparaciones Listas/Entregadas ("+reparaciones.length+")", tablaRep)+
-      sec("⬆ Ingresos ("+ingresos.length+")", tablaIng)+
-      sec("⬇ Egresos ("+egresos.length+")", tablaEgr)+
-      balanceBox+
-      "<div class=\"no-print\" style=\"text-align:center;margin-top:28px\">"+
-      "<button onclick=\"window.print()\" style=\"padding:12px 36px;background:#0D1B35;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:800;font-family:inherit\">🖨 Imprimir Reporte</button></div>"+
-      "<p style=\"text-align:center;margin-top:18px;color:#94A3B8;font-size:11px\">Generado el "+new Date().toLocaleString("es-CO")+"</p>"+
-      "</body></html>";
-
-    var win = window.open("","_blank","width=960,height=800");
-    win.document.write(html);
-    win.document.close();
-    setTimeout(function(){ win.focus(); }, 300);
+  // ── Calcular resumen para el período seleccionado ──
+  var calcResumen = function(matchFn) {
+    var ventas      = (data.sales||[]).filter(function(s){ return matchFn(s.date); });
+    var reps        = (data.repairs||[]).filter(function(r){ return matchFn(r.deliveryDate||r.date); });
+    var repEntregas = reps.filter(function(r){ return r.status==="Entregado"||r.status==="Listo"; });
+    var ingresos    = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso"&&matchFn(e.date); });
+    var egresos     = (data.cashflow||[]).filter(function(e){ return e.type==="egreso" &&matchFn(e.date); });
+    return {
+      ventas: ventas, reps: repEntregas,
+      ingresos: ingresos, egresos: egresos,
+      tv: ventas.reduce(function(a,s){return a+(s.total||0);},0),
+      tr: repEntregas.filter(function(r){return r.paid;}).reduce(function(a,r){return a+(r.cost||0);},0),
+      ti: ingresos.reduce(function(a,e){return a+(e.amount||0);},0),
+      te: egresos.reduce(function(a,e){return a+(e.amount||0);},0)
+    };
   };
 
-  return /*#__PURE__*/React.createElement("div", { style:{maxWidth:560,margin:"0 auto",padding:"8px 0"} },
-    /*#__PURE__*/React.createElement("h2", {style:{fontSize:20,fontWeight:800,color:T.text,marginBottom:8,letterSpacing:"-0.03em"}}, "📊 Reporte General"),
-    /*#__PURE__*/React.createElement("p",  {style:{color:T.muted,fontSize:14,marginBottom:32}}, "Genera e imprime el resumen completo del día o del mes: ventas, reparaciones, ingresos y egresos."),
-    /*#__PURE__*/React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:16}},
-      [
-        { tipo:"diario",  icon:"🗓️", title:"Reporte Diario",
-          desc:"Ventas · Reparaciones · Ingresos · Egresos de HOY",
-          color:"#10E08A", textColor:"#0D1B35" },
-        { tipo:"mensual", icon:"📅", title:"Reporte Mensual",
-          desc:"Resumen completo del MES en curso",
-          color:"#4F8EFF", textColor:"#fff" }
-      ].map(function(op){
-        return /*#__PURE__*/React.createElement("button", {
-          key: op.tipo,
-          onClick: function(){ generarReporte(op.tipo); },
-          style:{ display:"flex", alignItems:"center", gap:18, padding:"22px 24px",
-            background:T.card, border:"2px solid "+T.border, borderRadius:16,
-            cursor:"pointer", fontFamily:"inherit", textAlign:"left", width:"100%",
-            boxShadow:"0 2px 12px rgba(0,0,0,0.07)", transition:"all 0.15s" }
+  var matchDia = function(d){ return d===fechaSel; };
+  var matchMes = function(d){ return (d||"").startsWith(mesSel); };
+  var res = modo==="dia" ? calcResumen(matchDia) : calcResumen(matchMes);
+  var balance = res.tv + res.tr + res.ti - res.te;
+  var totalActs = res.ventas.length + res.reps.length + res.ingresos.length + res.egresos.length;
+
+  // ── Construir calendario ──
+  var CalendarioMes = function() {
+    var año  = calMes.getFullYear();
+    var mes  = calMes.getMonth();
+    var primerDia = new Date(año, mes, 1).getDay();
+    var diasEnMes = new Date(año, mes+1, 0).getDate();
+    var DIAS = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];
+    var MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+    var celdas = [];
+    for (var i=0; i<primerDia; i++) celdas.push(null);
+    for (var d=1; d<=diasEnMes; d++) celdas.push(d);
+
+    var navBtn = function(dir) {
+      return /*#__PURE__*/React.createElement("button",{
+        onClick:function(){
+          var nm = new Date(calMes);
+          nm.setMonth(nm.getMonth()+dir);
+          setCalMes(nm);
         },
-          /*#__PURE__*/React.createElement("div",{style:{width:52,height:52,borderRadius:14,background:op.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}},op.icon),
-          /*#__PURE__*/React.createElement("div",{style:{flex:1}},
-            /*#__PURE__*/React.createElement("div",{style:{fontSize:17,fontWeight:800,color:T.text,marginBottom:5}},op.title),
-            /*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:T.muted}},op.desc)
-          ),
-          /*#__PURE__*/React.createElement("span",{style:{fontSize:22,color:T.accent}},"🖨")
-        );
-      })
+        style:{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px 10px",fontSize:18,fontFamily:"inherit"}
+      }, dir<0?"‹":"›");
+    };
+
+    return /*#__PURE__*/React.createElement("div",{style:{background:T.card,border:"1px solid "+T.border,borderRadius:16,padding:18,userSelect:"none"}},
+      // Navegación mes
+      /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}},
+        navBtn(-1),
+        /*#__PURE__*/React.createElement("span",{style:{fontWeight:800,fontSize:15,color:T.text}}, MESES[mes]+" "+año),
+        navBtn(1)
+      ),
+      // Días semana header
+      /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:6}},
+        DIAS.map(function(d){
+          return /*#__PURE__*/React.createElement("div",{key:d,style:{textAlign:"center",fontSize:11,fontWeight:700,color:T.muted,padding:"4px 0"}},d);
+        })
+      ),
+      // Celdas días
+      /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}},
+        celdas.map(function(d,i){
+          if (!d) return /*#__PURE__*/React.createElement("div",{key:"e"+i});
+          var iso = año+"-"+(String(mes+1).padStart(2,"0"))+"-"+(String(d).padStart(2,"0"));
+          var isSelected = modo==="dia" && fechaSel===iso;
+          var isHoy = iso===hoy;
+          var tieneData = !!diasActivos[iso];
+          var count = diasActivos[iso]||0;
+
+          return /*#__PURE__*/React.createElement("button",{
+            key:iso,
+            onClick:function(){
+              setFechaSel(iso);
+              setModo("dia");
+            },
+            style:{
+              position:"relative", border:"none", borderRadius:9, cursor:"pointer",
+              padding:"8px 2px", fontFamily:"inherit", fontSize:13, fontWeight: isSelected||isHoy ? 800 : 500,
+              background: isSelected ? T.accent : isHoy ? T.accentDim : tieneData ? T.surface : "transparent",
+              color: isSelected ? "#0D1B35" : isHoy ? T.accent : tieneData ? T.text : T.muted,
+              outline: isSelected ? "2px solid "+T.accent : isHoy ? "1px solid "+T.accent : "none",
+              transition:"all 0.1s"
+            }
+          },
+            d,
+            tieneData&&!isSelected&&/*#__PURE__*/React.createElement("span",{
+              style:{position:"absolute",bottom:2,left:"50%",transform:"translateX(-50%)",width:4,height:4,borderRadius:"50%",background:T.accent,display:"block"}
+            })
+          );
+        })
+      ),
+      // Leyenda
+      /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:14,marginTop:12,fontSize:11,color:T.muted,justifyContent:"center"}},
+        /*#__PURE__*/React.createElement("span",null,"● Con actividad"),
+        /*#__PURE__*/React.createElement("span",{style:{color:T.accent}},"■ Hoy"),
+        /*#__PURE__*/React.createElement("span",{style:{color:T.accent,fontWeight:700}},"■ Seleccionado")
+      )
+    );
+  };
+
+  // ── Función imprimir ──
+  var imprimir = function() {
+    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
+    var titulo, subtitulo;
+    if (modo==="dia") {
+      titulo = "Reporte del Día";
+      subtitulo = new Date(fechaSel+"T12:00:00").toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+    } else {
+      titulo = "Reporte Mensual";
+      subtitulo = new Date(mesSel+"-15").toLocaleDateString("es-CO",{year:"numeric",month:"long"});
+    }
+    var tHead = function(cols){ return "<tr>"+cols.map(function(h){return "<th style=\"padding:8px 12px;background:#0D1B35;color:#fff;text-align:"+(h.right?"right":"left")+";font-size:11px;font-weight:700;text-transform:uppercase\">"+h.l+"</th>";}).join("")+"</tr>"; };
+    var td = "padding:8px 12px;border-bottom:1px solid #eee;font-size:13px";
+    var sec = function(t,tbl){ return "<div style=\"margin-bottom:24px\"><h3 style=\"font-size:14px;font-weight:800;color:#0D1B35;margin:0 0 8px;border-left:4px solid #10E08A;padding-left:10px\">"+t+"</h3>"+tbl+"</div>"; };
+    var empty = function(n){ return "<tr><td colspan=\""+n+"\" style=\"text-align:center;padding:16px;color:#94A3B8;font-size:13px\">Sin registros</td></tr>"; };
+
+    var tabV = "<table style=\"width:100%;border-collapse:collapse\"><thead>"+tHead([{l:"#"},{l:"Fecha"},{l:"Cliente"},{l:"Productos"},{l:"Pago"},{l:"Total",right:true}])+"</thead><tbody>"+
+      (res.ventas.length?res.ventas.map(function(s,i){return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\"><td style=\""+td+"\">"+(i+1)+"</td><td style=\""+td+"\">"+s.date+"</td><td style=\""+td+"\">"+(s.customer||"—")+"</td><td style=\""+td+";font-size:12px\">"+(s.items||[]).map(function(it){return it.name+" x"+it.qty;}).join(", ")+"</td><td style=\""+td+"\">"+(s.payment||"—")+"</td><td style=\""+td+";text-align:right;font-weight:700;color:#10B981\">"+fmtR(s.total)+"</td></tr>";}).join(""):empty(6))+
+      "</tbody><tfoot><tr><td colspan=\"5\" style=\""+td+";font-weight:700\">Total</td><td style=\""+td+";text-align:right;font-weight:800;color:#10B981;font-size:15px\">"+fmtR(res.tv)+"</td></tr></tfoot></table>";
+
+    var tabR = "<table style=\"width:100%;border-collapse:collapse\"><thead>"+tHead([{l:"Equipo"},{l:"Cliente"},{l:"Estado"},{l:"Costo",right:true}])+"</thead><tbody>"+
+      (res.reps.length?res.reps.map(function(r,i){return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\"><td style=\""+td+"\">"+(r.device||"—")+"</td><td style=\""+td+"\">"+(r.customer||"—")+"</td><td style=\""+td+"\">"+r.status+"</td><td style=\""+td+";text-align:right;font-weight:700;color:#10B981\">"+fmtR(r.cost)+"</td></tr>";}).join(""):empty(4))+
+      "</tbody><tfoot><tr><td colspan=\"3\" style=\""+td+";font-weight:700\">Cobrado</td><td style=\""+td+";text-align:right;font-weight:800;color:#10B981;font-size:15px\">"+fmtR(res.tr)+"</td></tr></tfoot></table>";
+
+    var tabI = "<table style=\"width:100%;border-collapse:collapse\"><thead>"+tHead([{l:"Descripción"},{l:"Categoría"},{l:"Monto",right:true}])+"</thead><tbody>"+
+      (res.ingresos.length?res.ingresos.map(function(e,i){return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\"><td style=\""+td+"\">"+(e.description||"—")+"</td><td style=\""+td+"\">"+(e.category||"—")+"</td><td style=\""+td+";text-align:right;font-weight:700;color:#10B981\">+"+fmtR(e.amount)+"</td></tr>";}).join(""):empty(3))+
+      "</tbody><tfoot><tr><td colspan=\"2\" style=\""+td+";font-weight:700\">Total</td><td style=\""+td+";text-align:right;font-weight:800;color:#10B981;font-size:15px\">"+fmtR(res.ti)+"</td></tr></tfoot></table>";
+
+    var tabE = "<table style=\"width:100%;border-collapse:collapse\"><thead>"+tHead([{l:"Descripción"},{l:"Categoría"},{l:"Monto",right:true}])+"</thead><tbody>"+
+      (res.egresos.length?res.egresos.map(function(e,i){return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\"><td style=\""+td+"\">"+(e.description||"—")+"</td><td style=\""+td+"\">"+(e.category||"—")+"</td><td style=\""+td+";text-align:right;font-weight:700;color:#EF4444\">-"+fmtR(e.amount)+"</td></tr>";}).join(""):empty(3))+
+      "</tbody><tfoot><tr><td colspan=\"2\" style=\""+td+";font-weight:700\">Total</td><td style=\""+td+";text-align:right;font-weight:800;color:#EF4444;font-size:15px\">"+fmtR(res.te)+"</td></tr></tfoot></table>";
+
+    var bColor = balance>=0?"#10B981":"#EF4444";
+    var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>"+titulo+"</title>"+
+      "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;padding:28px;color:#0D1B35}h1{font-size:22px;font-weight:900;margin-bottom:2px}tfoot td{border-top:2px solid #e2e8f4;background:#f8fafc}@media print{.no-print{display:none}}</style></head><body>"+
+      "<h1>"+storeName+"</h1><h2 style=\"font-size:14px;color:#64748B;font-weight:400;margin-bottom:4px\">"+titulo+"</h2>"+
+      "<p style=\"font-size:12px;color:#94A3B8;margin-bottom:22px\">"+subtitulo+"</p>"+
+      "<div style=\"display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px\">"+
+      [["Ventas",fmtR(res.tv),"#10B981"],["Reparaciones",fmtR(res.tr),"#8B5CF6"],["Ingresos",fmtR(res.ti),"#4F8EFF"],["Egresos",fmtR(res.te),"#EF4444"]].map(function(x){
+        return "<div style=\"background:#f8fafc;border:1px solid #E2E8F4;border-radius:10px;padding:12px 14px\"><div style=\"font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:4px\">"+x[0]+"</div><div style=\"font-size:17px;font-weight:800;color:"+x[2]+"\">"+x[1]+"</div></div>";
+      }).join("")+"</div>"+
+      sec("📋 Ventas ("+res.ventas.length+")", tabV)+
+      sec("🔧 Reparaciones ("+res.reps.length+")", tabR)+
+      sec("⬆ Ingresos ("+res.ingresos.length+")", tabI)+
+      sec("⬇ Egresos ("+res.egresos.length+")", tabE)+
+      "<div style=\"background:"+(balance>=0?"#d1fae5":"#fee2e2")+";border:2px solid "+bColor+";border-radius:12px;padding:16px 22px;display:flex;justify-content:space-between;align-items:center\">"+
+      "<div><div style=\"font-size:13px;font-weight:700;color:#64748B;text-transform:uppercase\">Balance del Período</div></div>"+
+      "<div style=\"font-size:26px;font-weight:900;color:"+bColor+"\">"+fmtR(balance)+"</div></div>"+
+      "<div class=\"no-print\" style=\"text-align:center;margin-top:24px\">"+
+      "<button onclick=\"window.print()\" style=\"padding:12px 36px;background:#0D1B35;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:800\">🖨 Imprimir</button></div>"+
+      "<p style=\"text-align:center;margin-top:14px;color:#94A3B8;font-size:11px\">Generado el "+new Date().toLocaleString("es-CO")+"</p></body></html>";
+
+    var win = window.open("","_blank","width=960,height=800");
+    win.document.write(html); win.document.close();
+    setTimeout(function(){win.focus();},300);
+  };
+
+  // ── UI ──
+  var modoBtn = function(id, lbl) {
+    return /*#__PURE__*/React.createElement("button",{
+      onClick:function(){setModo(id);},
+      style:{flex:1,padding:"9px 0",border:"none",borderRadius:9,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,
+        background:modo===id?T.accent:"transparent",color:modo===id?"#0D1B35":T.muted,transition:"all 0.15s"}
+    },lbl);
+  };
+
+  return /*#__PURE__*/React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16,maxWidth:700}},
+    // Título
+    /*#__PURE__*/React.createElement("h2",{style:{fontSize:20,fontWeight:800,color:T.text,letterSpacing:"-0.03em",margin:0}},"📊 Reporte"),
+
+    // Toggle Día / Mes
+    /*#__PURE__*/React.createElement("div",{style:{display:"flex",background:T.surface,borderRadius:12,padding:4,gap:4,maxWidth:320}},
+      modoBtn("dia","📅 Por Día"),
+      modoBtn("mes","📆 Por Mes")
     ),
-    /*#__PURE__*/React.createElement("div",{style:{marginTop:24,background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"14px 18px"}},
-      /*#__PURE__*/React.createElement("p",{style:{color:T.muted,fontSize:13,margin:0}},
-        "💡 El reporte incluye: ventas del período, reparaciones entregadas/listas, ingresos y egresos registrados en Caja. Se abre en una nueva ventana para imprimir o guardar como PDF."
+
+    // Layout: calendario + panel derecho
+    /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:16,flexWrap:"wrap"}},
+
+      // ── Calendario (solo modo dia) ──
+      modo==="dia" && /*#__PURE__*/React.createElement("div",{style:{flex:"0 0 300px",minWidth:280}},
+        /*#__PURE__*/React.createElement(CalendarioMes,null),
+        /*#__PURE__*/React.createElement("div",{style:{marginTop:10,background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"12px 16px"}},
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:T.muted,marginBottom:4}},"Fecha seleccionada"),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:15,fontWeight:800,color:T.text}},
+            new Date(fechaSel+"T12:00:00").toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"})
+          )
+        )
+      ),
+
+      // ── Selector mes (modo mes) ──
+      modo==="mes" && /*#__PURE__*/React.createElement("div",{style:{flex:"0 0 300px",minWidth:280}},
+        /*#__PURE__*/React.createElement("div",{style:{background:T.card,border:"1px solid "+T.border,borderRadius:16,padding:18}},
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:13,fontWeight:700,color:T.muted,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.06em"}},"Seleccionar Mes"),
+          /*#__PURE__*/React.createElement("input",{type:"month",value:mesSel,onChange:function(e){setMesSel(e.target.value);},
+            style:{background:T.surface,border:"1px solid "+T.border,borderRadius:10,color:T.text,padding:"12px 16px",fontSize:16,fontFamily:"inherit",width:"100%",outline:"none",fontWeight:700}})
+        )
+      ),
+
+      // ── Panel resumen ──
+      /*#__PURE__*/React.createElement("div",{style:{flex:1,minWidth:260,display:"flex",flexDirection:"column",gap:12}},
+        // Tarjetas mini resumen
+        /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+          [
+            {l:"Ventas",      v:res.tv, c:T.green,  icon:"🛒", n:res.ventas.length},
+            {l:"Reparaciones",v:res.tr, c:"#8B5CF6", icon:"🔧", n:res.reps.length},
+            {l:"Ingresos",    v:res.ti, c:"#4F8EFF", icon:"⬆",  n:res.ingresos.length},
+            {l:"Egresos",     v:res.te, c:T.red,     icon:"⬇",  n:res.egresos.length}
+          ].map(function(x){
+            return /*#__PURE__*/React.createElement("div",{key:x.l,style:{background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"13px 14px"}},
+              /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:T.muted,fontWeight:700,textTransform:"uppercase",marginBottom:4}},x.icon+" "+x.l),
+              /*#__PURE__*/React.createElement("div",{style:{fontSize:17,fontWeight:800,color:x.c}},fmtR(x.v)),
+              /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:T.muted,marginTop:2}},x.n+" registro"+(x.n===1?"":"s"))
+            );
+          })
+        ),
+        // Balance
+        /*#__PURE__*/React.createElement("div",{style:{background:balance>=0?"rgba(16,224,138,0.10)":"rgba(239,68,68,0.10)",border:"2px solid "+(balance>=0?T.green:T.red),borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          /*#__PURE__*/React.createElement("div",null,
+            /*#__PURE__*/React.createElement("div",{style:{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em"}},"Balance"),
+            /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:T.muted,marginTop:2}},"Ventas+Reps+Ing−Egr")
+          ),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:22,fontWeight:900,color:balance>=0?T.green:T.red}},fmtR(balance))
+        ),
+        // Sin datos aviso
+        totalActs===0&&/*#__PURE__*/React.createElement("div",{style:{background:T.card,border:"1px dashed "+T.border,borderRadius:12,padding:"18px 16px",textAlign:"center",color:T.muted,fontSize:14}},
+          "📭 Sin registros para este período"
+        ),
+        // Botón imprimir
+        /*#__PURE__*/React.createElement("button",{
+          onClick:imprimir,
+          style:{padding:"13px 0",background:T.accent,border:"none",borderRadius:12,cursor:"pointer",color:"#0D1B35",fontFamily:"inherit",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",gap:10}
+        },
+          /*#__PURE__*/React.createElement(Printer,{size:18}),
+          "Imprimir Reporte "+(modo==="dia"?"del Día":"Mensual")
+        )
       )
     )
   );
 }
+
 
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
