@@ -6061,81 +6061,68 @@ function App(_appProps) {
     } catch (_unused2) {}
   };
   useEffect(function () {
-    // ── PASO 1: Cargar siempre desde localStorage primero (instantáneo) ──
     var lsKey = "trp_data_" + clientId;
+
+    // ── PASO 1: localStorage es la fuente de verdad principal ──
     var localData = null;
     try {
       var stored = localStorage.getItem(lsKey);
-      if (stored) { localData = JSON.parse(stored); }
+      if (stored) localData = JSON.parse(stored);
     } catch(e) {}
 
-    if (localData && localData.repairs) {
-      // Tenemos datos locales — cargarlos inmediatamente
+    // Si hay datos locales, cargar inmediatamente y marcar sesión como "tiene datos"
+    var _hasLocalData = false;
+    if (localData && (localData.repairs || localData.products || localData.inventory)) {
       setData(_objectSpread(_objectSpread({}, INIT), localData));
-      _trpLastSaveTs = Date.now();
+      _hasLocalData = true;
+      // Subir datos locales a Firebase para mantenerlos sincronizados
+      if (clientDataRef) {
+        clientDataRef.set({
+          appData: JSON.stringify(localData),
+          updatedAt: new Date().toISOString(),
+          savedBy: _trpSessionId
+        }).catch(function(){});
+      }
     }
 
-    // ── PASO 2: Firebase en segundo plano para sincronizar ──
-    // Recuperar timestamp del último guardado local (persiste entre recargas)
-    var savedLocalTs = 0;
-    try { savedLocalTs = parseInt(localStorage.getItem("trp_data_ts_" + clientId) || "0", 10); } catch(e) {}
-    if (savedLocalTs > _trpLastSaveTs) _trpLastSaveTs = savedLocalTs;
-
+    // ── PASO 2: Firebase solo se usa si NO hay datos locales (dispositivo nuevo) ──
     if (clientDataRef) {
+      var _fbApplied = false;
       var unsubscribe = clientDataRef.onSnapshot(function(doc) {
+        // Si ya tenemos datos locales: ignorar Firebase completamente en esta sesión
+        // (ya subimos los datos locales a Firebase arriba)
+        if (_hasLocalData) return;
+        // Si ya aplicamos Firebase una vez, no volver a aplicar
+        if (_fbApplied) return;
+        // Ignorar eco de nuestra propia sesión
+        if (doc.data && doc.data().savedBy === _trpSessionId) return;
+
         if (doc.exists && doc.data().appData) {
-          // Ignorar si es nuestra propia sesión (evitar eco)
-          if (doc.data().savedBy === _trpSessionId) return;
-          // Solo aplicar si Firebase es MÁS RECIENTE que nuestro último guardado local
-          var fbTs = doc.data().updatedAt ? new Date(doc.data().updatedAt).getTime() : 0;
-          if (fbTs <= _trpLastSaveTs) return;
           try {
             var d = JSON.parse(doc.data().appData);
-            if (!d || !d.repairs) return;
-            // Protección COMPLETA: no sobrescribir si Firebase tiene MENOS datos que local
-            var localRepairs   = (localData && localData.repairs)   ? localData.repairs.length   : 0;
-            var localProducts  = (localData && localData.products)  ? localData.products.length  : 0;
-            var localInventory = (localData && localData.inventory) ? localData.inventory.length : 0;
-            var localCustomers = (localData && localData.customers) ? localData.customers.length : 0;
-            var fbProducts  = (d.products)  ? d.products.length  : 0;
-            var fbInventory = (d.inventory) ? d.inventory.length : 0;
-            var fbCustomers = (d.customers) ? d.customers.length : 0;
-            if (d.repairs.length < localRepairs || fbProducts < localProducts ||
-                fbInventory < localInventory || fbCustomers < localCustomers) {
-              console.warn("[TRP] Firebase tiene menos datos que local — subiendo datos locales a Firebase");
-              if (localData) {
-                clientDataRef.set({
-                  appData: JSON.stringify(localData),
-                  updatedAt: new Date().toISOString(),
-                  savedBy: _trpSessionId
-                }).catch(function(){});
-              }
-              return;
-            }
+            if (!d) return;
             setData(_objectSpread(_objectSpread({}, INIT), d));
-            localStorage.setItem(lsKey, JSON.stringify(d));
-            localStorage.setItem("trp_data_ts_" + clientId, fbTs.toString());
-            _trpLastSaveTs = fbTs;
-            console.log("[TRP] Datos sincronizados desde Firebase");
-          } catch(e) { console.warn("[TRP] Error parseando Firebase:", e); }
+            // Guardar en localStorage para próximas cargas
+            try {
+              localStorage.setItem(lsKey, JSON.stringify(d));
+            } catch(e) {}
+            _fbApplied = true;
+            _hasLocalData = true;
+            console.log("[TRP] Datos cargados desde Firebase (dispositivo nuevo)");
+          } catch(e) { console.warn("[TRP] Error leyendo Firebase:", e); }
         } else if (!doc.exists) {
-          // Firebase vacío — subir datos locales si existen
-          if (localData && (localData.repairs || localData.products)) {
-            clientDataRef.set({
-              appData: JSON.stringify(localData),
-              updatedAt: new Date().toISOString(),
-              savedBy: _trpSessionId
-            }).catch(function(){});
-          } else {
-            // Primera vez en este dispositivo Y Firebase vacío
-            setData(INIT);
-          }
+          // Firebase vacío y sin datos locales → empezar desde cero
+          setData(INIT);
+          _fbApplied = true;
         }
       }, function(error) {
-        console.warn("Error Firebase:", error);
-        // Ya cargamos desde localStorage arriba — no hacer nada más
+        console.warn("[TRP] Firebase no disponible, usando modo offline", error);
+        if (!_hasLocalData) setData(INIT);
       });
       return function() { unsubscribe(); };
+    } else {
+      // Sin Firebase — usar datos locales o INIT
+      if (!_hasLocalData) setData(INIT);
     }
   }, [clientId]);
   var save = function save(d) {
@@ -6147,15 +6134,47 @@ function App(_appProps) {
       localStorage.setItem("trp_data_ts_" + clientId, _trpLastSaveTs.toString());
       localStorage.setItem('trp_sid_v1', _trpSessionId);
     } catch(e) {}
-    // Guardar en Firebase con sessionId (evita eco en onSnapshot)
+    // Guardar en Firebase — con reintento automático si no hay internet
     if (clientDataRef) {
       clientDataRef.set({
         appData: JSON.stringify(d),
         updatedAt: new Date().toISOString(),
         savedBy: _trpSessionId
-      }).catch(function(e) { console.warn("Error guardando en Firebase:", e); });
+      }).catch(function(e) {
+        console.warn("[TRP] Sin internet — dato queda pendiente para sincronizar", e);
+        // Marcar que hay datos pendientes de subir
+        try { localStorage.setItem("trp_pending_sync_" + clientId, "1"); } catch(err) {}
+      });
     }
   };
+  // ── AUTO-SYNC cuando vuelve el internet ──────────────────
+  useEffect(function() {
+    var handleOnline = function() {
+      var pending = localStorage.getItem("trp_pending_sync_" + clientId);
+      if (!pending || !clientDataRef) return;
+      // Hay datos pendientes de subir — leer de localStorage y subir a Firebase
+      try {
+        var stored = localStorage.getItem("trp_data_" + clientId);
+        if (!stored) return;
+        var d = JSON.parse(stored);
+        clientDataRef.set({
+          appData: JSON.stringify(d),
+          updatedAt: new Date().toISOString(),
+          savedBy: _trpSessionId
+        }).then(function() {
+          localStorage.removeItem("trp_pending_sync_" + clientId);
+          console.log("[TRP] ✅ Datos sincronizados automáticamente al recuperar internet");
+        }).catch(function(e) {
+          console.warn("[TRP] Falló reintento de sync:", e);
+        });
+      } catch(e) {}
+    };
+    window.addEventListener("online", handleOnline);
+    // También intentar al montar por si acaso hay pendientes y ya hay internet
+    if (navigator.onLine) handleOnline();
+    return function() { window.removeEventListener("online", handleOnline); };
+  }, [clientId, clientDataRef]);
+
   var openCatalog = function openCatalog() {
     var base = window.location.href.split("#")[0].split("?")[0];
     window.open(base + "?client=" + encodeURIComponent(clientId) + "#catalog", "_blank");
@@ -6566,13 +6585,37 @@ function AdminPanel() {
   var _a3 = useState(""), _aa3 = _slicedToArray(_a3, 2), rcUser = _aa3[0], setRcUser = _aa3[1];
   var _a4 = useState(""), _aa4 = _slicedToArray(_a4, 2), rcOut = _aa4[0], setRcOut = _aa4[1];
   var _a5 = useState(false), _aa5 = _slicedToArray(_a5, 2), copied = _aa5[0], setCopied = _aa5[1];
+  // Lista de códigos generados con su estado
+  var _a6 = useState(function(){ try{ return JSON.parse(localStorage.getItem("acce_admin_codes")||"[]"); }catch(e){ return []; } });
+  var _aa6 = _slicedToArray(_a6, 2), codigos = _aa6[0], setCodigos = _aa6[1];
+
+  // Verificar estado de cada código en Firebase
+  useEffect(function() {
+    if (!codigos.length) return;
+    var db = window.__firebaseDB;
+    if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+      db = firebase.apps[0].firestore();
+    if (!db) return;
+    codigos.forEach(function(item, idx) {
+      var codeKey = "LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
+      db.collection("licenses").doc(codeKey).get().then(function(doc) {
+        if (doc.exists && doc.data().used) {
+          setCodigos(function(prev) {
+            var updated = prev.map(function(x, i) {
+              return i === idx ? _objectSpread(_objectSpread({}, x), {}, { usado: true, deviceId: doc.data().deviceId, activadoEn: doc.data().activatedAt }) : x;
+            });
+            localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
+            return updated;
+          });
+        }
+      }).catch(function(){});
+    });
+  }, [codigos.length]);
 
   var generar = function() {
     var code;
     var now = new Date();
-
     if (tipo === "test") {
-      // Expira en 10 minutos exactos
       var expMin = Math.floor((Date.now() + 10 * 60 * 1000) / 60000).toString();
       var hT = _hash(expMin + "TEST" + _LS);
       code = "TEST-" + expMin + "-" + hT;
@@ -6592,21 +6635,35 @@ function AdminPanel() {
     }
     setCodigoGen(code);
     setCopied(false);
+    // Guardar en historial
+    var nuevo = { code: code, tipo: tipo, generadoEn: new Date().toISOString(), usado: false };
+    setCodigos(function(prev) {
+      var updated = [nuevo].concat(prev);
+      localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
+      return updated;
+    });
   };
 
-  var copiar = function() {
-    if (codigoGen) {
-      navigator.clipboard.writeText(codigoGen).then(function(){ setCopied(true); setTimeout(function(){ setCopied(false); }, 2000); });
-    }
+  var copiar = function(cod) {
+    navigator.clipboard.writeText(cod || codigoGen).then(function(){ setCopied(true); setTimeout(function(){ setCopied(false); }, 2000); });
+  };
+
+  var eliminarCodigo = function(idx) {
+    setCodigos(function(prev) {
+      var updated = prev.filter(function(_,i){ return i !== idx; });
+      localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   var cardStyle = { background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", marginBottom:16 };
-  var lblStyle = { fontSize:12, fontWeight:600, color:"#606060", marginBottom:6, display:"block" };
+  var lblStyle  = { fontSize:12, fontWeight:600, color:"#606060", marginBottom:6, display:"block" };
 
   return /*#__PURE__*/React.createElement("div", {
     style: { minHeight:"100dvh", background:"#F0F2F5", fontFamily:"'DM Sans',system-ui,sans-serif", padding:20 }
   },
-    /*#__PURE__*/React.createElement("div", { style:{ maxWidth:520, margin:"0 auto" } },
+    /*#__PURE__*/React.createElement("div", { style:{ maxWidth:560, margin:"0 auto" } },
+
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:12, marginBottom:20 } },
         /*#__PURE__*/React.createElement("div", { style:{ width:40, height:40, background:"linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" } },
           /*#__PURE__*/React.createElement(Smartphone, { size:20, color:"#fff" })
@@ -6618,7 +6675,7 @@ function AdminPanel() {
       ),
 
       /*#__PURE__*/React.createElement("div", { style: cardStyle },
-        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:14, color:"#0D1B35" } }, "🔑 Generar código de activación"),
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:14, color:"#0D1B35" } }, "\uD83D\uDD11 Generar código de activación"),
         /*#__PURE__*/React.createElement("label", { style: lblStyle }, "Tipo de licencia"),
         /*#__PURE__*/React.createElement("select", {
           value: tipo, onChange: function(e){ setTipo(e.target.value); setCodigoGen(null); },
@@ -6628,7 +6685,7 @@ function AdminPanel() {
           /*#__PURE__*/React.createElement("option", { value:"trial" }, "TRIAL — 30 días"),
           /*#__PURE__*/React.createElement("option", { value:"anual" }, "ANUAL — 1 año"),
           /*#__PURE__*/React.createElement("option", { value:"pro" }, "PRO — Permanente"),
-          /*#__PURE__*/React.createElement("option", { value:"test" }, "🧪 TEST — 10 minutos (para probar)")
+          /*#__PURE__*/React.createElement("option", { value:"test" }, "\uD83E\uDDEA TEST — 10 minutos (para probar)")
         ),
         /*#__PURE__*/React.createElement("button", {
           onClick: generar,
@@ -6638,19 +6695,70 @@ function AdminPanel() {
           /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:6 } }, "Código generado — compártelo con tu cliente:"),
           /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:16, fontWeight:700, color:"#0D1B35", letterSpacing:"0.08em", wordBreak:"break-all", marginBottom:10 } }, codigoGen),
           /*#__PURE__*/React.createElement("button", {
-            onClick: copiar,
+            onClick: function(){ copiar(codigoGen); },
             style:{ padding:"8px 16px", background: copied?"#10E08A":"#0D1B35", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
-          }, copied ? "✅ Copiado" : "Copiar código"),
+          }, copied ? "\u2705 Copiado" : "Copiar código"),
           /*#__PURE__*/React.createElement("a", {
             href:"https://wa.me/?text=" + encodeURIComponent("Tu código de activación para ACCE PRO:\n\n" + codigoGen + "\n\nPrecio: " + PRECIO),
             target:"_blank",
             style:{ display:"inline-flex", alignItems:"center", gap:6, marginLeft:8, padding:"8px 14px", background:"#25D366", color:"#fff", borderRadius:8, fontSize:13, fontWeight:600, textDecoration:"none" }
-          }, "📱 Enviar por WhatsApp")
+          }, "\uD83D\uDCF1 Enviar por WhatsApp")
         )
       ),
 
       /*#__PURE__*/React.createElement("div", { style: cardStyle },
-        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:6, color:"#0D1B35" } }, "🔐 Código de recuperación de contraseña"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
+          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "\uD83D\uDCCB Códigos generados (" + codigos.length + ")"),
+          codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
+            onClick: function(){ if(confirm("¿Limpiar todo el historial?")){ setCodigos([]); localStorage.removeItem("acce_admin_codes"); } },
+            style:{ fontSize:11, color:"#94A3B8", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }
+          }, "Limpiar todo")
+        ),
+        codigos.length === 0
+          ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "Aún no has generado ningún código")
+          : /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:8 } },
+              codigos.map(function(item, idx) {
+                var usado = item.usado;
+                var bgColor  = usado ? "#FFF5F5" : "#F0FDF4";
+                var bdColor  = usado ? "#FCA5A5" : "#6EE7B7";
+                var dotColor = usado ? "#EF4444" : "#10B981";
+                var fechaGen = item.generadoEn ? new Date(item.generadoEn).toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+                return /*#__PURE__*/React.createElement("div", {
+                  key: idx,
+                  style:{ background: bgColor, border:"1px solid "+bdColor, borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"flex-start", gap:10 }
+                },
+                  /*#__PURE__*/React.createElement("div", {
+                    style:{ width:10, height:10, borderRadius:"50%", background: dotColor, flexShrink:0, marginTop:4 }
+                  }),
+                  /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:0 } },
+                    /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:13, fontWeight:700, color:"#0D1B35", wordBreak:"break-all" } }, item.code),
+                    /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:3, display:"flex", gap:10, flexWrap:"wrap" } },
+                      /*#__PURE__*/React.createElement("span", null, item.tipo ? item.tipo.toUpperCase() : ""),
+                      fechaGen && /*#__PURE__*/React.createElement("span", null, "Generado: " + fechaGen),
+                      usado
+                        ? /*#__PURE__*/React.createElement("span", { style:{ color:"#EF4444", fontWeight:600 } }, "\u2716 Ya activado por cliente")
+                        : /*#__PURE__*/React.createElement("span", { style:{ color:"#10B981", fontWeight:600 } }, "\u2714 Disponible — no usado")
+                    )
+                  ),
+                  /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:6, flexShrink:0 } },
+                    /*#__PURE__*/React.createElement("button", {
+                      onClick: function(){ navigator.clipboard.writeText(item.code); },
+                      title:"Copiar código",
+                      style:{ padding:"4px 8px", background:"#E2E8F0", border:"none", borderRadius:6, fontSize:11, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }
+                    }, "Copiar"),
+                    /*#__PURE__*/React.createElement("button", {
+                      onClick: function(){ eliminarCodigo(idx); },
+                      title:"Eliminar del historial",
+                      style:{ padding:"4px 8px", background:"#FEE2E2", border:"none", borderRadius:6, fontSize:11, cursor:"pointer", color:"#EF4444", fontFamily:"inherit", fontWeight:600 }
+                    }, "\u2715")
+                  )
+                );
+              })
+            )
+      ),
+
+      /*#__PURE__*/React.createElement("div", { style: cardStyle },
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:6, color:"#0D1B35" } }, "\uD83D\uDD10 Código de recuperación de contraseña"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B", marginBottom:12 } },
           "Ingresa el ", /*#__PURE__*/React.createElement("strong", null, "nombre de usuario"), " del cliente para obtener su código de recuperación:"
         ),
@@ -6673,14 +6781,15 @@ function AdminPanel() {
       ),
 
       /*#__PURE__*/React.createElement("div", { style: cardStyle },
-        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:10, color:"#0D1B35" } }, "ℹ️ Información"),
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:10, color:"#0D1B35" } }, "\u2139\uFE0F Información"),
         [
           "DEMO: válido " + DIAS_DEMO + " días desde que el cliente activa.",
           "TRIAL: válido 30 días desde que el cliente activa.",
           "ANUAL: válido 1 año (365 días) desde que el cliente activa.",
           "PRO: acceso permanente sin vencimiento.",
           "TEST: válido exactamente 10 minutos — solo para probar el flujo de vencimiento.",
-          "Cuando vence → cliente ingresa usuario y contraseña → ingresa nuevo código → acceso restaurado.",
+          "🟢 Verde = código disponible, el cliente aún no lo ha activado.",
+          "🔴 Rojo = código ya activado por el cliente.",
           "El código de recuperación se genera con el NOMBRE DE USUARIO del cliente."
         ].map(function(txt, i) {
           return /*#__PURE__*/React.createElement("div", { key:i, style:{ fontSize:12, color:"#606060", marginBottom:6, display:"flex", gap:6 } },
@@ -6893,16 +7002,42 @@ function CreateAccountScreen(_ref) {
       setLoading(false);
       onCreated(userData);
     };
+    // ── Verificar que el código no esté en uso por OTRA cuenta ──
+    var verificarCodigoUnico = function(onOk) {
+      try {
+        var fbDb = window.__firebaseDB;
+        if (!fbDb && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+          fbDb = firebase.apps[0].firestore();
+        if (!fbDb) { onOk(); return; }
+        var codeKey = "LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+        fbDb.collection("licenses").doc(codeKey).get().then(function(licDoc) {
+          if (licDoc.exists && licDoc.data().usedBy && licDoc.data().usedBy !== norm) {
+            // Código ya registrado por otra cuenta
+            setErr("❌ Este código ya está siendo usado por otra cuenta. Solicita un código nuevo a GlobalAcce.");
+            setLoading(false);
+          } else {
+            // Código libre o es el mismo usuario — registrar uso
+            fbDb.collection("licenses").doc(codeKey).set({
+              usedBy: norm,
+              usedAt: new Date().toISOString(),
+              codeType: licResult.type
+            }, { merge: true }).catch(function(){});
+            onOk();
+          }
+        }).catch(function(){ onOk(); }); // si falla Firebase, permitir continuar
+      } catch(e) { onOk(); }
+    };
+
     if (ref) {
       ref.get().then(function(doc) {
         if (doc.exists) {
           setErr("Este usuario ya existe. Inicia sesión o usa otro nombre."); setLoading(false);
         } else {
-          finalizarCreacion();
+          verificarCodigoUnico(finalizarCreacion);
         }
-      }).catch(function(){ finalizarCreacion(); }); // si falla Firebase, crear local
+      }).catch(function(){ verificarCodigoUnico(finalizarCreacion); });
     } else {
-      finalizarCreacion();
+      verificarCodigoUnico(finalizarCreacion);
     }
   };
 
@@ -6939,7 +7074,32 @@ function ExpiredScreen(_ref) {
     var result = verificarCodigo(newCode.trim());
     if (!result.valid) { setErr(result.error || "Código inválido"); return; }
     setLoading(true);
-    // clientId PERMANENTE — nunca cambia al renovar
+    // ── Verificar que el código no esté en uso por OTRA cuenta ──
+    try {
+      var fbDb = window.__firebaseDB;
+      if (!fbDb && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+        fbDb = firebase.apps[0].firestore();
+      if (fbDb) {
+        var codeKey = "LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+        fbDb.collection("licenses").doc(codeKey).get().then(function(licDoc) {
+          if (licDoc.exists && licDoc.data().usedBy && licDoc.data().usedBy !== currentUser.username) {
+            setErr("❌ Este código ya está siendo usado por otra cuenta. Solicita un código nuevo a GlobalAcce.");
+            setLoading(false);
+          } else {
+            fbDb.collection("licenses").doc(codeKey).set({
+              usedBy: currentUser.username,
+              usedAt: new Date().toISOString(),
+              codeType: result.type
+            }, { merge: true }).catch(function(){});
+            _finalizarRenovacion(result);
+          }
+        }).catch(function(){ _finalizarRenovacion(result); });
+        return;
+      }
+    } catch(e) {}
+    _finalizarRenovacion(result);
+  };
+  var _finalizarRenovacion = function(result) {
     var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + currentUser.username);
     if (!permanentClientId) {
       permanentClientId = currentUser.clientId;
@@ -6948,7 +7108,7 @@ function ExpiredScreen(_ref) {
     var updated = Object.assign({}, currentUser, {
       licenseCode: newCode.trim().toUpperCase(),
       licenseType: result.type,
-      clientId: permanentClientId  // SIEMPRE el mismo
+      clientId: permanentClientId
     });
     _saveUser(updated);
     localStorage.setItem("trp_session_" + currentUser.username, "active");
