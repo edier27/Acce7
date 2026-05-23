@@ -6300,6 +6300,182 @@ function CashflowView(_props) {
   );
 }
 
+
+// ─── REPORTE GENERAL (Diario / Mensual) ──────────────────────────────────────
+function ReporteView(_props) {
+  var data = _props.data;
+  var fmtR = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
+
+  var generarReporte = function(tipo) {
+    var hoy = new Date().toISOString().slice(0,10);
+    var mes = hoy.slice(0,7);
+    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
+    var isDiario = tipo === "diario";
+    var titulo   = isDiario ? "Reporte Diario" : "Reporte Mensual";
+    var subtitulo = isDiario
+      ? new Date().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"})
+      : new Date().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
+    var match = function(d){ return isDiario ? d===hoy : (d||"").startsWith(mes); };
+
+    // ── Ventas ──
+    var ventas = (data.sales||[]).filter(function(s){ return match(s.date); });
+    var totalVentas = ventas.reduce(function(a,s){ return a+(s.total||0); },0);
+
+    // ── Reparaciones entregadas ──
+    var reparaciones = (data.repairs||[]).filter(function(r){
+      var d = isDiario ? r.deliveryDate||r.date : r.deliveryDate||r.date;
+      return match(d) && (r.status==="Entregado"||r.status==="Listo");
+    });
+    var totalRep = reparaciones.reduce(function(a,r){ return a+(r.cost||0); },0);
+    var totalRepPagado = reparaciones.filter(function(r){return r.paid;}).reduce(function(a,r){return a+(r.cost||0);},0);
+
+    // ── Ingresos ──
+    var ingresos = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso" && match(e.date); });
+    var totalIngresos = ingresos.reduce(function(a,e){ return a+(e.amount||0); },0);
+
+    // ── Egresos ──
+    var egresos = (data.cashflow||[]).filter(function(e){ return e.type==="egreso" && match(e.date); });
+    var totalEgresos = egresos.reduce(function(a,e){ return a+(e.amount||0); },0);
+
+    var totalGeneral = totalVentas + totalRepPagado + totalIngresos - totalEgresos;
+
+    // ── Helpers HTML ──
+    var tHead = function(cols){ return "<tr>"+cols.map(function(h){ return "<th style=\"padding:8px 12px;background:#0D1B35;color:#fff;text-align:"+(h.right?"right":"left")+";font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em\">"+(h.label||h)+"</th>"; }).join("")+"</tr>"; };
+    var tdS  = "padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;";
+    var sec  = function(titulo, tabla){ return "<div style=\"margin-bottom:28px\"><h3 style=\"font-size:15px;font-weight:800;color:#0D1B35;margin:0 0 10px;border-left:4px solid #10E08A;padding-left:10px\">"+titulo+"</h3>"+tabla+"</div>"; };
+    var emptyRow = function(n){ return "<tr><td colspan=\""+n+"\" style=\"text-align:center;padding:18px;color:#94A3B8;font-size:13px\">Sin registros en este período</td></tr>"; };
+
+    // ── Tabla ventas ──
+    var tablaVentas = "<table style=\"width:100%;border-collapse:collapse\">"+
+      "<thead>"+tHead([{label:"#"},{label:"Fecha"},{label:"Cliente"},{label:"Productos"},{label:"Pago"},{label:"Total",right:true}])+"</thead><tbody>"+
+      (ventas.length ? ventas.map(function(s,i){
+        return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\">"+
+          "<td style=\""+tdS+"\">"+( i+1)+"</td>"+
+          "<td style=\""+tdS+"\">"+s.date+"</td>"+
+          "<td style=\""+tdS+"\">"+(s.customer||"—")+"</td>"+
+          "<td style=\""+tdS+";font-size:12px;max-width:180px\">"+(s.items||[]).map(function(it){return it.name+" x"+it.qty;}).join(", ")+"</td>"+
+          "<td style=\""+tdS+"\">"+(s.payment||"—")+"</td>"+
+          "<td style=\""+tdS+";font-weight:700;text-align:right;color:#10B981\">"+fmtR(s.total)+"</td></tr>";
+      }).join("") : emptyRow(6))+
+      "</tbody><tfoot><tr><td colspan=\"5\" style=\"padding:8px 12px;font-weight:700;font-size:13px\">Total Ventas</td><td style=\"padding:8px 12px;font-weight:800;text-align:right;color:#10B981;font-size:15px\">"+fmtR(totalVentas)+"</td></tr></tfoot></table>";
+
+    // ── Tabla reparaciones ──
+    var tablaRep = "<table style=\"width:100%;border-collapse:collapse\">"+
+      "<thead>"+tHead([{label:"Equipo"},{label:"Cliente"},{label:"Estado"},{label:"Técnico"},{label:"Costo",right:true},{label:"Pagado",right:true}])+"</thead><tbody>"+
+      (reparaciones.length ? reparaciones.map(function(r,i){
+        return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\">"+
+          "<td style=\""+tdS+"\">"+(r.device||"—")+"</td>"+
+          "<td style=\""+tdS+"\">"+(r.customer||"—")+"</td>"+
+          "<td style=\""+tdS+"\"><span style=\"background:"+(r.status==="Entregado"?"#d1fae5":"#fef9c3")+";color:"+(r.status==="Entregado"?"#065f46":"#92400e")+";padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700\">"+r.status+"</span></td>"+
+          "<td style=\""+tdS+"\">"+(r.technician||"—")+"</td>"+
+          "<td style=\""+tdS+";text-align:right\">"+fmtR(r.cost)+"</td>"+
+          "<td style=\""+tdS+";text-align:right;font-weight:700;color:"+(r.paid?"#10B981":"#EF4444")+"\">"+fmtR(r.paid?r.cost:0)+"</td></tr>";
+      }).join("") : emptyRow(6))+
+      "</tbody><tfoot><tr><td colspan=\"4\" style=\"padding:8px 12px;font-weight:700;font-size:13px\">Total Cobrado Reparaciones</td><td colspan=\"2\" style=\"padding:8px 12px;font-weight:800;text-align:right;color:#10B981;font-size:15px\">"+fmtR(totalRepPagado)+"</td></tr></tfoot></table>";
+
+    // ── Tabla ingresos ──
+    var tablaIng = "<table style=\"width:100%;border-collapse:collapse\">"+
+      "<thead>"+tHead([{label:"Fecha"},{label:"Descripción"},{label:"Categoría"},{label:"Monto",right:true}])+"</thead><tbody>"+
+      (ingresos.length ? ingresos.map(function(e,i){
+        return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\">"+
+          "<td style=\""+tdS+"\">"+e.date+"</td>"+
+          "<td style=\""+tdS+"\">"+(e.description||"—")+"</td>"+
+          "<td style=\""+tdS+"\">"+(e.category||"—")+"</td>"+
+          "<td style=\""+tdS+";text-align:right;font-weight:700;color:#10B981\">+"+fmtR(e.amount)+"</td></tr>";
+      }).join("") : emptyRow(4))+
+      "</tbody><tfoot><tr><td colspan=\"3\" style=\"padding:8px 12px;font-weight:700;font-size:13px\">Total Ingresos</td><td style=\"padding:8px 12px;font-weight:800;text-align:right;color:#10B981;font-size:15px\">"+fmtR(totalIngresos)+"</td></tr></tfoot></table>";
+
+    // ── Tabla egresos ──
+    var tablaEgr = "<table style=\"width:100%;border-collapse:collapse\">"+
+      "<thead>"+tHead([{label:"Fecha"},{label:"Descripción"},{label:"Categoría"},{label:"Monto",right:true}])+"</thead><tbody>"+
+      (egresos.length ? egresos.map(function(e,i){
+        return "<tr style=\"background:"+(i%2?"#f9fafb":"#fff")+"\">"+
+          "<td style=\""+tdS+"\">"+e.date+"</td>"+
+          "<td style=\""+tdS+"\">"+(e.description||"—")+"</td>"+
+          "<td style=\""+tdS+"\">"+(e.category||"—")+"</td>"+
+          "<td style=\""+tdS+";text-align:right;font-weight:700;color:#EF4444\">-"+fmtR(e.amount)+"</td></tr>";
+      }).join("") : emptyRow(4))+
+      "</tbody><tfoot><tr><td colspan=\"3\" style=\"padding:8px 12px;font-weight:700;font-size:13px\">Total Egresos</td><td style=\"padding:8px 12px;font-weight:800;text-align:right;color:#EF4444;font-size:15px\">"+fmtR(totalEgresos)+"</td></tr></tfoot></table>";
+
+    // ── Balance final ──
+    var balanceColor = totalGeneral>=0?"#10B981":"#EF4444";
+    var balanceBox = "<div style=\"background:"+(totalGeneral>=0?"#d1fae5":"#fee2e2")+";border:2px solid "+(totalGeneral>=0?"#10B981":"#EF4444")+";border-radius:12px;padding:18px 22px;display:flex;justify-content:space-between;align-items:center;margin-top:8px\">"+
+      "<div><div style=\"font-size:13px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em\">Balance del Período</div>"+
+      "<div style=\"font-size:11px;color:#64748B;margin-top:3px\">Ventas + Reparaciones cobradas + Ingresos − Egresos</div></div>"+
+      "<div style=\"font-size:28px;font-weight:900;color:"+balanceColor+"\">"+fmtR(totalGeneral)+"</div></div>";
+
+    var resumen = "<div style=\"display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px\">"+
+      [
+        {l:"Ventas",      v:totalVentas,      c:"#10B981"},
+        {l:"Reparaciones",v:totalRepPagado,   c:"#8B5CF6"},
+        {l:"Ingresos",    v:totalIngresos,    c:"#4F8EFF"},
+        {l:"Egresos",     v:totalEgresos,     c:"#EF4444"}
+      ].map(function(x){
+        return "<div style=\"background:#f8fafc;border:1px solid #E2E8F4;border-radius:10px;padding:14px 16px\">"+
+          "<div style=\"font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:5px\">"+x.l+"</div>"+
+          "<div style=\"font-size:18px;font-weight:800;color:"+x.c+"\">"+fmtR(x.v)+"</div></div>";
+      }).join("")+"</div>";
+
+    var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>"+titulo+" — "+storeName+"</title>"+
+      "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;padding:28px;color:#0D1B35;background:#fff}"+
+      "h1{font-size:22px;font-weight:900;margin-bottom:2px}h2{font-size:14px;color:#64748B;font-weight:400;margin-bottom:4px}"+
+      ".sub{font-size:12px;color:#94A3B8;margin-bottom:24px}table{width:100%;border-collapse:collapse;margin-bottom:0}"+
+      "tfoot td{border-top:2px solid #e2e8f4;background:#f8fafc}@media print{.no-print{display:none}}</style></head><body>"+
+      "<h1>"+storeName+"</h1><h2>"+titulo+"</h2><p class=\"sub\">"+subtitulo+"</p>"+
+      resumen+
+      sec("📋 Ventas ("+ventas.length+")", tablaVentas)+
+      sec("🔧 Reparaciones Listas/Entregadas ("+reparaciones.length+")", tablaRep)+
+      sec("⬆ Ingresos ("+ingresos.length+")", tablaIng)+
+      sec("⬇ Egresos ("+egresos.length+")", tablaEgr)+
+      balanceBox+
+      "<div class=\"no-print\" style=\"text-align:center;margin-top:28px\">"+
+      "<button onclick=\"window.print()\" style=\"padding:12px 36px;background:#0D1B35;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:800;font-family:inherit\">🖨 Imprimir Reporte</button></div>"+
+      "<p style=\"text-align:center;margin-top:18px;color:#94A3B8;font-size:11px\">Generado el "+new Date().toLocaleString("es-CO")+"</p>"+
+      "</body></html>";
+
+    var win = window.open("","_blank","width=960,height=800");
+    win.document.write(html);
+    win.document.close();
+    setTimeout(function(){ win.focus(); }, 300);
+  };
+
+  return /*#__PURE__*/React.createElement("div", { style:{maxWidth:560,margin:"0 auto",padding:"8px 0"} },
+    /*#__PURE__*/React.createElement("h2", {style:{fontSize:20,fontWeight:800,color:T.text,marginBottom:8,letterSpacing:"-0.03em"}}, "📊 Reporte General"),
+    /*#__PURE__*/React.createElement("p",  {style:{color:T.muted,fontSize:14,marginBottom:32}}, "Genera e imprime el resumen completo del día o del mes: ventas, reparaciones, ingresos y egresos."),
+    /*#__PURE__*/React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:16}},
+      [
+        { tipo:"diario",  icon:"🗓️", title:"Reporte Diario",
+          desc:"Ventas · Reparaciones · Ingresos · Egresos de HOY",
+          color:"#10E08A", textColor:"#0D1B35" },
+        { tipo:"mensual", icon:"📅", title:"Reporte Mensual",
+          desc:"Resumen completo del MES en curso",
+          color:"#4F8EFF", textColor:"#fff" }
+      ].map(function(op){
+        return /*#__PURE__*/React.createElement("button", {
+          key: op.tipo,
+          onClick: function(){ generarReporte(op.tipo); },
+          style:{ display:"flex", alignItems:"center", gap:18, padding:"22px 24px",
+            background:T.card, border:"2px solid "+T.border, borderRadius:16,
+            cursor:"pointer", fontFamily:"inherit", textAlign:"left", width:"100%",
+            boxShadow:"0 2px 12px rgba(0,0,0,0.07)", transition:"all 0.15s" }
+        },
+          /*#__PURE__*/React.createElement("div",{style:{width:52,height:52,borderRadius:14,background:op.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}},op.icon),
+          /*#__PURE__*/React.createElement("div",{style:{flex:1}},
+            /*#__PURE__*/React.createElement("div",{style:{fontSize:17,fontWeight:800,color:T.text,marginBottom:5}},op.title),
+            /*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:T.muted}},op.desc)
+          ),
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:22,color:T.accent}},"🖨")
+        );
+      })
+    ),
+    /*#__PURE__*/React.createElement("div",{style:{marginTop:24,background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"14px 18px"}},
+      /*#__PURE__*/React.createElement("p",{style:{color:T.muted,fontSize:13,margin:0}},
+        "💡 El reporte incluye: ventas del período, reparaciones entregadas/listas, ingresos y egresos registrados en Caja. Se abre en una nueva ventana para imprimir o guardar como PDF."
+      )
+    )
+  );
+}
+
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var onLogout = _appProps && _appProps.onLogout ? _appProps.onLogout : function(){};
@@ -6642,6 +6818,12 @@ function App(_appProps) {
       size: 17
     })
   }, {
+    id: "reporte",
+    label: "Reporte",
+    icon: /*#__PURE__*/React.createElement(Printer, {
+      size: 17
+    })
+  }, {
     id: "settings",
     label: "Configuración",
     icon: /*#__PURE__*/React.createElement(CheckCircle, {
@@ -6825,7 +7007,8 @@ function App(_appProps) {
   view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
   view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
   view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
-  view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify })),
+  view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
+  view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data })),
 
   isMobile && /*#__PURE__*/React.createElement("nav", {
     className: "trp-bottom-nav",
