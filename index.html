@@ -5842,6 +5842,17 @@ function SettingsView(_ref20) {
             clientId: permId
           });
           _saveUser(updated);
+          // Registrar uso del código en Firebase (panel admin lo verá en rojo)
+          try {
+            var fbDbS = window.__firebaseDB;
+            if (fbDbS) {
+              var codeKeyS = "LIC_" + newLic.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+              fbDbS.collection("licenses").doc(codeKeyS).set({
+                used: true, usedBy: userData.username,
+                usedAt: new Date().toISOString(), codeType: result.type
+              }).catch(function(){});
+            }
+          } catch(e){}
           setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Recarga para aplicar." : "✅ Demo activado — " + result.daysLeft + " días. Recarga para aplicar.");
         } else {
           setLicErr("Error: no se encontró tu cuenta. Vuelve a iniciar sesión.");
