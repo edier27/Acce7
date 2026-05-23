@@ -6161,6 +6161,11 @@ function App(_appProps) {
       localStorage.setItem('trp_sid_v1', _trpSessionId);
     } catch(e) {}
     // Guardar en Firebase — con reintento automático si no hay internet
+    // Actualizar lastSeen del usuario en trp_users (para el panel admin)
+    try {
+      var _userRef = _getUserRef ? _getUserRef(clientId) : null;
+      if (_userRef) _userRef.set({ lastSeen: new Date().toISOString() }, { merge: true }).catch(function(){});
+    } catch(e){}
     if (clientDataRef) {
       clientDataRef.set({
         appData: JSON.stringify(d),
@@ -6611,37 +6616,100 @@ function AdminPanel() {
   var _a3 = useState(""), _aa3 = _slicedToArray(_a3, 2), rcUser = _aa3[0], setRcUser = _aa3[1];
   var _a4 = useState(""), _aa4 = _slicedToArray(_a4, 2), rcOut = _aa4[0], setRcOut = _aa4[1];
   var _a5 = useState(false), _aa5 = _slicedToArray(_a5, 2), copied = _aa5[0], setCopied = _aa5[1];
-  // Lista de códigos generados con su estado
   var _a6 = useState(function(){ try{ return JSON.parse(localStorage.getItem("acce_admin_codes")||"[]"); }catch(e){ return []; } });
   var _aa6 = _slicedToArray(_a6, 2), codigos = _aa6[0], setCodigos = _aa6[1];
-
-  // Verificar estado de cada código en Firebase — tiempo real con onSnapshot
   var _a7 = useState(false), _aa7 = _slicedToArray(_a7, 2), refreshing = _aa7[0], setRefreshing = _aa7[1];
+  var _a8 = useState("codigos"), _aa8 = _slicedToArray(_a8, 2), tab = _aa8[0], setTab = _aa8[1];
+  var _a9 = useState([]), _aa9 = _slicedToArray(_a9, 2), cuentas = _aa9[0], setCuentas = _aa9[1];
+  var _a10 = useState(false), _aa10 = _slicedToArray(_a10, 2), loadingCuentas = _aa10[0], setLoadingCuentas = _aa10[1];
+  var _a11 = useState(""), _aa11 = _slicedToArray(_a11, 2), buscarCuenta = _aa11[0], setBuscarCuenta = _aa11[1];
 
-  var verificarEstados = function() {
-    if (!codigos.length) return;
-    setRefreshing(true);
+  var getDb = function() {
     var db = window.__firebaseDB;
     if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
       db = firebase.apps[0].firestore();
+    return db;
+  };
+
+  // ── Cargar cuentas desde Firebase ──
+  var cargarCuentas = function() {
+    var db = getDb();
+    if (!db) return;
+    setLoadingCuentas(true);
+    db.collection("trp_users").get().then(function(snap) {
+      var lista = [];
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        // Excluir documentos de códigos (code_LIC_...)
+        if (doc.id.startsWith("code_LIC_")) return;
+        if (!d.username) return;
+        lista.push({
+          id:          doc.id,
+          username:    d.username || doc.id,
+          licenseCode: d.licenseCode || "",
+          licenseType: d.licenseType || "",
+          createdAt:   d.createdAt || "",
+          lastSeen:    d.lastSeen || "",
+        });
+      });
+      // Enriquecer con info de lastSeen desde clientes collection
+      if (lista.length === 0) { setCuentas(lista); setLoadingCuentas(false); return; }
+      var pending = lista.length;
+      lista.forEach(function(u, i) {
+        var clientId = u.username.replace(/-/g,"_");
+        db.collection("clientes").doc(clientId).get().then(function(cDoc) {
+          if (cDoc.exists && cDoc.data().updatedAt) {
+            lista[i].lastSeen = cDoc.data().updatedAt;
+          }
+          pending--;
+          if (pending === 0) {
+            lista.sort(function(a,b){ return (b.createdAt||"").localeCompare(a.createdAt||""); });
+            setCuentas(lista);
+            setLoadingCuentas(false);
+          }
+        }).catch(function(){
+          pending--;
+          if (pending === 0) { setCuentas(lista); setLoadingCuentas(false); }
+        });
+      });
+    }).catch(function(e){
+      console.warn("Error cargando cuentas:", e);
+      setLoadingCuentas(false);
+    });
+  };
+
+  useEffect(function() {
+    if (tab === "cuentas") cargarCuentas();
+  }, [tab]);
+
+  // ── Eliminar cuenta ──
+  var eliminarCuenta = function(cuenta) {
+    if (!confirm("¿Eliminar la cuenta \"" + cuenta.username + "\"?\n\nEsto eliminará su acceso pero NO borrará sus datos del taller.")) return;
+    var db = getDb();
+    if (db) {
+      db.collection("trp_users").doc(cuenta.id).delete().then(function() {
+        setCuentas(function(prev){ return prev.filter(function(x){ return x.id !== cuenta.id; }); });
+      }).catch(function(e){ alert("Error al eliminar: " + e.message); });
+    }
+  };
+
+  // ── Verificar estados de códigos ──
+  var verificarEstados = function() {
+    if (!codigos.length) return;
+    setRefreshing(true);
+    var db = getDb();
     if (!db) { setRefreshing(false); return; }
     var pending = codigos.length;
-    // Copiar array para modificar
     setCodigos(function(prev) {
       var newArr = prev.map(function(x){ return _objectSpread({}, x); });
       prev.forEach(function(item, idx) {
         var codeKey = "code_LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
-        // onSnapshot: escucha cambios en tiempo real
         db.collection("trp_users").doc(codeKey).onSnapshot(function(doc) {
           if (doc.exists && (doc.data().usedBy || doc.data().used)) {
             setCodigos(function(latest) {
               var updated = latest.map(function(x, i) {
                 if (i !== idx) return x;
-                return _objectSpread(_objectSpread({}, x), {}, {
-                  usado: true,
-                  usedBy: doc.data().usedBy || "",
-                  activadoEn: doc.data().usedAt || ""
-                });
+                return _objectSpread(_objectSpread({}, x), {}, { usado: true, usedBy: doc.data().usedBy || "", activadoEn: doc.data().usedAt || "" });
               });
               localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
               return updated;
@@ -6649,72 +6717,67 @@ function AdminPanel() {
           }
           pending--;
           if (pending === 0) setRefreshing(false);
-        }, function(err) {
-          console.warn("[ADMIN] Error leyendo código:", err);
-          pending--;
-          if (pending === 0) setRefreshing(false);
-        });
+        }, function(err){ pending--; if (pending === 0) setRefreshing(false); });
       });
       return newArr;
     });
   };
 
-  // Verificar al montar y cuando cambia la lista
-  useEffect(function() {
-    verificarEstados();
-  }, [codigos.length]);
+  useEffect(function() { verificarEstados(); }, [codigos.length]);
 
   var generar = function() {
-    var code;
-    var now = new Date();
+    var code; var now = new Date();
     if (tipo === "test") {
-      var expMin = Math.floor((Date.now() + 10 * 60 * 1000) / 60000).toString();
-      var hT = _hash(expMin + "TEST" + _LS);
-      code = "TEST-" + expMin + "-" + hT;
+      var expMin = Math.floor((Date.now() + 10*60*1000)/60000).toString();
+      var hT = _hash(expMin+"TEST"+_LS);
+      code = "TEST-"+expMin+"-"+hT;
     } else if (tipo === "pro") {
       var id = Math.random().toString(36).slice(2,8).toUpperCase();
-      var h2 = _hash(id + "PRO" + _LS);
-      code = "PRO-" + id + "-" + h2;
+      var h2 = _hash(id+"PRO"+_LS);
+      code = "PRO-"+id+"-"+h2;
     } else {
-      var days = tipo === "trial" ? 30 : tipo === "anual" ? 365 : DIAS_DEMO;
-      var exp = new Date(now.getTime() + days * 86400000);
-      var dateStr = exp.getFullYear().toString() +
-        String(exp.getMonth()+1).padStart(2,"0") +
-        String(exp.getDate()).padStart(2,"0");
-      var prefix = tipo === "trial" ? "TRIAL" : tipo === "anual" ? "ANUAL" : "DEMO";
-      var h = _hash(dateStr + _LS);
-      code = prefix + "-" + dateStr + "-" + h;
+      var days = tipo==="trial"?30:tipo==="anual"?365:DIAS_DEMO;
+      var exp = new Date(now.getTime()+days*86400000);
+      var dateStr = exp.getFullYear().toString()+String(exp.getMonth()+1).padStart(2,"0")+String(exp.getDate()).padStart(2,"0");
+      var prefix = tipo==="trial"?"TRIAL":tipo==="anual"?"ANUAL":"DEMO";
+      var h = _hash(dateStr+_LS);
+      code = prefix+"-"+dateStr+"-"+h;
     }
-    setCodigoGen(code);
-    setCopied(false);
-    // Guardar en historial
-    var nuevo = { code: code, tipo: tipo, generadoEn: new Date().toISOString(), usado: false };
-    setCodigos(function(prev) {
-      var updated = [nuevo].concat(prev);
-      localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
-      return updated;
-    });
+    setCodigoGen(code); setCopied(false);
+    var nuevo = { code:code, tipo:tipo, generadoEn:new Date().toISOString(), usado:false };
+    setCodigos(function(prev){ var u=[nuevo].concat(prev); localStorage.setItem("acce_admin_codes",JSON.stringify(u)); return u; });
   };
 
   var copiar = function(cod) {
-    navigator.clipboard.writeText(cod || codigoGen).then(function(){ setCopied(true); setTimeout(function(){ setCopied(false); }, 2000); });
+    navigator.clipboard.writeText(cod||codigoGen).then(function(){ setCopied(true); setTimeout(function(){ setCopied(false); },2000); });
   };
 
   var eliminarCodigo = function(idx) {
-    setCodigos(function(prev) {
-      var updated = prev.filter(function(_,i){ return i !== idx; });
-      localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
-      return updated;
-    });
+    setCodigos(function(prev){ var u=prev.filter(function(_,i){ return i!==idx; }); localStorage.setItem("acce_admin_codes",JSON.stringify(u)); return u; });
   };
+
+  var licLabel = function(u) {
+    if (!u.licenseCode) return { txt:"Sin licencia", color:"#94A3B8" };
+    var r = verificarCodigo(u.licenseCode);
+    if (!r.valid) return { txt:"Vencida", color:"#EF4444" };
+    if (r.type==="pro") return { txt:"PRO — Permanente", color:"#10B981" };
+    return { txt:"Activa — "+r.daysLeft+" días", color:"#3B82F6" };
+  };
+
+  var fmtDate = function(iso) {
+    if (!iso) return "—";
+    try { return new Date(iso).toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"}); } catch(e){ return iso.slice(0,10); }
+  };
+
+  var cuentasFiltradas = cuentas.filter(function(u){
+    return !buscarCuenta || u.username.toLowerCase().includes(buscarCuenta.toLowerCase());
+  });
 
   var cardStyle = { background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", marginBottom:16 };
   var lblStyle  = { fontSize:12, fontWeight:600, color:"#606060", marginBottom:6, display:"block" };
 
-  return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight:"100dvh", background:"#F0F2F5", fontFamily:"'DM Sans',system-ui,sans-serif", padding:20 }
-  },
-    /*#__PURE__*/React.createElement("div", { style:{ maxWidth:560, margin:"0 auto" } },
+  return /*#__PURE__*/React.createElement("div", { style:{ minHeight:"100dvh", background:"#F0F2F5", fontFamily:"'DM Sans',system-ui,sans-serif", padding:20 } },
+    /*#__PURE__*/React.createElement("div", { style:{ maxWidth:600, margin:"0 auto" } },
 
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:12, marginBottom:20 } },
         /*#__PURE__*/React.createElement("div", { style:{ width:40, height:40, background:"linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" } },
@@ -6726,135 +6789,165 @@ function AdminPanel() {
         )
       ),
 
-      /*#__PURE__*/React.createElement("div", { style: cardStyle },
-        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:14, color:"#0D1B35" } }, "\uD83D\uDD11 Generar código de activación"),
-        /*#__PURE__*/React.createElement("label", { style: lblStyle }, "Tipo de licencia"),
-        /*#__PURE__*/React.createElement("select", {
-          value: tipo, onChange: function(e){ setTipo(e.target.value); setCodigoGen(null); },
-          style:{ width:"100%", padding:"10px 12px", border:"1px solid #E2E8F4", borderRadius:10, fontSize:14, marginBottom:12, fontFamily:"inherit", background:"#fff" }
-        },
-          /*#__PURE__*/React.createElement("option", { value:"demo" }, "DEMO — " + DIAS_DEMO + " días"),
-          /*#__PURE__*/React.createElement("option", { value:"trial" }, "TRIAL — 30 días"),
-          /*#__PURE__*/React.createElement("option", { value:"anual" }, "ANUAL — 1 año"),
-          /*#__PURE__*/React.createElement("option", { value:"pro" }, "PRO — Permanente"),
-          /*#__PURE__*/React.createElement("option", { value:"test" }, "\uD83E\uDDEA TEST — 10 minutos (para probar)")
-        ),
-        /*#__PURE__*/React.createElement("button", {
-          onClick: generar,
-          style:{ width:"100%", padding:"12px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:10, fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }
-        }, "Generar código"),
-        codigoGen && /*#__PURE__*/React.createElement("div", { style:{ marginTop:12, padding:"14px", background:"#F0FDF4", border:"1px solid #10E08A40", borderRadius:10 } },
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:6 } }, "Código generado — compártelo con tu cliente:"),
-          /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:16, fontWeight:700, color:"#0D1B35", letterSpacing:"0.08em", wordBreak:"break-all", marginBottom:10 } }, codigoGen),
-          /*#__PURE__*/React.createElement("button", {
-            onClick: function(){ copiar(codigoGen); },
-            style:{ padding:"8px 16px", background: copied?"#10E08A":"#0D1B35", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
-          }, copied ? "\u2705 Copiado" : "Copiar código"),
-          /*#__PURE__*/React.createElement("a", {
-            href:"https://wa.me/?text=" + encodeURIComponent("Tu código de activación para ACCE PRO:\n\n" + codigoGen + "\n\nPrecio: " + PRECIO),
-            target:"_blank",
-            style:{ display:"inline-flex", alignItems:"center", gap:6, marginLeft:8, padding:"8px 14px", background:"#25D366", color:"#fff", borderRadius:8, fontSize:13, fontWeight:600, textDecoration:"none" }
-          }, "\uD83D\uDCF1 Enviar por WhatsApp")
-        )
+      /* ── TABS ── */
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, marginBottom:16 } },
+        ["codigos","cuentas"].map(function(t) {
+          var labels = { codigos:"🔑 Códigos", cuentas:"👥 Cuentas" };
+          return /*#__PURE__*/React.createElement("button", {
+            key:t, onClick:function(){ setTab(t); },
+            style:{ flex:1, padding:"10px", borderRadius:10, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:14, fontWeight:700,
+              background: tab===t ? "#0D1B35" : "#fff",
+              color: tab===t ? "#fff" : "#64748B",
+              boxShadow: tab===t ? "none" : "0 1px 4px rgba(0,0,0,0.08)"
+            }
+          }, labels[t]);
+        })
       ),
 
-      /*#__PURE__*/React.createElement("div", { style: cardStyle },
-        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
-          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "\uD83D\uDCCB Códigos generados (" + codigos.length + ")"),
-          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, alignItems:"center" } },
-            codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
-              onClick: function(){ verificarEstados(); },
-              disabled: refreshing,
-              style:{ fontSize:12, color:"#fff", background: refreshing ? "#94A3B8" : "#4F8EFF", border:"none", borderRadius:6, padding:"4px 10px", cursor: refreshing ? "default" : "pointer", fontFamily:"inherit", fontWeight:600 }
-            }, refreshing ? "⏳ Verificando..." : "🔄 Actualizar estados"),
-            codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
-              onClick: function(){ if(confirm("¿Limpiar todo el historial?")){ setCodigos([]); localStorage.removeItem("acce_admin_codes"); } },
-              style:{ fontSize:11, color:"#94A3B8", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }
-            }, "Limpiar todo")
+      /* ══════════════ TAB CÓDIGOS ══════════════ */
+      tab === "codigos" && /*#__PURE__*/React.createElement(React.Fragment, null,
+        /*#__PURE__*/React.createElement("div", { style: cardStyle },
+          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:14, color:"#0D1B35" } }, "🔑 Generar código de activación"),
+          /*#__PURE__*/React.createElement("label", { style: lblStyle }, "Tipo de licencia"),
+          /*#__PURE__*/React.createElement("select", {
+            value:tipo, onChange:function(e){ setTipo(e.target.value); setCodigoGen(null); },
+            style:{ width:"100%", padding:"10px 12px", border:"1px solid #E2E8F4", borderRadius:10, fontSize:14, marginBottom:12, fontFamily:"inherit", background:"#fff" }
+          },
+            /*#__PURE__*/React.createElement("option", { value:"demo" }, "DEMO — "+DIAS_DEMO+" días"),
+            /*#__PURE__*/React.createElement("option", { value:"trial" }, "TRIAL — 30 días"),
+            /*#__PURE__*/React.createElement("option", { value:"anual" }, "ANUAL — 1 año"),
+            /*#__PURE__*/React.createElement("option", { value:"pro" }, "PRO — Permanente"),
+            /*#__PURE__*/React.createElement("option", { value:"test" }, "🧪 TEST — 10 minutos")
+          ),
+          /*#__PURE__*/React.createElement("button", {
+            onClick:generar,
+            style:{ width:"100%", padding:"12px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:10, fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }
+          }, "Generar código"),
+          codigoGen && /*#__PURE__*/React.createElement("div", { style:{ marginTop:12, padding:"14px", background:"#F0FDF4", border:"1px solid #10E08A40", borderRadius:10 } },
+            /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:6 } }, "Compártelo con tu cliente:"),
+            /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:16, fontWeight:700, color:"#0D1B35", letterSpacing:"0.08em", wordBreak:"break-all", marginBottom:10 } }, codigoGen),
+            /*#__PURE__*/React.createElement("button", {
+              onClick:function(){ copiar(codigoGen); },
+              style:{ padding:"8px 16px", background:copied?"#10E08A":"#0D1B35", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginRight:8 }
+            }, copied?"✅ Copiado":"Copiar"),
+            /*#__PURE__*/React.createElement("a", {
+              href:"https://wa.me/?text="+encodeURIComponent("Tu código de activación ACCE PRO:\n\n"+codigoGen+"\n\nPrecio: "+PRECIO),
+              target:"_blank",
+              style:{ display:"inline-flex", alignItems:"center", gap:6, padding:"8px 14px", background:"#25D366", color:"#fff", borderRadius:8, fontSize:13, fontWeight:600, textDecoration:"none" }
+            }, "📱 WhatsApp")
           )
         ),
-        codigos.length === 0
-          ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "Aún no has generado ningún código")
-          : /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:8 } },
-              codigos.map(function(item, idx) {
-                var usado = item.usado;
-                var bgColor  = usado ? "#FFF5F5" : "#F0FDF4";
-                var bdColor  = usado ? "#FCA5A5" : "#6EE7B7";
-                var dotColor = usado ? "#EF4444" : "#10B981";
-                var fechaGen = item.generadoEn ? new Date(item.generadoEn).toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
-                return /*#__PURE__*/React.createElement("div", {
-                  key: idx,
-                  style:{ background: bgColor, border:"1px solid "+bdColor, borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"flex-start", gap:10 }
-                },
-                  /*#__PURE__*/React.createElement("div", {
-                    style:{ width:10, height:10, borderRadius:"50%", background: dotColor, flexShrink:0, marginTop:4 }
-                  }),
-                  /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:0 } },
-                    /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:13, fontWeight:700, color:"#0D1B35", wordBreak:"break-all" } }, item.code),
-                    /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:3, display:"flex", gap:10, flexWrap:"wrap" } },
-                      /*#__PURE__*/React.createElement("span", null, item.tipo ? item.tipo.toUpperCase() : ""),
-                      fechaGen && /*#__PURE__*/React.createElement("span", null, "Generado: " + fechaGen),
-                      usado
-                        ? /*#__PURE__*/React.createElement("span", { style:{ color:"#EF4444", fontWeight:600 } }, "\u2716 Ya activado" + (item.usedBy ? " — cuenta: " + item.usedBy : " por un cliente"))
-                        : /*#__PURE__*/React.createElement("span", { style:{ color:"#10B981", fontWeight:600 } }, "\u2714 Disponible — no usado")
-                    )
-                  ),
-                  /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:6, flexShrink:0 } },
-                    /*#__PURE__*/React.createElement("button", {
-                      onClick: function(){ navigator.clipboard.writeText(item.code); },
-                      title:"Copiar código",
-                      style:{ padding:"4px 8px", background:"#E2E8F0", border:"none", borderRadius:6, fontSize:11, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }
-                    }, "Copiar"),
-                    /*#__PURE__*/React.createElement("button", {
-                      onClick: function(){ eliminarCodigo(idx); },
-                      title:"Eliminar del historial",
-                      style:{ padding:"4px 8px", background:"#FEE2E2", border:"none", borderRadius:6, fontSize:11, cursor:"pointer", color:"#EF4444", fontFamily:"inherit", fontWeight:600 }
-                    }, "\u2715")
-                  )
-                );
-              })
-            )
-      ),
 
-      /*#__PURE__*/React.createElement("div", { style: cardStyle },
-        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:6, color:"#0D1B35" } }, "\uD83D\uDD10 Código de recuperación de contraseña"),
-        /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B", marginBottom:12 } },
-          "Ingresa el ", /*#__PURE__*/React.createElement("strong", null, "nombre de usuario"), " del cliente para obtener su código de recuperación:"
+        /*#__PURE__*/React.createElement("div", { style: cardStyle },
+          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
+            /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "📋 Códigos generados ("+codigos.length+")"),
+            /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, alignItems:"center" } },
+              codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
+                onClick:function(){ verificarEstados(); }, disabled:refreshing,
+                style:{ fontSize:12, color:"#fff", background:refreshing?"#94A3B8":"#4F8EFF", border:"none", borderRadius:6, padding:"4px 10px", cursor:refreshing?"default":"pointer", fontFamily:"inherit", fontWeight:600 }
+              }, refreshing?"⏳ Verificando...":"🔄 Actualizar"),
+              codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
+                onClick:function(){ if(confirm("¿Limpiar historial?")){ setCodigos([]); localStorage.removeItem("acce_admin_codes"); } },
+                style:{ fontSize:11, color:"#94A3B8", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }
+              }, "Limpiar todo")
+            )
+          ),
+          codigos.length === 0
+            ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "Aún no has generado ningún código")
+            : /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:8 } },
+                codigos.map(function(item, idx) {
+                  var usado = item.usado;
+                  return /*#__PURE__*/React.createElement("div", { key:idx,
+                    style:{ background:usado?"#FFF5F5":"#F0FDF4", border:"1px solid "+(usado?"#FCA5A5":"#6EE7B7"), borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"flex-start", gap:10 }
+                  },
+                    /*#__PURE__*/React.createElement("div", { style:{ width:10, height:10, borderRadius:"50%", background:usado?"#EF4444":"#10B981", flexShrink:0, marginTop:4 } }),
+                    /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:0 } },
+                      /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:13, fontWeight:700, color:"#0D1B35", wordBreak:"break-all" } }, item.code),
+                      /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:3, display:"flex", gap:10, flexWrap:"wrap" } },
+                        /*#__PURE__*/React.createElement("span", null, (item.tipo||"").toUpperCase()),
+                        item.generadoEn && /*#__PURE__*/React.createElement("span", null, "Generado: "+fmtDate(item.generadoEn)),
+                        usado
+                          ? /*#__PURE__*/React.createElement("span", { style:{ color:"#EF4444", fontWeight:600 } }, "✖ Activado"+(item.usedBy?" por: "+item.usedBy:""))
+                          : /*#__PURE__*/React.createElement("span", { style:{ color:"#10B981", fontWeight:600 } }, "✔ Disponible — no usado")
+                      )
+                    ),
+                    /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:6, flexShrink:0 } },
+                      /*#__PURE__*/React.createElement("button", { onClick:function(){ navigator.clipboard.writeText(item.code); },
+                        style:{ padding:"4px 8px", background:"#E2E8F0", border:"none", borderRadius:6, fontSize:11, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }
+                      }, "Copiar"),
+                      /*#__PURE__*/React.createElement("button", { onClick:function(){ eliminarCodigo(idx); },
+                        style:{ padding:"4px 8px", background:"#FEE2E2", border:"none", borderRadius:6, fontSize:11, cursor:"pointer", color:"#EF4444", fontFamily:"inherit", fontWeight:600 }
+                      }, "✕")
+                    )
+                  );
+                })
+              )
         ),
-        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
-          /*#__PURE__*/React.createElement("input", {
-            type:"text", placeholder:"Nombre de usuario del cliente",
-            value: rcUser, onChange: function(e){ setRcUser(e.target.value.toLowerCase()); setRcOut(""); },
-            style:{ flex:1, padding:"10px 12px", border:"1px solid #E2E8F4", borderRadius:10, fontSize:14, fontFamily:"inherit" }
-          }),
-          /*#__PURE__*/React.createElement("button", {
-            onClick: function(){ if(rcUser.trim()) setRcOut(_resetCode(rcUser.trim())); },
-            style:{ padding:"10px 16px", background:"#0D1B35", color:"#fff", border:"none", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:700, fontFamily:"inherit" }
-          }, "Obtener")
-        ),
-        rcOut && /*#__PURE__*/React.createElement("div", { style:{ marginTop:10, padding:"12px 16px", background:"#F0FDF4", border:"1px solid #10E08A40", borderRadius:10, textAlign:"center" } },
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:4 } }, "Código de recuperación para " + rcUser + ":"),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:24, fontWeight:800, letterSpacing:"0.2em", color:"#10E08A" } }, rcOut),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#94A3B8", marginTop:4 } }, "Envíaselo al cliente por WhatsApp")
+
+        /*#__PURE__*/React.createElement("div", { style: cardStyle },
+          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:6, color:"#0D1B35" } }, "🔐 Código de recuperación"),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B", marginBottom:12 } }, "Ingresa el nombre de usuario del cliente:"),
+          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
+            /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Usuario del cliente", value:rcUser, onChange:function(e){ setRcUser(e.target.value.toLowerCase()); setRcOut(""); },
+              style:{ flex:1, padding:"10px 12px", border:"1px solid #E2E8F4", borderRadius:10, fontSize:14, fontFamily:"inherit" }
+            }),
+            /*#__PURE__*/React.createElement("button", { onClick:function(){ if(rcUser.trim()) setRcOut(_resetCode(rcUser.trim())); },
+              style:{ padding:"10px 16px", background:"#0D1B35", color:"#fff", border:"none", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:700, fontFamily:"inherit" }
+            }, "Obtener")
+          ),
+          rcOut && /*#__PURE__*/React.createElement("div", { style:{ marginTop:10, padding:"12px 16px", background:"#F0FDF4", border:"1px solid #10E08A40", borderRadius:10, textAlign:"center" } },
+            /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:4 } }, "Código para "+rcUser+":"),
+            /*#__PURE__*/React.createElement("div", { style:{ fontSize:24, fontWeight:800, letterSpacing:"0.2em", color:"#10E08A" } }, rcOut)
+          )
         )
       ),
 
-      /*#__PURE__*/React.createElement("div", { style: cardStyle },
-        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:10, color:"#0D1B35" } }, "\u2139\uFE0F Información"),
-        [
-          "DEMO: válido " + DIAS_DEMO + " días desde que el cliente activa.",
-          "TRIAL: válido 30 días desde que el cliente activa.",
-          "ANUAL: válido 1 año (365 días) desde que el cliente activa.",
-          "PRO: acceso permanente sin vencimiento.",
-          "TEST: válido exactamente 10 minutos — solo para probar el flujo de vencimiento.",
-          "🟢 Verde = código disponible, el cliente aún no lo ha activado.",
-          "🔴 Rojo = código ya activado por el cliente.",
-          "El código de recuperación se genera con el NOMBRE DE USUARIO del cliente."
-        ].map(function(txt, i) {
-          return /*#__PURE__*/React.createElement("div", { key:i, style:{ fontSize:12, color:"#606060", marginBottom:6, display:"flex", gap:6 } },
-            /*#__PURE__*/React.createElement("span", { style:{ color:"#10E08A", flexShrink:0 } }, "•"), txt
-          );
-        })
+      /* ══════════════ TAB CUENTAS ══════════════ */
+      tab === "cuentas" && /*#__PURE__*/React.createElement(React.Fragment, null,
+        /*#__PURE__*/React.createElement("div", { style: cardStyle },
+          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
+            /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "👥 Cuentas registradas ("+cuentas.length+")"),
+            /*#__PURE__*/React.createElement("button", { onClick:cargarCuentas, disabled:loadingCuentas,
+              style:{ fontSize:12, color:"#fff", background:loadingCuentas?"#94A3B8":"#4F8EFF", border:"none", borderRadius:6, padding:"6px 12px", cursor:loadingCuentas?"default":"pointer", fontFamily:"inherit", fontWeight:600 }
+            }, loadingCuentas?"⏳ Cargando...":"🔄 Actualizar")
+          ),
+          /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"🔍 Buscar por usuario...", value:buscarCuenta, onChange:function(e){ setBuscarCuenta(e.target.value); },
+            style:{ width:"100%", padding:"9px 12px", border:"1px solid #E2E8F4", borderRadius:8, fontSize:14, fontFamily:"inherit", marginBottom:12, boxSizing:"border-box" }
+          }),
+          loadingCuentas
+            ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", padding:"30px 0", fontSize:14 } }, "⏳ Cargando cuentas...")
+            : cuentasFiltradas.length === 0
+              ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", padding:"30px 0", fontSize:14 } }, "No se encontraron cuentas")
+              : /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:10 } },
+                  cuentasFiltradas.map(function(u) {
+                    var lic = licLabel(u);
+                    var isVencida = lic.txt === "Vencida" || lic.txt === "Sin licencia";
+                    var dias30 = u.lastSeen ? ((Date.now()-new Date(u.lastSeen).getTime())/(1000*60*60*24)) > 30 : true;
+                    return /*#__PURE__*/React.createElement("div", { key:u.id,
+                      style:{ background:"#F8FAFF", border:"1px solid #E2E8F4", borderRadius:10, padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }
+                    },
+                      /*#__PURE__*/React.createElement("div", { style:{ width:38, height:38, borderRadius:"50%", background:"linear-gradient(135deg,#4F8EFF,#10E08A)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 } },
+                        /*#__PURE__*/React.createElement("span", { style:{ color:"#fff", fontWeight:800, fontSize:16 } }, u.username[0].toUpperCase())
+                      ),
+                      /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:0 } },
+                        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:14, color:"#0D1B35" } }, u.username),
+                        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 } },
+                          /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, fontWeight:600, color:lic.color, background:lic.color+"18", padding:"2px 8px", borderRadius:20 } }, lic.txt),
+                          u.createdAt && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Creada: "+fmtDate(u.createdAt)),
+                          u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color: dias30 ? "#F59E0B" : "#10B981" } },
+                            (dias30?"⚠️ ":"✅ ")+"Última uso: "+fmtDate(u.lastSeen)
+                          ),
+                          !u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Sin actividad registrada")
+                        )
+                      ),
+                      /*#__PURE__*/React.createElement("button", { onClick:function(){ eliminarCuenta(u); },
+                        title:"Eliminar cuenta",
+                        style:{ padding:"6px 12px", background:"#FEE2E2", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#EF4444", fontFamily:"inherit", fontWeight:700, flexShrink:0 }
+                      }, "🗑️ Eliminar")
+                    );
+                  })
+                )
+        )
       )
     )
   );
