@@ -7004,28 +7004,40 @@ function CreateAccountScreen(_ref) {
     };
     // ── Verificar que el código no esté en uso por OTRA cuenta ──
     var verificarCodigoUnico = function(onOk) {
+      // Timeout de seguridad: si Firebase no responde en 5 segundos, continuar
+      var _done = false;
+      var _timer = setTimeout(function() {
+        if (!_done) { _done = true; onOk(); }
+      }, 5000);
+      var _finish = function(proceder, errorMsg) {
+        if (_done) return;
+        _done = true;
+        clearTimeout(_timer);
+        if (proceder) { onOk(); }
+        else { setErr(errorMsg); setLoading(false); }
+      };
       try {
         var fbDb = window.__firebaseDB;
         if (!fbDb && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
           fbDb = firebase.apps[0].firestore();
-        if (!fbDb) { onOk(); return; }
+        if (!fbDb) { _finish(true); return; }
         var codeKey = "LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
         fbDb.collection("licenses").doc(codeKey).get().then(function(licDoc) {
           if (licDoc.exists && licDoc.data().usedBy && licDoc.data().usedBy !== norm) {
-            // Código ya registrado por otra cuenta
-            setErr("❌ Este código ya está siendo usado por otra cuenta. Solicita un código nuevo a GlobalAcce.");
-            setLoading(false);
+            _finish(false, "❌ Este código ya está siendo usado por otra cuenta. Solicita un código nuevo a GlobalAcce.");
           } else {
-            // Código libre o es el mismo usuario — registrar uso
-            fbDb.collection("licenses").doc(codeKey).set({
-              usedBy: norm,
-              usedAt: new Date().toISOString(),
-              codeType: licResult.type
-            }, { merge: true }).catch(function(){});
-            onOk();
+            // Registrar uso en Firebase (sin esperar)
+            try {
+              fbDb.collection("licenses").doc(codeKey).set({
+                usedBy: norm,
+                usedAt: new Date().toISOString(),
+                codeType: licResult.type
+              }).catch(function(){});
+            } catch(e2){}
+            _finish(true);
           }
-        }).catch(function(){ onOk(); }); // si falla Firebase, permitir continuar
-      } catch(e) { onOk(); }
+        }).catch(function(){ _finish(true); });
+      } catch(e) { _finish(true); }
     };
 
     if (ref) {
@@ -7075,29 +7087,28 @@ function ExpiredScreen(_ref) {
     if (!result.valid) { setErr(result.error || "Código inválido"); return; }
     setLoading(true);
     // ── Verificar que el código no esté en uso por OTRA cuenta ──
+    var _donR = false;
+    var _timerR = setTimeout(function(){ if(!_donR){_donR=true;_finalizarRenovacion(result);} }, 5000);
+    var _endR = function(ok, msg) {
+      if (_donR) return; _donR = true; clearTimeout(_timerR);
+      if (ok) { _finalizarRenovacion(result); }
+      else { setErr(msg); setLoading(false); }
+    };
     try {
       var fbDb = window.__firebaseDB;
       if (!fbDb && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
         fbDb = firebase.apps[0].firestore();
-      if (fbDb) {
-        var codeKey = "LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-        fbDb.collection("licenses").doc(codeKey).get().then(function(licDoc) {
-          if (licDoc.exists && licDoc.data().usedBy && licDoc.data().usedBy !== currentUser.username) {
-            setErr("❌ Este código ya está siendo usado por otra cuenta. Solicita un código nuevo a GlobalAcce.");
-            setLoading(false);
-          } else {
-            fbDb.collection("licenses").doc(codeKey).set({
-              usedBy: currentUser.username,
-              usedAt: new Date().toISOString(),
-              codeType: result.type
-            }, { merge: true }).catch(function(){});
-            _finalizarRenovacion(result);
-          }
-        }).catch(function(){ _finalizarRenovacion(result); });
-        return;
-      }
-    } catch(e) {}
-    _finalizarRenovacion(result);
+      if (!fbDb) { _endR(true); return; }
+      var codeKey = "LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+      fbDb.collection("licenses").doc(codeKey).get().then(function(licDoc) {
+        if (licDoc.exists && licDoc.data().usedBy && licDoc.data().usedBy !== currentUser.username) {
+          _endR(false, "❌ Este código ya está siendo usado por otra cuenta. Solicita un código nuevo a GlobalAcce.");
+        } else {
+          try { fbDb.collection("licenses").doc(codeKey).set({ usedBy: currentUser.username, usedAt: new Date().toISOString(), codeType: result.type }).catch(function(){}); } catch(e2){}
+          _endR(true);
+        }
+      }).catch(function(){ _endR(true); });
+    } catch(e) { _endR(true); }
   };
   var _finalizarRenovacion = function(result) {
     var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + currentUser.username);
