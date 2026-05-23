@@ -6614,10 +6614,10 @@ function AdminPanel() {
     codigos.forEach(function(item, idx) {
       var codeKey = "LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
       db.collection("licenses").doc(codeKey).get().then(function(doc) {
-        if (doc.exists && doc.data().used) {
+        if (doc.exists && doc.data().usedBy) {
           setCodigos(function(prev) {
             var updated = prev.map(function(x, i) {
-              return i === idx ? _objectSpread(_objectSpread({}, x), {}, { usado: true, deviceId: doc.data().deviceId, activadoEn: doc.data().activatedAt }) : x;
+              return i === idx ? _objectSpread(_objectSpread({}, x), {}, { usado: true, usedBy: doc.data().usedBy || "", activadoEn: doc.data().usedAt }) : x;
             });
             localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
             return updated;
@@ -6751,7 +6751,7 @@ function AdminPanel() {
                       /*#__PURE__*/React.createElement("span", null, item.tipo ? item.tipo.toUpperCase() : ""),
                       fechaGen && /*#__PURE__*/React.createElement("span", null, "Generado: " + fechaGen),
                       usado
-                        ? /*#__PURE__*/React.createElement("span", { style:{ color:"#EF4444", fontWeight:600 } }, "\u2716 Ya activado por cliente")
+                        ? /*#__PURE__*/React.createElement("span", { style:{ color:"#EF4444", fontWeight:600 } }, "\u2716 Ya activado" + (item.usedBy ? " — cuenta: " + item.usedBy : " por un cliente"))
                         : /*#__PURE__*/React.createElement("span", { style:{ color:"#10B981", fontWeight:600 } }, "\u2714 Disponible — no usado")
                     )
                   ),
@@ -7020,7 +7020,7 @@ function CreateAccountScreen(_ref) {
         if (fbDb2) {
           var codeKey2 = "LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
           fbDb2.collection("licenses").doc(codeKey2).set({
-            usedBy: norm, usedAt: new Date().toISOString(), codeType: licResult.type
+            used: true, usedBy: norm, usedAt: new Date().toISOString(), codeType: licResult.type
           }).catch(function(){});
         }
       } catch(e){}
@@ -7079,7 +7079,7 @@ function ExpiredScreen(_ref) {
       if (fbDbR) {
         var codeKeyR = "LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
         fbDbR.collection("licenses").doc(codeKeyR).set({
-          usedBy: currentUser.username, usedAt: new Date().toISOString(), codeType: result.type
+          used: true, usedBy: currentUser.username, usedAt: new Date().toISOString(), codeType: result.type
         }).catch(function(){});
       }
     } catch(e){}
