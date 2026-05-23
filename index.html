@@ -6038,6 +6038,92 @@ var _trpLastSaveTs = 0;
 
 // ─── MAIN APP ────────────────────────────────────────────
 
+
+// ─── REGISTROS VIEW ──────────────────────────────────────────────────────────
+function RegistrosView(_props) {
+  var data = _props.data;
+  var _fmtR = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
+
+  var imprimirRegistro = function(tipo) {
+    var sales = (data && data.sales) ? data.sales : [];
+    var todayStr = new Date().toISOString().slice(0,10);
+    var mesStr = todayStr.slice(0,7);
+    var storeName = (data && data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
+    var lista, titulo, subtitulo;
+    if (tipo === "diario") {
+      lista = sales.filter(function(s){ return s.date === todayStr; });
+      titulo = "Registro Diario";
+      subtitulo = new Date().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+    } else {
+      lista = sales.filter(function(s){ return s.date && s.date.startsWith(mesStr); });
+      titulo = "Registro Mensual";
+      subtitulo = new Date().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
+    }
+    lista = lista.sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
+    var total = lista.reduce(function(s,v){ return s+(v.total||0); }, 0);
+    var filas = lista.map(function(s, i){
+      var bg = i%2===0 ? "#fff" : "#f9fafb";
+      var td = "padding:7px 10px;border-bottom:1px solid #eee;font-size:12px";
+      var itemsStr = (s.items||[]).map(function(it){ return it.name+" x"+it.qty; }).join(", ");
+      return "<tr style=\"background:"+bg+"\">"+
+        "<td style=\""+td+"\">"+(i+1)+"</td>"+
+        "<td style=\""+td+"\">"+s.date+"</td>"+
+        "<td style=\""+td+"\">"+(s.customer||"—")+"</td>"+
+        "<td style=\""+td+";font-size:11px\">"+itemsStr+"</td>"+
+        "<td style=\""+td+"\">"+(s.payment||"—")+"</td>"+
+        "<td style=\""+td+";font-weight:700;text-align:right\">"+_fmtR(s.total)+"</td>"+
+        "</tr>";
+    }).join("");
+    var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>"+titulo+" — "+storeName+"</title>"+
+      "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;padding:24px;color:#0D1B35}"+
+      "h1{font-size:20px;font-weight:800;margin-bottom:2px}h2{font-size:14px;color:#64748B;font-weight:400;margin-bottom:6px}"+
+      ".sub{font-size:12px;color:#94A3B8;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin-bottom:16px}"+
+      "th{padding:9px 10px;background:#0D1B35;color:#fff;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}"+
+      "th:last-child{text-align:right}.total-box{background:#F0FDF4;border:1px solid #10E08A;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}"+
+      ".total-label{font-size:13px;color:#64748B;font-weight:600}.total-val{font-size:20px;font-weight:800;color:#10B981}"+
+      ".empty{text-align:center;color:#94A3B8;padding:30px;font-size:14px}@media print{.no-print{display:none}}</style></head><body>"+
+      "<h1>"+storeName+"</h1><h2>"+titulo+"</h2><p style=\"font-size:12px;color:#94A3B8;margin-bottom:20px\">"+subtitulo+" | "+lista.length+" venta(s)</p>"+
+      "<table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Pago</th><th style=\"text-align:right\">Total</th></tr></thead><tbody>"+
+      (lista.length > 0 ? filas : "<tr><td colspan=\"6\" style=\"text-align:center;padding:30px;color:#94A3B8\">No hay ventas para este período</td></tr>")+
+      "</tbody></table>"+
+      (lista.length > 0 ? "<div class=\"total-box\"><span class=\"total-label\">TOTAL "+titulo.toUpperCase()+"</span><span class=\"total-val\">"+_fmtR(total)+"</span></div>" : "")+
+      "<div style=\"text-align:center;margin-top:20px\"><div class=\"no-print\">"+
+      "<button onclick=\"window.print()\" style=\"padding:10px 28px;background:#0D1B35;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700\">🖨 Imprimir</button></div></div>"+
+      "</body></html>";
+    var win = window.open("","_blank","width=820,height=700");
+    win.document.write(html);
+    win.document.close();
+    setTimeout(function(){ win.focus(); }, 300);
+  };
+
+  return /*#__PURE__*/React.createElement("div", { style:{ maxWidth:600, margin:"0 auto", padding:"8px 0" } },
+    /*#__PURE__*/React.createElement("h2", { style:{ fontSize:20, fontWeight:800, color:T.text, marginBottom:8, letterSpacing:"-0.03em" } }, "📋 Registros"),
+    /*#__PURE__*/React.createElement("p", { style:{ color:T.muted, fontSize:14, marginBottom:28 } }, "Genera e imprime reportes de ventas por período"),
+    /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:14 } },
+      [
+        { tipo:"diario",  icon:"🗓️", title:"Registro Diario",  desc:"Todas las ventas de hoy" },
+        { tipo:"mensual", icon:"📆", title:"Registro Mensual", desc:"Todas las ventas de este mes" }
+      ].map(function(op){
+        return /*#__PURE__*/React.createElement("button", {
+          key: op.tipo,
+          onClick: function(){ imprimirRegistro(op.tipo); },
+          style:{ display:"flex", alignItems:"center", gap:16, padding:"18px 22px",
+            background:T.card, border:"1px solid "+T.border, borderRadius:14,
+            cursor:"pointer", fontFamily:"inherit", textAlign:"left", width:"100%",
+            boxShadow:"0 2px 8px rgba(0,0,0,0.06)", transition:"all 0.15s" }
+        },
+          /*#__PURE__*/React.createElement("span", { style:{ fontSize:32 } }, op.icon),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("div", { style:{ fontSize:16, fontWeight:700, color:T.text, marginBottom:4 } }, op.title),
+            /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, color:T.muted } }, op.desc)
+          ),
+          /*#__PURE__*/React.createElement("span", { style:{ marginLeft:"auto", fontSize:22, color:T.accent } }, "→")
+        );
+      })
+    )
+  );
+}
+
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var onLogout = _appProps && _appProps.onLogout ? _appProps.onLogout : function(){};
@@ -6046,9 +6132,6 @@ function App(_appProps) {
   // ─── TEMPORIZADOR DE INACTIVIDAD (10 minutos) ──────────
   var _it1 = useState(false), _ita1 = _slicedToArray(_it1, 2), showIdleWarn = _ita1[0], setShowIdleWarn = _ita1[1];
   var _it2 = useState(60), _ita2 = _slicedToArray(_it2, 2), idleCountdown = _ita2[0], setIdleCountdown = _ita2[1];
-  // ── Estado para menú Registros en sidebar (DEBE ir antes de any return condicional) ──
-  var _stReg = useState(false), _stRegA = _slicedToArray(_stReg, 2);
-  var showRegistrosSidebar = _stRegA[0], setShowRegistrosSidebar = _stRegA[1];
   var _idleTimer = React.useRef(null);
   var _warnTimer = React.useRef(null);
   var _countTimer = React.useRef(null);
@@ -6338,65 +6421,8 @@ function App(_appProps) {
   var activeRepairs = (data.repairs || []).filter(function (r) {
     return !["Entregado", "Cancelado"].includes(r.status);
   });
-  var imprimirRegistroApp = function(tipo) {
-    setShowRegistrosSidebar(false);
-    var sales = data.sales || [];
-    var todayStr = new Date().toISOString().slice(0,10);
-    var mesStr = todayStr.slice(0,7);
-    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
-    var lista, titulo, subtitulo;
-    if (tipo === "diario") {
-      lista = sales.filter(function(s){ return s.date === todayStr; });
-      titulo = "Registro Diario";
-      subtitulo = new Date().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
-    } else {
-      lista = sales.filter(function(s){ return s.date && s.date.startsWith(mesStr); });
-      titulo = "Registro Mensual";
-      subtitulo = new Date().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
-    }
-    lista = lista.sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
-    var total = lista.reduce(function(s,v){ return s+(v.total||0); }, 0);
-    var filas = lista.map(function(s, i){
-      var bg = i%2===0 ? "#fff" : "#f9fafb";
-      var td = "padding:7px 10px;border-bottom:1px solid #eee;font-size:12px";
-      var itemsStr = (s.items||[]).map(function(it){ return it.name+" x"+it.qty; }).join(", ");
-      return "<tr style='background:"+bg+"'>" +
-        "<td style='"+td+"'>"+(i+1)+"</td>" +
-        "<td style='"+td+"'>"+s.date+"</td>" +
-        "<td style='"+td+"'>"+(s.customer||"-")+"</td>" +
-        "<td style='"+td+";font-size:11px'>"+itemsStr+"</td>" +
-        "<td style='"+td+"'>"+(s.payment||"-")+"</td>" +
-        "<td style='"+td+";font-weight:700;text-align:right'>"+fmtCOP2(s.total)+"</td>" +
-        "</tr>";
-    }).join("");
-    var html = [
-      "<!DOCTYPE html><html><head>",
-      "<meta charset='UTF-8'>",
-      "<title>"+titulo+" - "+storeName+"</title>",
-      "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:24px;color:#0D1B35}",
-      "h1{font-size:20px;font-weight:800;margin-bottom:2px}h2{font-size:14px;color:#64748B;font-weight:400;margin-bottom:6px}",
-      ".sub{font-size:12px;color:#94A3B8;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin-bottom:16px}",
-      "th{padding:9px 10px;background:#0D1B35;color:#fff;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}",
-      "th:last-child{text-align:right}.total-box{background:#F0FDF4;border:1px solid #10E08A;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}",
-      ".total-label{font-size:13px;color:#64748B;font-weight:600}.total-val{font-size:20px;font-weight:800;color:#10B981}",
-      ".empty{text-align:center;color:#94A3B8;padding:30px;font-size:14px}",
-      "@media print{.no-print{display:none}}</style></head><body>",
-      "<h1>"+storeName+"</h1><h2>"+titulo+"</h2>",
-      "<p class='sub'>"+subtitulo+" | "+lista.length+" venta(s)</p>",
-      "<table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Pago</th><th style='text-align:right'>Total</th></tr></thead><tbody>",
-      (lista.length > 0 ? filas : "<tr><td colspan='6' class='empty'>No hay ventas para este periodo</td></tr>"),
-      "</tbody></table>",
-      (lista.length > 0 ? "<div class='total-box'><span class='total-label'>TOTAL "+titulo.toUpperCase()+"</span><span class='total-val'>"+fmtCOP2(total)+"</span></div>" : ""),
-      "<div class='footer' style='text-align:center;margin-top:20px;color:#94A3B8;font-size:11px'>Generado el "+new Date().toLocaleString("es-CO")+"</div>",
-      "<div class='no-print' style='text-align:center;margin-top:20px'>",
-      "<button onclick='window.print()' style='padding:10px 28px;background:#0D1B35;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700'>Imprimir</button>",
-      "</div></body></html>"
-    ].join("");
-    var win = window.open("","_blank","width=820,height=700");
-    win.document.write(html);
-    win.document.close();
-    setTimeout(function(){ win.focus(); }, 300);
-  };
+
+
 
   var navItems = [{
     id: "dashboard",
@@ -6511,48 +6537,6 @@ function App(_appProps) {
   /*#__PURE__*/React.createElement("nav", {
     style: { flex: 1, padding: "10px 7px", display: "flex", flexDirection: "column", gap: 2 }
   }, navItems.map(function (item) {
-    // ── Item especial: Registros con submenú ──
-    if (item.id === "registros") {
-      return /*#__PURE__*/React.createElement("div", { key:"registros", style:{ position:"relative" } },
-        /*#__PURE__*/React.createElement("button", {
-          onClick: function(){ setShowRegistrosSidebar(function(v){ return !v; }); },
-          style: {
-            display:"flex", alignItems:"center", gap:11,
-            padding: isSidebarExpanded ? "10px 11px" : "10px 0",
-            justifyContent: isSidebarExpanded ? "flex-start" : "center",
-            border:"none", borderRadius:4, cursor:"pointer", width:"100%",
-            background: showRegistrosSidebar ? "linear-gradient(90deg, "+T.accent+"20, "+T.accent+"08)" : "transparent",
-            color: showRegistrosSidebar ? T.accent : T.muted,
-            fontWeight: showRegistrosSidebar ? 600 : 400,
-            fontSize:14, fontFamily:"inherit", minHeight:44,
-            boxShadow: showRegistrosSidebar ? "inset 3px 0 0 "+T.accent : "none"
-          }
-        },
-          /*#__PURE__*/React.createElement("span", { style:{ flexShrink:0 } }, item.icon),
-          isSidebarExpanded && /*#__PURE__*/React.createElement("span", { style:{ flex:1, textAlign:"left" } }, item.label),
-          isSidebarExpanded && /*#__PURE__*/React.createElement("span", { style:{ fontSize:10, color:T.muted } }, showRegistrosSidebar ? "▲" : "▼")
-        ),
-        showRegistrosSidebar && isSidebarExpanded && /*#__PURE__*/React.createElement("div", {
-          style:{ background:T.surface, border:"1px solid "+T.border, borderRadius:8, margin:"4px 8px 4px 28px", overflow:"hidden" }
-        },
-          [
-            { label:"🗓️ Registro Diario",  tipo:"diario",  desc:"Ventas de hoy" },
-            { label:"📆 Registro Mensual", tipo:"mensual", desc:"Ventas de este mes" }
-          ].map(function(op){
-            return /*#__PURE__*/React.createElement("button", {
-              key: op.tipo,
-              onClick: function(){ imprimirRegistroApp(op.tipo); },
-              style:{ display:"block", width:"100%", padding:"10px 12px", background:"none", border:"none",
-                textAlign:"left", cursor:"pointer", fontFamily:"inherit", borderBottom:"1px solid "+T.border }
-            },
-              /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, fontWeight:700, color:T.text } }, op.label),
-              /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:T.muted, marginTop:2 } }, op.desc)
-            );
-          })
-        )
-      );
-    }
-    // ── Items normales ──
     return /*#__PURE__*/React.createElement("button", {
       key: item.id,
       onClick: function onClick() { return setView(item.id); },
@@ -6667,7 +6651,8 @@ function App(_appProps) {
   view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
   view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
   view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
-  view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout })),
+  view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
+  view === "registros" && /*#__PURE__*/React.createElement(RegistrosView, { data: data })),
 
   isMobile && /*#__PURE__*/React.createElement("nav", {
     className: "trp-bottom-nav",
