@@ -6615,27 +6615,44 @@ function AdminPanel() {
   var _a6 = useState(function(){ try{ return JSON.parse(localStorage.getItem("acce_admin_codes")||"[]"); }catch(e){ return []; } });
   var _aa6 = _slicedToArray(_a6, 2), codigos = _aa6[0], setCodigos = _aa6[1];
 
-  // Verificar estado de cada código en Firebase
-  useEffect(function() {
+  // Verificar estado de cada código en Firebase — tiempo real con onSnapshot
+  var _a7 = useState(false), _aa7 = _slicedToArray(_a7, 2), refreshing = _aa7[0], setRefreshing = _aa7[1];
+
+  var verificarEstados = function() {
     if (!codigos.length) return;
+    setRefreshing(true);
     var db = window.__firebaseDB;
     if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
       db = firebase.apps[0].firestore();
-    if (!db) return;
+    if (!db) { setRefreshing(false); return; }
+    var pending = codigos.length;
+    var newCodigos = codigos.map(function(x){ return _objectSpread({}, x); });
     codigos.forEach(function(item, idx) {
       var codeKey = "LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
       db.collection("licenses").doc(codeKey).get().then(function(doc) {
-        if (doc.exists && doc.data().usedBy) {
-          setCodigos(function(prev) {
-            var updated = prev.map(function(x, i) {
-              return i === idx ? _objectSpread(_objectSpread({}, x), {}, { usado: true, usedBy: doc.data().usedBy || "", activadoEn: doc.data().usedAt }) : x;
-            });
-            localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
-            return updated;
+        if (doc.exists && (doc.data().usedBy || doc.data().used)) {
+          newCodigos[idx] = _objectSpread(_objectSpread({}, newCodigos[idx]), {}, {
+            usado: true,
+            usedBy: doc.data().usedBy || "",
+            activadoEn: doc.data().usedAt || doc.data().activatedAt || ""
           });
         }
-      }).catch(function(){});
+        pending--;
+        if (pending === 0) {
+          setCodigos(newCodigos);
+          localStorage.setItem("acce_admin_codes", JSON.stringify(newCodigos));
+          setRefreshing(false);
+        }
+      }).catch(function(){
+        pending--;
+        if (pending === 0) setRefreshing(false);
+      });
     });
+  };
+
+  // Verificar al montar y cada vez que cambia la lista
+  useEffect(function() {
+    verificarEstados();
   }, [codigos.length]);
 
   var generar = function() {
@@ -6735,10 +6752,17 @@ function AdminPanel() {
       /*#__PURE__*/React.createElement("div", { style: cardStyle },
         /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
           /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "\uD83D\uDCCB Códigos generados (" + codigos.length + ")"),
-          codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
-            onClick: function(){ if(confirm("¿Limpiar todo el historial?")){ setCodigos([]); localStorage.removeItem("acce_admin_codes"); } },
-            style:{ fontSize:11, color:"#94A3B8", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }
-          }, "Limpiar todo")
+          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, alignItems:"center" } },
+            codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
+              onClick: function(){ verificarEstados(); },
+              disabled: refreshing,
+              style:{ fontSize:12, color:"#fff", background: refreshing ? "#94A3B8" : "#4F8EFF", border:"none", borderRadius:6, padding:"4px 10px", cursor: refreshing ? "default" : "pointer", fontFamily:"inherit", fontWeight:600 }
+            }, refreshing ? "⏳ Verificando..." : "🔄 Actualizar estados"),
+            codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
+              onClick: function(){ if(confirm("¿Limpiar todo el historial?")){ setCodigos([]); localStorage.removeItem("acce_admin_codes"); } },
+              style:{ fontSize:11, color:"#94A3B8", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }
+            }, "Limpiar todo")
+          )
         ),
         codigos.length === 0
           ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "Aún no has generado ningún código")
