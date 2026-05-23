@@ -7360,6 +7360,14 @@ function Root() {
   var _r3 = useState("login"), _ra3 = _slicedToArray(_r3, 2), screen = _ra3[0], setScreen = _ra3[1];
 
   var isAdmin = window.location.search.includes("admin=globalacce");
+  // Habilitar scroll para el panel admin (el body tiene overflow:hidden por defecto)
+  if (isAdmin) {
+    try {
+      document.body.style.overflow = "auto";
+      document.body.style.height = "auto";
+      document.documentElement.style.overflow = "auto";
+    } catch(e){}
+  }
   var isCatalog = window.location.hash === "#catalog";
 
   useEffect(function() {
