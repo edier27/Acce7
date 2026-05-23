@@ -518,7 +518,7 @@ async function _licVerify(code) {
     try {
       var db = firebase.apps[0].firestore();
       var codeKey = "LIC_" + c.replace(/[^A-Z0-9]/g, "_");
-      var docRef  = db.collection("licenses").doc(codeKey);
+      var docRef  = db.collection("trp_codes").doc(codeKey);
       var doc     = await docRef.get();
       if (doc.exists && doc.data() && doc.data().used) {
         return { ok: false, type: "already_used" };
@@ -5847,10 +5847,10 @@ function SettingsView(_ref20) {
             var fbDbS = window.__firebaseDB;
             if (fbDbS) {
               var codeKeyS = "LIC_" + newLic.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-              fbDbS.collection("licenses").doc(codeKeyS).set({
+              fbDbS.collection("trp_codes").doc(codeKeyS).set({
                 used: true, usedBy: userData.username,
                 usedAt: new Date().toISOString(), codeType: result.type
-              }).catch(function(){});
+              });
             }
           } catch(e){}
           setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Recarga para aplicar." : "✅ Demo activado — " + result.daysLeft + " días. Recarga para aplicar.");
@@ -6626,31 +6626,40 @@ function AdminPanel() {
       db = firebase.apps[0].firestore();
     if (!db) { setRefreshing(false); return; }
     var pending = codigos.length;
-    var newCodigos = codigos.map(function(x){ return _objectSpread({}, x); });
-    codigos.forEach(function(item, idx) {
-      var codeKey = "LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
-      db.collection("licenses").doc(codeKey).get().then(function(doc) {
-        if (doc.exists && (doc.data().usedBy || doc.data().used)) {
-          newCodigos[idx] = _objectSpread(_objectSpread({}, newCodigos[idx]), {}, {
-            usado: true,
-            usedBy: doc.data().usedBy || "",
-            activadoEn: doc.data().usedAt || doc.data().activatedAt || ""
-          });
-        }
-        pending--;
-        if (pending === 0) {
-          setCodigos(newCodigos);
-          localStorage.setItem("acce_admin_codes", JSON.stringify(newCodigos));
-          setRefreshing(false);
-        }
-      }).catch(function(){
-        pending--;
-        if (pending === 0) setRefreshing(false);
+    // Copiar array para modificar
+    setCodigos(function(prev) {
+      var newArr = prev.map(function(x){ return _objectSpread({}, x); });
+      prev.forEach(function(item, idx) {
+        var codeKey = "LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
+        // onSnapshot: escucha cambios en tiempo real
+        db.collection("trp_codes").doc(codeKey).onSnapshot(function(doc) {
+          if (doc.exists && (doc.data().usedBy || doc.data().used)) {
+            setCodigos(function(latest) {
+              var updated = latest.map(function(x, i) {
+                if (i !== idx) return x;
+                return _objectSpread(_objectSpread({}, x), {}, {
+                  usado: true,
+                  usedBy: doc.data().usedBy || "",
+                  activadoEn: doc.data().usedAt || ""
+                });
+              });
+              localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
+              return updated;
+            });
+          }
+          pending--;
+          if (pending === 0) setRefreshing(false);
+        }, function(err) {
+          console.warn("[ADMIN] Error leyendo código:", err);
+          pending--;
+          if (pending === 0) setRefreshing(false);
+        });
       });
+      return newArr;
     });
   };
 
-  // Verificar al montar y cada vez que cambia la lista
+  // Verificar al montar y cuando cambia la lista
   useEffect(function() {
     verificarEstados();
   }, [codigos.length]);
@@ -7047,18 +7056,18 @@ function CreateAccountScreen(_ref) {
         licenseType: licResult.type,
         createdAt: new Date().toISOString()
       };
-      _saveUser(userData);
-      localStorage.setItem("trp_session_" + norm, "active");
-      // Registrar uso del código en Firebase (segundo plano, no bloquea)
+      // Registrar código usado en Firebase ANTES de crear cuenta
       try {
         var fbDb2 = window.__firebaseDB;
         if (fbDb2) {
           var codeKey2 = "LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-          fbDb2.collection("licenses").doc(codeKey2).set({
+          fbDb2.collection("trp_codes").doc(codeKey2).set({
             used: true, usedBy: norm, usedAt: new Date().toISOString(), codeType: licResult.type
-          }).catch(function(){});
+          });
         }
       } catch(e){}
+      _saveUser(userData);
+      localStorage.setItem("trp_session_" + norm, "active");
       setLoading(false);
       onCreated(userData);
     };
@@ -7113,7 +7122,7 @@ function ExpiredScreen(_ref) {
       var fbDbR = window.__firebaseDB;
       if (fbDbR) {
         var codeKeyR = "LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-        fbDbR.collection("licenses").doc(codeKeyR).set({
+        fbDbR.collection("trp_codes").doc(codeKeyR).set({
           used: true, usedBy: currentUser.username, usedAt: new Date().toISOString(), codeType: result.type
         }).catch(function(){});
       }
