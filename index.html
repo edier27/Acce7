@@ -6671,146 +6671,179 @@ function App(_appProps) {
   var isMobile = _wsize.w < 640;
   var isTablet = !isMobile && _wsize.w < 1024;
   var isSidebarExpanded = !isMobile && !isTablet && sidebarOpen;
-  var saveSettings = function saveSettings(s) {
-    setSettings(s);
-    try {
-      localStorage.setItem("trp_settings_v1", JSON.stringify(s));
-    } catch (_unused2) {}
-  };
+
+  // ─── SINCRONIZACIÓN FIREBASE ────────────────────────────────────────────────
+  // ESTRATEGIA: Firebase es la fuente de verdad.
+  // Al iniciar: cargar localStorage para render inmediato, luego comparar
+  // con Firebase y usar el más reciente. Así cualquier dispositivo
+  // con la misma cuenta siempre ve los datos actualizados.
   useEffect(function () {
-    var lsKey = "trp_data_" + clientId;
+    var lsKey    = "trp_data_" + clientId;
+    var lsTsKey  = "trp_data_ts_" + clientId;
+    var _loaded  = false;
 
-    // ── TIMEOUT DE RESCATE: si en 6s no cargó nada, arrancar con INIT ──
-    var _dataLoaded = false;
-    var _rescueTimer = setTimeout(function() {
-      if (!_dataLoaded) {
-        console.warn("[TRP] Timeout — arrancando con datos vacíos");
-        setData(INIT);
-      }
-    }, 6000);
+    // Rescue timer: si en 8s no llega nada, usar lo que haya
+    var _rescue = setTimeout(function() {
+      if (_loaded) return;
+      console.warn("[TRP] Timeout — usando datos locales o INIT");
+      try {
+        var s = localStorage.getItem(lsKey);
+        setData(s ? _objectSpread(_objectSpread({}, INIT), JSON.parse(s)) : INIT);
+      } catch(e) { setData(INIT); }
+      _loaded = true;
+    }, 8000);
 
-    // ── PASO 1: localStorage es la fuente de verdad principal ──
+    // Render inmediato con localStorage (evita pantalla en blanco)
     var localData = null;
+    var localTs   = 0;
     try {
-      var stored = localStorage.getItem(lsKey);
-      if (stored) localData = JSON.parse(stored);
+      var raw = localStorage.getItem(lsKey);
+      if (raw) { localData = JSON.parse(raw); localTs = parseInt(localStorage.getItem(lsTsKey)||"0")||0; }
     } catch(e) {}
-
-    // Si hay datos locales, cargar inmediatamente y marcar sesión como "tiene datos"
-    var _hasLocalData = false;
-    if (localData && (localData.repairs || localData.products || localData.inventory)) {
+    if (localData && (localData.repairs || localData.products || localData.sales || localData.cashflow)) {
       setData(_objectSpread(_objectSpread({}, INIT), localData));
-      _hasLocalData = true;
-      _dataLoaded = true;
-      clearTimeout(_rescueTimer);
-      // Subir datos locales a Firebase para mantenerlos sincronizados
-      if (clientDataRef) {
-        clientDataRef.set({
-          appData: JSON.stringify(localData),
-          updatedAt: new Date().toISOString(),
-          savedBy: _trpSessionId
-        }).catch(function(){});
-      }
+      _loaded = true;
+      clearTimeout(_rescue);
     }
 
-    // ── PASO 2: Firebase solo se usa si NO hay datos locales (dispositivo nuevo) ──
+    // Firebase: SIEMPRE se consulta para obtener la versión más reciente
     if (clientDataRef) {
-      var _fbApplied = false;
-      var unsubscribe = clientDataRef.onSnapshot(function(doc) {
-        // Si ya tenemos datos locales: ignorar Firebase completamente en esta sesión
-        // (ya subimos los datos locales a Firebase arriba)
-        if (_hasLocalData) return;
-        // Si ya aplicamos Firebase una vez, no volver a aplicar
-        if (_fbApplied) return;
-        // Ignorar eco de nuestra propia sesión
-        if (doc.data && doc.data().savedBy === _trpSessionId) return;
-
-        if (doc.exists && doc.data().appData) {
-          try {
-            var d = JSON.parse(doc.data().appData);
-            if (!d) return;
-            setData(_objectSpread(_objectSpread({}, INIT), d));
-            // Guardar en localStorage para próximas cargas
-            try {
-              localStorage.setItem(lsKey, JSON.stringify(d));
-            } catch(e) {}
-            _fbApplied = true;
-            _hasLocalData = true;
-            _dataLoaded = true;
-            clearTimeout(_rescueTimer);
-            console.log("[TRP] Datos cargados desde Firebase (dispositivo nuevo)");
-          } catch(e) { console.warn("[TRP] Error leyendo Firebase:", e); }
-        } else if (!doc.exists) {
-          // Firebase vacío y sin datos locales → empezar desde cero
-          setData(INIT);
-          _dataLoaded = true;
-          clearTimeout(_rescueTimer);
-          _fbApplied = true;
+      clientDataRef.get().then(function(doc) {
+        if (!doc.exists) {
+          // Cuenta nueva en este dispositivo: subir datos locales si los hay
+          if (localData) {
+            clientDataRef.set({ appData: JSON.stringify(localData), updatedAt: new Date().toISOString(), savedBy: _trpSessionId }).catch(function(){});
+          } else {
+            setData(INIT);
+          }
+          if (!_loaded) { _loaded = true; clearTimeout(_rescue); }
+          return;
         }
-      }, function(error) {
-        console.warn("[TRP] Firebase no disponible, usando modo offline", error);
-        if (!_hasLocalData) { setData(INIT); _dataLoaded = true; clearTimeout(_rescueTimer); }
+
+        // Comparar timestamps: usar el más reciente
+        var fbRaw  = doc.data().appData;
+        var fbTs   = 0;
+        try { fbTs = new Date(doc.data().updatedAt||0).getTime()||0; } catch(e) {}
+
+        if (fbRaw) {
+          try {
+            var fbData = JSON.parse(fbRaw);
+            if (!fbData) throw new Error("empty");
+
+            if (fbTs >= localTs) {
+              // Firebase es más reciente o igual → usar Firebase
+              console.log("[TRP] ✅ Datos cargados desde Firebase (más recientes)");
+              var merged = _objectSpread(_objectSpread({}, INIT), fbData);
+              setData(merged);
+              // Guardar en localStorage como caché
+              try {
+                localStorage.setItem(lsKey, JSON.stringify(fbData));
+                localStorage.setItem(lsTsKey, fbTs.toString());
+              } catch(e2) {}
+              // Sincronizar settings si vienen en Firebase
+              var fbSettings = doc.data().settingsData;
+              if (fbSettings) {
+                try {
+                  var parsedSettings = JSON.parse(fbSettings);
+                  localStorage.setItem("trp_settings_v1", JSON.stringify(parsedSettings));
+                  // No llamar setSettings aquí para no interferir con el render
+                } catch(e2) {}
+              }
+            } else {
+              // localStorage es más reciente → subir a Firebase
+              console.log("[TRP] ✅ Datos locales más recientes — subiendo a Firebase");
+              clientDataRef.set({ appData: JSON.stringify(localData), updatedAt: new Date(localTs).toISOString(), savedBy: _trpSessionId }).catch(function(){});
+            }
+          } catch(e) {
+            if (!_loaded) { setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT); }
+          }
+        }
+        if (!_loaded) { _loaded = true; clearTimeout(_rescue); }
+        _loaded = true;
+        clearTimeout(_rescue);
+
+      }).catch(function(err) {
+        console.warn("[TRP] Firebase no disponible:", err);
+        if (!_loaded) {
+          setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT);
+          _loaded = true; clearTimeout(_rescue);
+        }
       });
-      return function() { unsubscribe(); };
     } else {
-      // Sin Firebase — usar datos locales o INIT
-      if (!_hasLocalData) { setData(INIT); _dataLoaded = true; clearTimeout(_rescueTimer); }
+      if (!_loaded) {
+        setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT);
+        _loaded = true; clearTimeout(_rescue);
+      }
     }
   }, [clientId]);
+
+  // ─── GUARDAR: localStorage + Firebase + settings incluidos ───────────────
   var save = function save(d) {
     setData(d);
-    _trpLastSaveTs = Date.now();
-    // Guardar en localStorage primero (instantáneo)
+    var ts = Date.now();
+    _trpLastSaveTs = ts;
+    var lsKey   = "trp_data_" + clientId;
+    var lsTsKey = "trp_data_ts_" + clientId;
+    // localStorage primero (instantáneo)
     try {
-      localStorage.setItem("trp_data_" + clientId, JSON.stringify(d));
-      localStorage.setItem("trp_data_ts_" + clientId, _trpLastSaveTs.toString());
-      localStorage.setItem('trp_sid_v1', _trpSessionId);
+      localStorage.setItem(lsKey, JSON.stringify(d));
+      localStorage.setItem(lsTsKey, ts.toString());
     } catch(e) {}
-    // Guardar en Firebase — con reintento automático si no hay internet
-    // Actualizar lastSeen del usuario en trp_users (para el panel admin)
-    try {
-      var _userRef = _getUserRef ? _getUserRef(clientId) : null;
-      if (_userRef) _userRef.set({ lastSeen: new Date().toISOString() }, { merge: true }).catch(function(){});
-    } catch(e){}
+    // Firebase (incluye settings para sincronizar entre dispositivos)
+    var settingsSnap = null;
+    try { var ss = localStorage.getItem("trp_settings_v1"); if(ss) settingsSnap = JSON.parse(ss); } catch(e) {}
+    var payload = { appData: JSON.stringify(d), updatedAt: new Date(ts).toISOString(), savedBy: _trpSessionId };
+    if (settingsSnap) payload.settingsData = JSON.stringify(settingsSnap);
     if (clientDataRef) {
-      clientDataRef.set({
-        appData: JSON.stringify(d),
-        updatedAt: new Date().toISOString(),
-        savedBy: _trpSessionId
-      }).catch(function(e) {
-        console.warn("[TRP] Sin internet — dato queda pendiente para sincronizar", e);
-        // Marcar que hay datos pendientes de subir
+      clientDataRef.set(payload).catch(function(e) {
+        console.warn("[TRP] Sin internet — marcando para sincronizar", e);
         try { localStorage.setItem("trp_pending_sync_" + clientId, "1"); } catch(err) {}
       });
     }
+    // Actualizar lastSeen del usuario
+    try {
+      var _uRef = _getUserRef ? _getUserRef(clientId) : null;
+      if (_uRef) _uRef.set({ lastSeen: new Date().toISOString() }, { merge: true }).catch(function(){});
+    } catch(e) {}
   };
-  // ── AUTO-SYNC cuando vuelve el internet ──────────────────
+
+  // ─── GUARDAR SETTINGS: también sube a Firebase ────────────────────────────
+  var saveSettings = function saveSettings(s) {
+    setSettings(s);
+    try { localStorage.setItem("trp_settings_v1", JSON.stringify(s)); } catch(e) {}
+    // Subir settings a Firebase junto con los datos actuales
+    if (clientDataRef && data) {
+      var lsKey = "trp_data_" + clientId;
+      var ts = Date.now();
+      clientDataRef.set({
+        appData: JSON.stringify(data),
+        settingsData: JSON.stringify(s),
+        updatedAt: new Date(ts).toISOString(),
+        savedBy: _trpSessionId
+      }).catch(function(){});
+    }
+  };
+
+  // ─── AUTO-SYNC cuando vuelve el internet ──────────────────────────────────
   useEffect(function() {
-    var handleOnline = function() {
+    var sync = function() {
       var pending = localStorage.getItem("trp_pending_sync_" + clientId);
       if (!pending || !clientDataRef) return;
-      // Hay datos pendientes de subir — leer de localStorage y subir a Firebase
       try {
         var stored = localStorage.getItem("trp_data_" + clientId);
+        var ts     = localStorage.getItem("trp_data_ts_" + clientId);
         if (!stored) return;
         var d = JSON.parse(stored);
-        clientDataRef.set({
-          appData: JSON.stringify(d),
-          updatedAt: new Date().toISOString(),
-          savedBy: _trpSessionId
-        }).then(function() {
-          localStorage.removeItem("trp_pending_sync_" + clientId);
-          console.log("[TRP] ✅ Datos sincronizados automáticamente al recuperar internet");
-        }).catch(function(e) {
-          console.warn("[TRP] Falló reintento de sync:", e);
-        });
+        clientDataRef.set({ appData: JSON.stringify(d), updatedAt: new Date(parseInt(ts)||Date.now()).toISOString(), savedBy: _trpSessionId })
+          .then(function(){ localStorage.removeItem("trp_pending_sync_" + clientId); console.log("[TRP] ✅ Sync automático OK"); })
+          .catch(function(){});
       } catch(e) {}
     };
-    window.addEventListener("online", handleOnline);
-    // También intentar al montar por si acaso hay pendientes y ya hay internet
-    if (navigator.onLine) handleOnline();
-    return function() { window.removeEventListener("online", handleOnline); };
-  }, [clientId, clientDataRef]);
+    window.addEventListener("online", sync);
+    if (navigator.onLine) setTimeout(sync, 1000);
+    return function() { window.removeEventListener("online", sync); };
+  }, [clientId]);
+
 
   var openCatalog = function openCatalog() {
     var base = window.location.href.split("#")[0].split("?")[0];
