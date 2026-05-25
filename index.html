@@ -7457,6 +7457,7 @@ function AdminPanel() {
   var _a5 = useState(false), _aa5 = _slicedToArray(_a5, 2), copied = _aa5[0], setCopied = _aa5[1];
   var _a6 = useState(function(){ try{ return JSON.parse(localStorage.getItem("acce_admin_codes")||"[]"); }catch(e){ return []; } });
   var _aa6 = _slicedToArray(_a6, 2), codigos = _aa6[0], setCodigos = _aa6[1];
+  var _a6b = useState(false), _aa6b = _slicedToArray(_a6b, 2), loadingCodes = _aa6b[0], setLoadingCodes = _aa6b[1];
   var _a7 = useState(false), _aa7 = _slicedToArray(_a7, 2), refreshing = _aa7[0], setRefreshing = _aa7[1];
   var _a8 = useState("codigos"), _aa8 = _slicedToArray(_a8, 2), tab = _aa8[0], setTab = _aa8[1];
   var _a9 = useState([]), _aa9 = _slicedToArray(_a9, 2), cuentas = _aa9[0], setCuentas = _aa9[1];
@@ -7469,6 +7470,45 @@ function AdminPanel() {
       db = firebase.apps[0].firestore();
     return db;
   };
+
+  // ── Cargar códigos desde Firebase al iniciar ──────────────────────────────
+  var cargarCodigosFirebase = function() {
+    var db = getDb();
+    if (!db) return;
+    setLoadingCodes(true);
+    db.collection("trp_users").get().then(function(snap) {
+      var fbCodes = [];
+      snap.forEach(function(doc) {
+        if (!doc.id.startsWith("code_LIC_")) return;
+        var d = doc.data();
+        if (!d.code) return;
+        fbCodes.push({
+          code:        d.code,
+          tipo:        d.tipo || "demo",
+          generadoEn:  d.generadoEn || "",
+          usado:       d.used || false,
+          usedBy:      d.usedBy || "",
+          activadoEn:  d.usedAt || ""
+        });
+      });
+      if (fbCodes.length > 0) {
+        // Combinar Firebase + localStorage (Firebase gana en conflictos)
+        var localCodes = [];
+        try { localCodes = JSON.parse(localStorage.getItem("acce_admin_codes")||"[]"); } catch(e) {}
+        // Merge: Firebase como fuente de verdad, agregar los locales que no estén en Firebase
+        var fbCodesMap = {};
+        fbCodes.forEach(function(x){ fbCodesMap[x.code] = x; });
+        localCodes.forEach(function(x){ if (!fbCodesMap[x.code]) fbCodes.push(x); });
+        fbCodes.sort(function(a,b){ return (b.generadoEn||"").localeCompare(a.generadoEn||""); });
+        setCodigos(fbCodes);
+        localStorage.setItem("acce_admin_codes", JSON.stringify(fbCodes));
+      }
+      setLoadingCodes(false);
+    }).catch(function(){ setLoadingCodes(false); });
+  };
+
+  // Cargar al montar el componente
+  useEffect(function(){ cargarCodigosFirebase(); }, []);
 
   // ── Cargar cuentas desde Firebase ──
   var cargarCuentas = function() {
@@ -7585,6 +7625,16 @@ function AdminPanel() {
     setCodigoGen(code); setCopied(false);
     var nuevo = { code:code, tipo:tipo, generadoEn:new Date().toISOString(), usado:false };
     setCodigos(function(prev){ var u=[nuevo].concat(prev); localStorage.setItem("acce_admin_codes",JSON.stringify(u)); return u; });
+    // Guardar en Firebase para que aparezca en cualquier dispositivo
+    var db = getDb();
+    if (db) {
+      var codeKey = "code_LIC_" + code.replace(/[^A-Z0-9]/g,"_");
+      db.collection("trp_users").doc(codeKey).set({
+        code: code, tipo: tipo,
+        generadoEn: new Date().toISOString(),
+        used: false, createdByAdmin: true
+      }, { merge: true }).catch(function(e){ console.warn("No se pudo guardar código en Firebase:", e); });
+    }
   };
 
   var copiar = function(cod) {
@@ -7592,7 +7642,16 @@ function AdminPanel() {
   };
 
   var eliminarCodigo = function(idx) {
+    var codeToDelete = codigos[idx] ? codigos[idx].code : null;
     setCodigos(function(prev){ var u=prev.filter(function(_,i){ return i!==idx; }); localStorage.setItem("acce_admin_codes",JSON.stringify(u)); return u; });
+    // Eliminar también de Firebase
+    if (codeToDelete) {
+      var db = getDb();
+      if (db) {
+        var codeKey = "code_LIC_" + codeToDelete.replace(/[^A-Z0-9]/g,"_");
+        db.collection("trp_users").doc(codeKey).delete().catch(function(){});
+      }
+    }
   };
 
   var licLabel = function(u) {
@@ -7681,12 +7740,27 @@ function AdminPanel() {
           /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
             /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "📋 Códigos generados ("+codigos.length+")"),
             /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, alignItems:"center" } },
+              /*#__PURE__*/React.createElement("button", {
+                onClick: cargarCodigosFirebase,
+                style:{ fontSize:12, color:"#fff", background:loadingCodes?"#94A3B8":"#10E08A", border:"none", borderRadius:6, padding:"4px 10px", cursor:loadingCodes?"default":"pointer", fontFamily:"inherit", fontWeight:600 }
+              }, loadingCodes?"⏳ Cargando...":"☁ Firebase"),
               codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
                 onClick:function(){ verificarEstados(); }, disabled:refreshing,
                 style:{ fontSize:12, color:"#fff", background:refreshing?"#94A3B8":"#4F8EFF", border:"none", borderRadius:6, padding:"4px 10px", cursor:refreshing?"default":"pointer", fontFamily:"inherit", fontWeight:600 }
-              }, refreshing?"⏳ Verificando...":"🔄 Actualizar"),
+              }, refreshing?"⏳ Verificando...":"🔄 Estados"),
               codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
-                onClick:function(){ if(confirm("¿Limpiar historial?")){ setCodigos([]); localStorage.removeItem("acce_admin_codes"); } },
+                onClick:function(){
+                  if(confirm("¿Limpiar historial? Esto eliminará los códigos de Firebase también.")){
+                    setCodigos([]); localStorage.removeItem("acce_admin_codes");
+                    var db = getDb();
+                    if (db) {
+                      codigos.forEach(function(item){
+                        var ck = "code_LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
+                        db.collection("trp_users").doc(ck).delete().catch(function(){});
+                      });
+                    }
+                  }
+                },
                 style:{ fontSize:11, color:"#94A3B8", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }
               }, "Limpiar todo")
             )
