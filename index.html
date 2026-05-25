@@ -6854,9 +6854,7 @@ function AdminPanel() {
           ),
           codigos.length === 0
             ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "Aún no has generado ningún código")
-            : /*#__PURE__*/React.createElement("div", { style:{ maxHeight:420, overflowY:"auto", paddingRight:4,
-                scrollbarWidth:"thin", scrollbarColor:"#CBD5E1 transparent" } },
-              /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:8 } },
+            : /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:8 } },
                 codigos.map(function(item, idx) {
                   var usado = item.usado;
                   return /*#__PURE__*/React.createElement("div", { key:idx,
@@ -6884,7 +6882,6 @@ function AdminPanel() {
                   );
                 })
               )
-            )
         ),
 
         /*#__PURE__*/React.createElement("div", { style: cardStyle },
@@ -6921,9 +6918,7 @@ function AdminPanel() {
             ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", padding:"30px 0", fontSize:14 } }, "⏳ Cargando cuentas...")
             : cuentasFiltradas.length === 0
               ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", padding:"30px 0", fontSize:14 } }, "No se encontraron cuentas")
-              : /*#__PURE__*/React.createElement("div", { style:{ maxHeight:500, overflowY:"auto", paddingRight:4,
-                  scrollbarWidth:"thin", scrollbarColor:"#CBD5E1 transparent" } },
-                /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:10 } },
+              : /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:10 } },
                   cuentasFiltradas.map(function(u) {
                     var lic = licLabel(u);
                     var isVencida = lic.txt === "Vencida" || lic.txt === "Sin licencia";
@@ -6952,7 +6947,6 @@ function AdminPanel() {
                     );
                   })
                 )
-              )
         )
       )
     )
