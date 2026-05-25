@@ -6077,8 +6077,9 @@ function SettingsView(_ref20) {
               var codeKeyS = "code_LIC_" + newLic.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
               fbDbS.collection("trp_users").doc(codeKeyS).set({
                 used: true, usedBy: userData.username,
-                usedAt: new Date().toISOString(), codeType: result.type
-              });
+                usedAt: new Date().toISOString(), codeType: result.type,
+                code: newLic.trim().toUpperCase()
+              }, { merge: true });
             }
           } catch(e){}
           setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Recarga para aplicar." : "✅ Demo activado — " + result.daysLeft + " días. Recarga para aplicar.");
@@ -7490,9 +7491,14 @@ function AdminPanel() {
         snap.forEach(function(doc) {
           if (!doc.id.startsWith("code_LIC_")) return;
           var d = doc.data();
-          if (!d.code) return;
+          // Derivar código del ID si no tiene campo code (documentos activados sin merge)
+          // Si tiene campo code, usarlo. Si no, reconstruir del ID
+          // ID formato: code_LIC_PRO_UBUE19_0139PSNI → PRO-UBUE19-0139PSNI
+          var rawId = doc.id.replace("code_LIC_","");
+          var codeVal = d.code || rawId.replace(/_/g,"-");
+          if (!codeVal) return;
           fbCodes.push({
-            code:       d.code,
+            code:       codeVal,
             tipo:       d.tipo || "demo",
             generadoEn: d.generadoEn || "",
             usado:      d.used || false,
@@ -8095,8 +8101,9 @@ function CreateAccountScreen(_ref) {
         if (fbDb2) {
           var codeKey2 = "code_LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
           fbDb2.collection("trp_users").doc(codeKey2).set({
-            used: true, usedBy: norm, usedAt: new Date().toISOString(), codeType: licResult.type
-          });
+            used: true, usedBy: norm, usedAt: new Date().toISOString(), codeType: licResult.type,
+            code: code.trim().toUpperCase()
+          }, { merge: true });
         }
       } catch(e){}
       _saveUser(userData);
@@ -8174,8 +8181,9 @@ function ExpiredScreen(_ref) {
       if (fbDbR) {
         var codeKeyR = "code_LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
         fbDbR.collection("trp_users").doc(codeKeyR).set({
-          used: true, usedBy: currentUser.username, usedAt: new Date().toISOString(), codeType: result.type
-        }).catch(function(){});
+          used: true, usedBy: currentUser.username, usedAt: new Date().toISOString(), codeType: result.type,
+          code: newCode.trim().toUpperCase()
+        }, { merge: true }).catch(function(){});
       }
     } catch(e){}
   };
