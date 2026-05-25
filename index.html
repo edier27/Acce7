@@ -7455,9 +7455,10 @@ function AdminPanel() {
   var _a3 = useState(""), _aa3 = _slicedToArray(_a3, 2), rcUser = _aa3[0], setRcUser = _aa3[1];
   var _a4 = useState(""), _aa4 = _slicedToArray(_a4, 2), rcOut = _aa4[0], setRcOut = _aa4[1];
   var _a5 = useState(false), _aa5 = _slicedToArray(_a5, 2), copied = _aa5[0], setCopied = _aa5[1];
-  var _a6 = useState(function(){ try{ return JSON.parse(localStorage.getItem("acce_admin_codes")||"[]"); }catch(e){ return []; } });
+  // Códigos siempre desde Firebase — localStorage solo como caché visual inicial
+  var _a6 = useState([]);
   var _aa6 = _slicedToArray(_a6, 2), codigos = _aa6[0], setCodigos = _aa6[1];
-  var _a6b = useState(false), _aa6b = _slicedToArray(_a6b, 2), loadingCodes = _aa6b[0], setLoadingCodes = _aa6b[1];
+  var _a6b = useState(true), _aa6b = _slicedToArray(_a6b, 2), loadingCodes = _aa6b[0], setLoadingCodes = _aa6b[1];
   var _a7 = useState(false), _aa7 = _slicedToArray(_a7, 2), refreshing = _aa7[0], setRefreshing = _aa7[1];
   var _a8 = useState("codigos"), _aa8 = _slicedToArray(_a8, 2), tab = _aa8[0], setTab = _aa8[1];
   var _a9 = useState([]), _aa9 = _slicedToArray(_a9, 2), cuentas = _aa9[0], setCuentas = _aa9[1];
@@ -7473,44 +7474,51 @@ function AdminPanel() {
 
   // ── Cargar códigos desde Firebase al iniciar ──────────────────────────────
   var cargarCodigosFirebase = function() {
-    var db = getDb();
-    if (!db) return;
     setLoadingCodes(true);
-    db.collection("trp_users").get().then(function(snap) {
-      var fbCodes = [];
-      snap.forEach(function(doc) {
-        if (!doc.id.startsWith("code_LIC_")) return;
-        var d = doc.data();
-        if (!d.code) return;
-        fbCodes.push({
-          code:        d.code,
-          tipo:        d.tipo || "demo",
-          generadoEn:  d.generadoEn || "",
-          usado:       d.used || false,
-          usedBy:      d.usedBy || "",
-          activadoEn:  d.usedAt || ""
+    // Intentar hasta 3 veces si Firebase no está listo
+    var intentos = 0;
+    var intentar = function() {
+      var db = getDb();
+      if (!db) {
+        intentos++;
+        if (intentos < 3) { setTimeout(intentar, 1500); }
+        else { setLoadingCodes(false); }
+        return;
+      }
+      db.collection("trp_users").get().then(function(snap) {
+        var fbCodes = [];
+        snap.forEach(function(doc) {
+          if (!doc.id.startsWith("code_LIC_")) return;
+          var d = doc.data();
+          if (!d.code) return;
+          fbCodes.push({
+            code:       d.code,
+            tipo:       d.tipo || "demo",
+            generadoEn: d.generadoEn || "",
+            usado:      d.used || false,
+            usedBy:     d.usedBy || "",
+            activadoEn: d.usedAt || ""
+          });
         });
-      });
-      if (fbCodes.length > 0) {
-        // Combinar Firebase + localStorage (Firebase gana en conflictos)
-        var localCodes = [];
-        try { localCodes = JSON.parse(localStorage.getItem("acce_admin_codes")||"[]"); } catch(e) {}
-        // Merge: Firebase como fuente de verdad, agregar los locales que no estén en Firebase
-        var fbCodesMap = {};
-        fbCodes.forEach(function(x){ fbCodesMap[x.code] = x; });
-        localCodes.forEach(function(x){ if (!fbCodesMap[x.code]) fbCodes.push(x); });
         fbCodes.sort(function(a,b){ return (b.generadoEn||"").localeCompare(a.generadoEn||""); });
         setCodigos(fbCodes);
-        localStorage.setItem("acce_admin_codes", JSON.stringify(fbCodes));
-      }
-      setLoadingCodes(false);
-    }).catch(function(){ setLoadingCodes(false); });
+        // Guardar en localStorage como caché
+        try { localStorage.setItem("acce_admin_codes", JSON.stringify(fbCodes)); } catch(e) {}
+        setLoadingCodes(false);
+        console.log("[Admin] ✅ Códigos cargados desde Firebase:", fbCodes.length);
+      }).catch(function(e) {
+        console.warn("[Admin] Error cargando códigos:", e);
+        intentos++;
+        if (intentos < 3) { setTimeout(intentar, 2000); }
+        else { setLoadingCodes(false); }
+      });
+    };
+    intentar();
   };
 
-  // Cargar al montar el componente
+  // Cargar desde Firebase al abrir el panel
   useEffect(function(){
-    // Esperar 1s para que Firebase inicialice completamente
-    setTimeout(function(){ cargarCodigosFirebase(); }, 1000);
+    cargarCodigosFirebase();
   }, []);
 
   // ── Cargar cuentas desde Firebase ──
@@ -7628,15 +7636,19 @@ function AdminPanel() {
     setCodigoGen(code); setCopied(false);
     var nuevo = { code:code, tipo:tipo, generadoEn:new Date().toISOString(), usado:false };
     setCodigos(function(prev){ var u=[nuevo].concat(prev); localStorage.setItem("acce_admin_codes",JSON.stringify(u)); return u; });
-    // Guardar en Firebase para que aparezca en cualquier dispositivo
+    // Guardar en Firebase — fuente de verdad
     var db = getDb();
     if (db) {
       var codeKey = "code_LIC_" + code.replace(/[^A-Z0-9]/g,"_");
-      db.collection("trp_users").doc(codeKey).set({
-        code: code, tipo: tipo,
-        generadoEn: new Date().toISOString(),
-        used: false, createdByAdmin: true
-      }, { merge: true }).catch(function(e){ console.warn("No se pudo guardar código en Firebase:", e); });
+      var codeData = { code: code, tipo: tipo, generadoEn: new Date().toISOString(), used: false, createdByAdmin: true };
+      db.collection("trp_users").doc(codeKey).set(codeData, { merge: true })
+        .then(function(){ console.log("[Admin] ✅ Código guardado en Firebase:", code); })
+        .catch(function(e){
+          console.warn("[Admin] ❌ Error guardando en Firebase:", e);
+          alert("⚠️ No se pudo guardar en Firebase. Verifique la conexión.");
+        });
+    } else {
+      alert("⚠️ Firebase no disponible. El código se guardó localmente pero puede perderse.");
     }
   };
 
@@ -7772,7 +7784,9 @@ function AdminPanel() {
               }, "Limpiar todo")
             )
           ),
-          codigos.length === 0
+          loadingCodes
+            ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "⏳ Cargando códigos desde Firebase...")
+            : codigos.length === 0
             ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "Aún no has generado ningún código")
             : /*#__PURE__*/React.createElement("div", { style:{ maxHeight:420, overflowY:"auto", paddingRight:4,
                 scrollbarWidth:"thin", scrollbarColor:"#CBD5E1 transparent" } },
