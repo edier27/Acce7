@@ -6036,8 +6036,19 @@ function SettingsView(_ref20) {
       var _lice = useState(""), _licea = _slicedToArray(_lice, 2), licErr = _lice[0], setLicErr = _lice[1];
       var _licok = useState(""), _licoka = _slicedToArray(_licok, 2), licOk = _licok[0], setLicOk = _licok[1];
       // Mostrar estado actual
+      // Leer licencia del usuario actual (clave correcta: trp_lic_v1 o licenseCode del usuario)
       var savedLic = null;
-      try { savedLic = JSON.parse(localStorage.getItem("trp_license") || "null"); } catch(e) {}
+      try { savedLic = JSON.parse(localStorage.getItem("trp_lic_v1") || "null"); } catch(e) {}
+      // Si no está en trp_lic_v1, buscar en el objeto del usuario
+      if (!savedLic) {
+        try {
+          var _cu = localStorage.getItem("trp_current_user");
+          if (_cu) {
+            var _ud = JSON.parse(localStorage.getItem("trp_user_" + _cu) || "null");
+            if (_ud && _ud.licenseCode) savedLic = { code: _ud.licenseCode };
+          }
+        } catch(e) {}
+      }
       var curStatus = savedLic ? verificarCodigo(savedLic.code || "") : null;
       var handleActivar = function() {
         setLicErr(""); setLicOk("");
@@ -6055,6 +6066,10 @@ function SettingsView(_ref20) {
             clientId: permId
           });
           _saveUser(updated);
+          // Guardar también en trp_lic_v1 para que el panel lo muestre correctamente
+          try {
+            localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newLic.trim().toUpperCase(), type: result.type }));
+          } catch(e) {}
           // Registrar uso del código en Firebase (panel admin lo verá en rojo)
           try {
             var fbDbS = window.__firebaseDB;
