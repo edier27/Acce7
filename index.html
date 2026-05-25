@@ -6672,175 +6672,224 @@ function App(_appProps) {
   var isTablet = !isMobile && _wsize.w < 1024;
   var isSidebarExpanded = !isMobile && !isTablet && sidebarOpen;
 
-  // ─── SINCRONIZACIÓN FIREBASE ────────────────────────────────────────────────
-  // ESTRATEGIA: Firebase es la fuente de verdad.
-  // Al iniciar: cargar localStorage para render inmediato, luego comparar
-  // con Firebase y usar el más reciente. Así cualquier dispositivo
-  // con la misma cuenta siempre ve los datos actualizados.
-  useEffect(function () {
-    var lsKey    = "trp_data_" + clientId;
-    var lsTsKey  = "trp_data_ts_" + clientId;
-    var _loaded  = false;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SINCRONIZACIÓN — REGLA DE ORO: los datos NUNCA se borran.
+  // localStorage = fuente de verdad absoluta.
+  // Firebase = copia de seguridad en la nube + carga en dispositivos nuevos.
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    // Rescue timer: si en 8s no llega nada, usar lo que haya
-    var _rescue = setTimeout(function() {
-      if (_loaded) return;
-      console.warn("[TRP] Timeout — usando datos locales o INIT");
+  useEffect(function () {
+    var KEY  = "trp_data_" + clientId;
+    var done = false;
+
+    // Rescate: si en 6s no cargó nada → INIT (no debería pasar)
+    var rescue = setTimeout(function() {
+      if (done) return;
       try {
-        var s = localStorage.getItem(lsKey);
+        var s = localStorage.getItem(KEY);
         setData(s ? _objectSpread(_objectSpread({}, INIT), JSON.parse(s)) : INIT);
       } catch(e) { setData(INIT); }
-      _loaded = true;
-    }, 8000);
+      done = true;
+    }, 6000);
 
-    // Render inmediato con localStorage (evita pantalla en blanco)
+    // PASO 1 — Leer localStorage (siempre primero, instantáneo)
+    var localRaw = null;
     var localData = null;
-    var localTs   = 0;
     try {
-      var raw = localStorage.getItem(lsKey);
-      if (raw) { localData = JSON.parse(raw); localTs = parseInt(localStorage.getItem(lsTsKey)||"0")||0; }
+      localRaw = localStorage.getItem(KEY);
+      if (localRaw) localData = JSON.parse(localRaw);
     } catch(e) {}
-    if (localData && (localData.repairs || localData.products || localData.sales || localData.cashflow)) {
+
+    // ¿Tiene datos reales (algo más que los datos de ejemplo)?
+    var hasReal = !!(localData && (
+      (localData.repairs   && localData.repairs.length   > 0) ||
+      (localData.products  && localData.products.length  > 0) ||
+      (localData.customers && localData.customers.length > 0) ||
+      (localData.sales     && localData.sales.length     > 0) ||
+      (localData.inventory && localData.inventory.length > 0) ||
+      (localData.cashflow  && localData.cashflow.length  > 0)
+    ));
+
+    if (hasReal) {
+      // Tiene datos reales → mostrar inmediatamente, no esperar Firebase
       setData(_objectSpread(_objectSpread({}, INIT), localData));
-      _loaded = true;
-      clearTimeout(_rescue);
+      done = true;
+      clearTimeout(rescue);
+    } else if (localData) {
+      // Tiene localStorage pero solo datos de ejemplo → mostrar mientras carga Firebase
+      setData(_objectSpread(_objectSpread({}, INIT), localData));
     }
 
-    // Firebase: SIEMPRE se consulta para obtener la versión más reciente
-    if (clientDataRef) {
-      clientDataRef.get().then(function(doc) {
-        if (!doc.exists) {
-          // Cuenta nueva en este dispositivo: subir datos locales si los hay
-          if (localData) {
-            clientDataRef.set({ appData: JSON.stringify(localData), updatedAt: new Date().toISOString(), savedBy: _trpSessionId }).catch(function(){});
-          } else {
-            setData(INIT);
-          }
-          if (!_loaded) { _loaded = true; clearTimeout(_rescue); }
-          return;
-        }
+    // PASO 2 — Firebase: SOLO para subir/bajar en la nube
+    if (!clientDataRef) {
+      if (!done) { setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT); }
+      done = true; clearTimeout(rescue);
+      return;
+    }
 
-        // Comparar timestamps: usar el más reciente
-        var fbRaw  = doc.data().appData;
-        var fbTs   = 0;
-        try { fbTs = new Date(doc.data().updatedAt||0).getTime()||0; } catch(e) {}
-
-        if (fbRaw) {
-          try {
-            var fbData = JSON.parse(fbRaw);
-            if (!fbData) throw new Error("empty");
-
-            if (fbTs >= localTs) {
-              // Firebase es más reciente o igual → usar Firebase
-              console.log("[TRP] ✅ Datos cargados desde Firebase (más recientes)");
-              var merged = _objectSpread(_objectSpread({}, INIT), fbData);
-              setData(merged);
-              // Guardar en localStorage como caché
-              try {
-                localStorage.setItem(lsKey, JSON.stringify(fbData));
-                localStorage.setItem(lsTsKey, fbTs.toString());
-              } catch(e2) {}
-              // Sincronizar settings si vienen en Firebase
-              var fbSettings = doc.data().settingsData;
-              if (fbSettings) {
-                try {
-                  var parsedSettings = JSON.parse(fbSettings);
-                  localStorage.setItem("trp_settings_v1", JSON.stringify(parsedSettings));
-                  // No llamar setSettings aquí para no interferir con el render
-                } catch(e2) {}
-              }
-            } else {
-              // localStorage es más reciente → subir a Firebase
-              console.log("[TRP] ✅ Datos locales más recientes — subiendo a Firebase");
-              clientDataRef.set({ appData: JSON.stringify(localData), updatedAt: new Date(localTs).toISOString(), savedBy: _trpSessionId }).catch(function(){});
-            }
-          } catch(e) {
-            if (!_loaded) { setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT); }
-          }
-        }
-        if (!_loaded) { _loaded = true; clearTimeout(_rescue); }
-        _loaded = true;
-        clearTimeout(_rescue);
-
-      }).catch(function(err) {
-        console.warn("[TRP] Firebase no disponible:", err);
-        if (!_loaded) {
-          setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT);
-          _loaded = true; clearTimeout(_rescue);
-        }
-      });
-    } else {
-      if (!_loaded) {
-        setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT);
-        _loaded = true; clearTimeout(_rescue);
+    clientDataRef.get().then(function(doc) {
+      var fbData   = null;
+      var fbTsStr  = null;
+      if (doc.exists && doc.data()) {
+        try { fbData  = doc.data().appData  ? JSON.parse(doc.data().appData)  : null; } catch(e) {}
+        fbTsStr = doc.data().updatedAt || null;
       }
-    }
+
+      if (hasReal) {
+        // Ya tenemos datos locales reales → NUNCA sobreescribir con Firebase
+        // Solo subir a Firebase si no está actualizado (o no existe)
+        if (!doc.exists) {
+          // Subir los datos locales a Firebase (primer dispositivo)
+          var ts1 = Date.now();
+          clientDataRef.set({
+            appData: JSON.stringify(localData),
+            updatedAt: new Date(ts1).toISOString(),
+            savedBy: _trpSessionId
+          }).catch(function(){});
+          try { localStorage.setItem(KEY + "_ts", ts1.toString()); } catch(e) {}
+          console.log("[TRP] Datos locales subidos a Firebase (primera sincronización)");
+        } else {
+          // Firebase existe: verificar si hay cambios de OTRO dispositivo más recientes
+          var localTs = parseInt(localStorage.getItem(KEY + "_ts") || "0") || 0;
+          var fbTs    = fbTsStr ? new Date(fbTsStr).getTime() : 0;
+          if (fbTs > (localTs + 30000) && fbData) {
+            // Firebase tiene datos con más de 30s de diferencia → otro dispositivo actualizó
+            // CONFIRMAR antes de sobreescribir: solo si las colecciones principales tienen más datos
+            var fbTotal = ((fbData.repairs||[]).length + (fbData.products||[]).length +
+                          (fbData.customers||[]).length + (fbData.sales||[]).length +
+                          (fbData.inventory||[]).length + (fbData.cashflow||[]).length);
+            var localTotal = ((localData.repairs||[]).length + (localData.products||[]).length +
+                              (localData.customers||[]).length + (localData.sales||[]).length +
+                              (localData.inventory||[]).length + (localData.cashflow||[]).length);
+            if (fbTotal >= localTotal) {
+              // Firebase tiene igual o más datos → actualizar (cambios de otro dispositivo)
+              setData(_objectSpread(_objectSpread({}, INIT), fbData));
+              try {
+                localStorage.setItem(KEY, JSON.stringify(fbData));
+                localStorage.setItem(KEY + "_ts", fbTs.toString());
+              } catch(e) {}
+              console.log("[TRP] Actualizado desde otro dispositivo (Firebase más completo)");
+            } else {
+              // Local tiene más datos → subir local a Firebase
+              clientDataRef.set({
+                appData: JSON.stringify(localData),
+                updatedAt: new Date(localTs || Date.now()).toISOString(),
+                savedBy: _trpSessionId
+              }).catch(function(){});
+            }
+          } else if (localTs > fbTs || localTs === 0) {
+            // Local es más reciente o no tiene timestamp → subir a Firebase
+            var ts2 = localTs || Date.now();
+            clientDataRef.set({
+              appData: JSON.stringify(localData),
+              updatedAt: new Date(ts2).toISOString(),
+              savedBy: _trpSessionId
+            }).catch(function(){});
+            try { localStorage.setItem(KEY + "_ts", ts2.toString()); } catch(e) {}
+          }
+        }
+
+      } else {
+        // Sin datos locales reales → dispositivo nuevo, cargar de Firebase
+        if (fbData) {
+          setData(_objectSpread(_objectSpread({}, INIT), fbData));
+          var fbTs2 = fbTsStr ? new Date(fbTsStr).getTime() : Date.now();
+          try {
+            localStorage.setItem(KEY, JSON.stringify(fbData));
+            localStorage.setItem(KEY + "_ts", fbTs2.toString());
+          } catch(e) {}
+          // Restaurar settings
+          if (doc.data().settingsData && !localStorage.getItem("trp_settings_v1")) {
+            try { localStorage.setItem("trp_settings_v1", doc.data().settingsData); } catch(e) {}
+          }
+          console.log("[TRP] Datos cargados desde Firebase (dispositivo nuevo)");
+        } else if (!done) {
+          setData(INIT);
+        }
+      }
+
+      if (!done) { done = true; clearTimeout(rescue); }
+      done = true; clearTimeout(rescue);
+
+    }).catch(function(err) {
+      console.warn("[TRP] Firebase no disponible:", err);
+      if (!done) {
+        setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT);
+        done = true; clearTimeout(rescue);
+      }
+    });
+
   }, [clientId]);
 
-  // ─── GUARDAR: localStorage + Firebase + settings incluidos ───────────────
+  // ─── GUARDAR ─────────────────────────────────────────────────────────────────
+  // Guarda en localStorage PRIMERO (nunca falla), luego sube a Firebase
   var save = function save(d) {
+    var KEY = "trp_data_" + clientId;
+    var ts  = Date.now();
     setData(d);
-    var ts = Date.now();
     _trpLastSaveTs = ts;
-    var lsKey   = "trp_data_" + clientId;
-    var lsTsKey = "trp_data_ts_" + clientId;
-    // localStorage primero (instantáneo)
+    // 1. localStorage (inmediato, sin red)
     try {
-      localStorage.setItem(lsKey, JSON.stringify(d));
-      localStorage.setItem(lsTsKey, ts.toString());
-    } catch(e) {}
-    // Firebase (incluye settings para sincronizar entre dispositivos)
+      localStorage.setItem(KEY, JSON.stringify(d));
+      localStorage.setItem(KEY + "_ts", ts.toString());
+    } catch(e) { console.error("[TRP] Error guardando en localStorage", e); }
+    // 2. Firebase (asíncrono, puede fallar por red)
     var settingsSnap = null;
-    try { var ss = localStorage.getItem("trp_settings_v1"); if(ss) settingsSnap = JSON.parse(ss); } catch(e) {}
-    var payload = { appData: JSON.stringify(d), updatedAt: new Date(ts).toISOString(), savedBy: _trpSessionId };
+    try { var ss = localStorage.getItem("trp_settings_v1"); if (ss) settingsSnap = JSON.parse(ss); } catch(e) {}
+    var payload = {
+      appData: JSON.stringify(d),
+      updatedAt: new Date(ts).toISOString(),
+      savedBy: _trpSessionId
+    };
     if (settingsSnap) payload.settingsData = JSON.stringify(settingsSnap);
     if (clientDataRef) {
-      clientDataRef.set(payload).catch(function(e) {
-        console.warn("[TRP] Sin internet — marcando para sincronizar", e);
-        try { localStorage.setItem("trp_pending_sync_" + clientId, "1"); } catch(err) {}
+      clientDataRef.set(payload).then(function() {
+        localStorage.removeItem("trp_pending_sync_" + clientId);
+      }).catch(function(e) {
+        // Sin internet: marcar para sincronizar cuando vuelva
+        try { localStorage.setItem("trp_pending_sync_" + clientId, "1"); } catch(e2) {}
       });
     }
-    // Actualizar lastSeen del usuario
+    // 3. Actualizar lastSeen del usuario
     try {
       var _uRef = _getUserRef ? _getUserRef(clientId) : null;
       if (_uRef) _uRef.set({ lastSeen: new Date().toISOString() }, { merge: true }).catch(function(){});
     } catch(e) {}
   };
 
-  // ─── GUARDAR SETTINGS: también sube a Firebase ────────────────────────────
+  // ─── GUARDAR SETTINGS ────────────────────────────────────────────────────────
   var saveSettings = function saveSettings(s) {
     setSettings(s);
     try { localStorage.setItem("trp_settings_v1", JSON.stringify(s)); } catch(e) {}
-    // Subir settings a Firebase junto con los datos actuales
-    if (clientDataRef && data) {
-      var lsKey = "trp_data_" + clientId;
-      var ts = Date.now();
-      clientDataRef.set({
-        appData: JSON.stringify(data),
-        settingsData: JSON.stringify(s),
-        updatedAt: new Date(ts).toISOString(),
-        savedBy: _trpSessionId
-      }).catch(function(){});
+    // Subir solo settingsData (NO tocar appData para evitar sobreescribir productos)
+    if (clientDataRef) {
+      clientDataRef.set({ settingsData: JSON.stringify(s) }, { merge: true }).catch(function(){});
     }
   };
 
-  // ─── AUTO-SYNC cuando vuelve el internet ──────────────────────────────────
+  // ─── AUTO-SYNC cuando vuelve el internet ──────────────────────────────────────
   useEffect(function() {
     var sync = function() {
       var pending = localStorage.getItem("trp_pending_sync_" + clientId);
       if (!pending || !clientDataRef) return;
+      var KEY = "trp_data_" + clientId;
       try {
-        var stored = localStorage.getItem("trp_data_" + clientId);
-        var ts     = localStorage.getItem("trp_data_ts_" + clientId);
+        var stored = localStorage.getItem(KEY);
+        var ts     = localStorage.getItem(KEY + "_ts");
         if (!stored) return;
         var d = JSON.parse(stored);
-        clientDataRef.set({ appData: JSON.stringify(d), updatedAt: new Date(parseInt(ts)||Date.now()).toISOString(), savedBy: _trpSessionId })
-          .then(function(){ localStorage.removeItem("trp_pending_sync_" + clientId); console.log("[TRP] ✅ Sync automático OK"); })
-          .catch(function(){});
+        clientDataRef.set({
+          appData: JSON.stringify(d),
+          updatedAt: new Date(parseInt(ts) || Date.now()).toISOString(),
+          savedBy: _trpSessionId
+        }).then(function() {
+          localStorage.removeItem("trp_pending_sync_" + clientId);
+          console.log("[TRP] ✅ Datos sincronizados automáticamente");
+        }).catch(function(){});
       } catch(e) {}
     };
     window.addEventListener("online", sync);
-    if (navigator.onLine) setTimeout(sync, 1000);
+    if (navigator.onLine) setTimeout(sync, 2000);
     return function() { window.removeEventListener("online", sync); };
   }, [clientId]);
 
@@ -7959,44 +8008,71 @@ function PublicCatalogLoader(_ref) {
   var clientId = _ref.clientId;
   var _pc1 = useState(null), _pca1 = _slicedToArray(_pc1, 2), pubData = _pca1[0], setPubData = _pca1[1];
   var _pc2 = useState(true), _pca2 = _slicedToArray(_pc2, 2), loading = _pca2[0], setLoading = _pca2[1];
-  var _pc3 = useState(false), _pca3 = _slicedToArray(_pc3, 2), publicMode = _pca3[0], setPublicMode = _pca3[1];
+  var _pc3 = useState(""), _pca3 = _slicedToArray(_pc3, 2), errorMsg = _pca3[0], setErrorMsg = _pca3[1];
 
-  useEffect(function() {
-    if (!clientId) { setLoading(false); return; }
-    // Cargar datos del cliente desde Firebase sin necesidad de login
+  var loadFromFirebase = function(retries) {
+    if (!clientId) { setLoading(false); setErrorMsg("ID de catálogo no válido."); return; }
     try {
       var db = window.__firebaseDB;
       if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
         db = firebase.apps[0].firestore();
-      if (db) {
-        db.collection("clientes").doc(clientId).get().then(function(doc) {
-          if (doc.exists && doc.data().appData) {
-            try {
-              var d = JSON.parse(doc.data().appData);
-              setPubData(_objectSpread(_objectSpread({}, INIT), d));
-            } catch(e) { setPubData(INIT); }
-          } else {
+      if (!db) { setLoading(false); setErrorMsg("Sin conexión a Firebase."); return; }
+      db.collection("clientes").doc(clientId).get().then(function(doc) {
+        if (doc.exists && doc.data().appData) {
+          try {
+            var d = JSON.parse(doc.data().appData);
+            // Restaurar settings si vienen en Firebase
+            var merged = _objectSpread(_objectSpread({}, INIT), d);
+            if (doc.data().settingsData) {
+              try { merged.settings = JSON.parse(doc.data().settingsData); } catch(e2) {}
+            }
+            setPubData(merged);
+            setLoading(false);
+          } catch(e) {
             setPubData(INIT);
+            setLoading(false);
           }
+        } else {
+          // Doc no existe — catálogo vacío
+          setPubData(INIT);
           setLoading(false);
-          setPublicMode(true);
-        }).catch(function() { setPubData(INIT); setLoading(false); setPublicMode(true); });
-      } else {
-        setPubData(INIT); setLoading(false); setPublicMode(true);
-      }
-    } catch(e) { setPubData(INIT); setLoading(false); setPublicMode(true); }
+        }
+      }).catch(function(e) {
+        if (retries > 0) {
+          setTimeout(function(){ loadFromFirebase(retries-1); }, 2000);
+        } else {
+          setLoading(false);
+          setErrorMsg("No se pudo cargar el catálogo. Verifica tu conexión.");
+        }
+      });
+    } catch(e) { setLoading(false); setErrorMsg("Error al cargar el catálogo."); }
+  };
+
+  useEffect(function() {
+    loadFromFirebase(3); // 3 reintentos automáticos
   }, [clientId]);
 
   if (loading) return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight:"100dvh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 }
+    style: { minHeight:"100dvh", background:"#090E1A", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 }
   },
-    /*#__PURE__*/React.createElement(RefreshCw, { size:28, color:T.accent }),
-    /*#__PURE__*/React.createElement("div", { style:{color:T.muted,fontSize:13} }, "Cargando catálogo...")
+    /*#__PURE__*/React.createElement(RefreshCw, { size:28, color:"#10E08A", style:{animation:"spin 1s linear infinite"} }),
+    /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}"),
+    /*#__PURE__*/React.createElement("div", { style:{color:"#7A8EAA",fontSize:13} }, "Cargando catálogo...")
+  );
+
+  if (errorMsg) return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight:"100dvh", background:"#090E1A", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }
+  },
+    /*#__PURE__*/React.createElement("div", { style:{color:"#EF4444",fontSize:16,fontWeight:700,textAlign:"center",maxWidth:300} }, errorMsg),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: function(){ loadFromFirebase(3); },
+      style:{padding:"10px 24px",background:"#10E08A",border:"none",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:14}
+    }, "🔄 Reintentar")
   );
 
   if (!pubData || !clientId) return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight:"100dvh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center" }
-  }, /*#__PURE__*/React.createElement("div", { style:{color:T.muted,fontSize:14,textAlign:"center"} },
+    style: { minHeight:"100dvh", background:"#090E1A", display:"flex", alignItems:"center", justifyContent:"center" }
+  }, /*#__PURE__*/React.createElement("div", { style:{color:"#7A8EAA",fontSize:14,textAlign:"center"} },
     "Catálogo no disponible."
   ));
 
