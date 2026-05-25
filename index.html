@@ -6847,11 +6847,10 @@ function App(_appProps) {
         if (!doc.exists) {
           // Subir los datos locales a Firebase (primer dispositivo)
           var ts1 = Date.now();
-          clientDataRef.set({
-            appData: JSON.stringify(localData),
-            updatedAt: new Date(ts1).toISOString(),
-            savedBy: _trpSessionId
-          }).catch(function(){});
+          var firstPayload = { appData: JSON.stringify(localData), updatedAt: new Date(ts1).toISOString(), savedBy: _trpSessionId };
+          var curSets = localStorage.getItem("trp_settings_v1");
+          if (curSets) firstPayload.settingsData = curSets;
+          clientDataRef.set(firstPayload).catch(function(){});
           try { localStorage.setItem(KEY + "_ts", ts1.toString()); } catch(e) {}
           console.log("[TRP] Datos locales subidos a Firebase (primera sincronización)");
         } else {
@@ -6874,6 +6873,15 @@ function App(_appProps) {
                 localStorage.setItem(KEY, JSON.stringify(fbData));
                 localStorage.setItem(KEY + "_ts", fbTs.toString());
               } catch(e) {}
+              // Restaurar settings del otro dispositivo
+              if (doc.data().settingsData) {
+                try {
+                  var sOther = JSON.parse(doc.data().settingsData);
+                  localStorage.setItem("trp_settings_v1", JSON.stringify(sOther));
+                  setSettings(_objectSpread(_objectSpread({}, DEFAULT_SETTINGS), sOther));
+                  applyTheme(_objectSpread(_objectSpread({}, DEFAULT_SETTINGS), sOther));
+                } catch(e) {}
+              }
               console.log("[TRP] Actualizado desde otro dispositivo (Firebase más completo)");
             } else {
               // Local tiene más datos → subir local a Firebase
@@ -6904,9 +6912,14 @@ function App(_appProps) {
             localStorage.setItem(KEY, JSON.stringify(fbData));
             localStorage.setItem(KEY + "_ts", fbTs2.toString());
           } catch(e) {}
-          // Restaurar settings
-          if (doc.data().settingsData && !localStorage.getItem("trp_settings_v1")) {
-            try { localStorage.setItem("trp_settings_v1", doc.data().settingsData); } catch(e) {}
+          // Restaurar settings desde Firebase (tema, nombre, logo, etc.)
+          if (doc.data().settingsData) {
+            try {
+              var restoredS = JSON.parse(doc.data().settingsData);
+              localStorage.setItem("trp_settings_v1", JSON.stringify(restoredS));
+              setSettings(_objectSpread(_objectSpread({}, DEFAULT_SETTINGS), restoredS));
+              applyTheme(_objectSpread(_objectSpread({}, DEFAULT_SETTINGS), restoredS));
+            } catch(e) {}
           }
           console.log("[TRP] Datos cargados desde Firebase (dispositivo nuevo)");
         } else if (!done) {
@@ -6966,10 +6979,13 @@ function App(_appProps) {
   // ─── GUARDAR SETTINGS ────────────────────────────────────────────────────────
   var saveSettings = function saveSettings(s) {
     setSettings(s);
+    applyTheme(s);
     try { localStorage.setItem("trp_settings_v1", JSON.stringify(s)); } catch(e) {}
-    // Subir solo settingsData (NO tocar appData para evitar sobreescribir productos)
+    // Subir a Firebase con merge (no toca appData, solo actualiza settingsData)
     if (clientDataRef) {
-      clientDataRef.set({ settingsData: JSON.stringify(s) }, { merge: true }).catch(function(){});
+      clientDataRef.set({ settingsData: JSON.stringify(s), settingsUpdatedAt: new Date().toISOString() }, { merge: true })
+        .then(function(){ console.log("[TRP] ✅ Configuración guardada en Firebase"); })
+        .catch(function(e){ console.warn("[TRP] Settings no subieron a Firebase:", e); });
     }
   };
 
