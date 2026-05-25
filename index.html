@@ -7508,7 +7508,10 @@ function AdminPanel() {
   };
 
   // Cargar al montar el componente
-  useEffect(function(){ cargarCodigosFirebase(); }, []);
+  useEffect(function(){
+    // Esperar 1s para que Firebase inicialice completamente
+    setTimeout(function(){ cargarCodigosFirebase(); }, 1000);
+  }, []);
 
   // ── Cargar cuentas desde Firebase ──
   var cargarCuentas = function() {
@@ -7683,7 +7686,11 @@ function AdminPanel() {
         ),
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { style:{ fontWeight:800, fontSize:18, color:"#0D1B35", letterSpacing:"-0.03em" } }, "Panel Admin"),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B" } }, "ACCE PRO — GlobalAcce")
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B" } }, "ACCE PRO — GlobalAcce"),
+          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:5, marginTop:3 } },
+            /*#__PURE__*/React.createElement("span", { style:{ width:7, height:7, borderRadius:"50%", background: window.__firebaseDB ? "#10E08A" : "#EF4444", display:"inline-block" } }),
+            /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color: window.__firebaseDB ? "#10E08A" : "#EF4444" } }, window.__firebaseDB ? "Firebase ✅" : "Firebase ❌ Sin conexión")
+          )
         )
       ),
 
