@@ -7548,6 +7548,7 @@ function AdminPanel() {
           licenseType: d.licenseType || "",
           createdAt:   d.createdAt || "",
           lastSeen:    d.lastSeen || "",
+          software:    d.software || "ACCE PRO",
         });
       });
       // Enriquecer con info de lastSeen desde clientes collection
@@ -7577,7 +7578,16 @@ function AdminPanel() {
   };
 
   useEffect(function() {
-    if (tab === "cuentas") cargarCuentas();
+    if (tab === "cuentas") {
+      cargarCuentas();
+      // Auto-refresh cada 30s para ver quién está en línea
+      if (window._cuentasInterval) clearInterval(window._cuentasInterval);
+      window._cuentasInterval = setInterval(function(){
+        if (document.getElementById && document.visibilityState !== "hidden") cargarCuentas();
+      }, 30000);
+    } else {
+      if (window._cuentasInterval) { clearInterval(window._cuentasInterval); window._cuentasInterval = null; }
+    }
   }, [tab]);
 
   // ── Eliminar cuenta ──
@@ -7881,12 +7891,34 @@ function AdminPanel() {
                         /*#__PURE__*/React.createElement("span", { style:{ color:"#fff", fontWeight:800, fontSize:16 } }, u.username[0].toUpperCase())
                       ),
                       /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:0 } },
-                        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:14, color:"#0D1B35" } }, u.username),
+                        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:8 } },
+                          /*#__PURE__*/React.createElement("span", { style:{ fontWeight:700, fontSize:14, color:"#0D1B35" } }, u.username),
+                          // Indicador online (activo en últimos 5 minutos)
+                          (function(){
+                            var msAgo = u.lastSeen ? Date.now() - new Date(u.lastSeen).getTime() : Infinity;
+                            var isOnline = msAgo < 5*60*1000;
+                            var isRecent = msAgo < 60*60*1000;
+                            return /*#__PURE__*/React.createElement("span", {
+                              title: isOnline ? "En línea ahora" : isRecent ? "Activo hace menos de 1h" : "Desconectado",
+                              style:{ width:9, height:9, borderRadius:"50%", background: isOnline ? "#10E08A" : isRecent ? "#F59E0B" : "#CBD5E1", display:"inline-block", flexShrink:0 }
+                            });
+                          })(),
+                          // Software badge
+                          /*#__PURE__*/React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:"#fff", background: u.software==="FerneyMotos" ? "#8B5CF6" : "#4F8EFF", padding:"1px 7px", borderRadius:10 } },
+                            u.software || "ACCE PRO"
+                          )
+                        ),
                         /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 } },
                           /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, fontWeight:600, color:lic.color, background:lic.color+"18", padding:"2px 8px", borderRadius:20 } }, lic.txt),
                           u.createdAt && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Creada: "+fmtDate(u.createdAt)),
                           u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color: dias30 ? "#F59E0B" : "#10B981" } },
-                            (dias30?"⚠️ ":"✅ ")+"Última uso: "+fmtDate(u.lastSeen)
+                            (function(){
+                              var msAgo = Date.now() - new Date(u.lastSeen).getTime();
+                              if (msAgo < 5*60*1000)   return "🟢 En línea ahora";
+                              if (msAgo < 60*60*1000)  return "🟡 Activo hace "+(Math.floor(msAgo/60000))+"min";
+                              if (msAgo < 24*60*60*1000) return "✅ Hoy: "+fmtDate(u.lastSeen);
+                              return (dias30?"⚠️ ":"✅ ")+"Última vez: "+fmtDate(u.lastSeen);
+                            })()
                           ),
                           !u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Sin actividad registrada")
                         )
