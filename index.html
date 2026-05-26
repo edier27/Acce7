@@ -716,6 +716,17 @@ var uid = function uid() {
 var today = function today() {
   return new Date().toISOString().split("T")[0];
 };
+// ── Fecha en hora Colombia (UTC-5) ──────────────────────────────────────────
+var getHoyColombia = function() {
+  var now = new Date();
+  // Colombia = UTC-5 siempre (no tiene horario de verano)
+  var colombia = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+  return colombia.toISOString().slice(0,10);
+};
+var getMesColombia = function() {
+  return getHoyColombia().slice(0,7);
+};
+
 var INIT = {
   repairs: [{
     id: "init_inv_001",
@@ -1148,7 +1159,7 @@ var Toast = function Toast(_ref7) {
 // ─── RESUMEN DEL DÍA ─────────────────────────────────────────────────────────
 function ResumenDia(_props) {
   var data = _props.data, setView = _props.setView;
-  var hoy = new Date().toISOString().slice(0,10);
+  var hoy = getHoyColombia();
   var fmtD = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
   var diaSemana = new Date().toLocaleDateString("es-CO",{weekday:"long",day:"numeric",month:"long"});
 
@@ -2080,7 +2091,7 @@ function RepairModal(_ref0) {
   // Agregar abono
   var addAbono = function() {
     if (!abonoMonto || Number(abonoMonto) <= 0) { notify("Ingresa un monto válido", "error"); return; }
-    var newAdv = { id: uid(), amount: Number(abonoMonto), date: new Date().toISOString().slice(0,10), note: abonoNota || "Abono" };
+    var newAdv = { id: uid(), amount: Number(abonoMonto), date: getHoyColombia(), note: abonoNota || "Abono" };
     set("advances", [].concat(advances, [newAdv]));
     setAbonoMonto(""); setAbonoNota("");
     // Si el total cubre el costo, marcar como pagado
@@ -4843,9 +4854,9 @@ function VentasView(_ref18) {
 
   var imprimirRegistro = function(tipo) {
     setShowRegistros(false);
-    var hoy = new Date();
-    var todayStr = hoy.toISOString().slice(0,10);
-    var mesStr = todayStr.slice(0,7);
+    var todayStr = getHoyColombia();
+    var mesStr = getMesColombia();
+    var hoy = new Date(todayStr+"T12:00:00");
     var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
 
     var lista, titulo, subtitulo;
@@ -6225,7 +6236,7 @@ function CashflowView(_props) {
     var _f2 = useState(isNew ? ""        : String(modal.entry.amount)), _fa2 = _slicedToArray(_f2,2), monto = _fa2[0], setMonto = _fa2[1];
     var _f3 = useState(isNew ? ""        : (modal.entry.description||"")), _fa3 = _slicedToArray(_f3,2), desc  = _fa3[0], setDesc  = _fa3[1];
     var _f4 = useState(isNew ? (defType==="ingreso"?CATS_ING[0]:CATS_EGR[0]) : (modal.entry.category||"")), _fa4 = _slicedToArray(_f4,2), cat = _fa4[0], setCat = _fa4[1];
-    var _f5 = useState(isNew ? new Date().toISOString().slice(0,10) : (modal.entry.date||"")), _fa5 = _slicedToArray(_f5,2), fecha = _fa5[0], setFecha = _fa5[1];
+    var _f5 = useState(isNew ? getHoyColombia() : (modal.entry.date||"")), _fa5 = _slicedToArray(_f5,2), fecha = _fa5[0], setFecha = _fa5[1];
     var _f6 = useState(isNew ? "" : (modal.entry.notes||"")), _fa6 = _slicedToArray(_f6,2), notas = _fa6[0], setNotas = _fa6[1];
 
     var cats = tipo==="ingreso" ? CATS_ING : CATS_EGR;
@@ -6428,7 +6439,7 @@ function ReporteView(_props) {
   var data = _props.data;
   var fmtR = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
 
-  var hoy = new Date().toISOString().slice(0,10);
+  var hoy = getHoyColombia();
 
   // ── Estados ──
   var _s1 = useState(hoy),            _sa1 = _slicedToArray(_s1,2), fechaSel = _sa1[0], setFechaSel = _sa1[1];
@@ -6985,10 +6996,12 @@ function App(_appProps) {
         try { localStorage.setItem("trp_pending_sync_" + clientId, "1"); } catch(e2) {}
       });
     }
-    // 3. Actualizar lastSeen del usuario
+    // 3. Actualizar lastSeen + estado online del usuario
     try {
-      var _uRef = _getUserRef ? _getUserRef(clientId) : null;
-      if (_uRef) _uRef.set({ lastSeen: new Date().toISOString() }, { merge: true }).catch(function(){});
+      var _curUser = null;
+      try { _curUser = localStorage.getItem("trp_current_user"); } catch(e2) {}
+      var _uRefOnline = _getUserRef ? _getUserRef(_curUser || clientId) : null;
+      if (_uRefOnline) _uRefOnline.set({ lastSeen: new Date().toISOString(), online: true, software: "ACCE PRO" }, { merge: true }).catch(function(){});
     } catch(e) {}
   };
 
@@ -7897,16 +7910,16 @@ function AdminPanel() {
                           // Indicador online (activo en últimos 5 minutos)
                           (function(){
                             var msAgo = u.lastSeen ? Date.now() - new Date(u.lastSeen).getTime() : Infinity;
-                            var isOnline = u.online === true && msAgo < 3*60*1000;
-                            var isRecent = msAgo < 60*60*1000;
+                            // Verde: online=true Y activo en últimos 5 min, O activo en último 1 min
+                            var isOnline = (u.online === true && msAgo < 5*60*1000) || msAgo < 60*1000;
+                            var isRecent = msAgo < 30*60*1000;
                             var color = isOnline ? "#10E08A" : isRecent ? "#F59E0B" : "#CBD5E1";
-                            var label = isOnline ? "🟢 En línea" : isRecent ? "🟡 Activo recientemente" : "⚪ Desconectado";
+                            var label = isOnline ? "En línea ahora" : isRecent ? "Activo hace "+(Math.floor(msAgo/60000))+"min" : "Desconectado";
                             return /*#__PURE__*/React.createElement("span", {
                               title: label,
                               style:{ width:9, height:9, borderRadius:"50%", background: color,
                                 display:"inline-block", flexShrink:0,
-                                boxShadow: isOnline ? "0 0 0 3px rgba(16,224,138,0.25)" : "none",
-                                animation: isOnline ? "pulse 1.5s infinite" : "none"
+                                boxShadow: isOnline ? "0 0 0 3px rgba(16,224,138,0.25)" : "none"
                               }
                             });
                           })(),
