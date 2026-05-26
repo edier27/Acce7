@@ -6974,12 +6974,8 @@ function App(_appProps) {
     var ts  = Date.now();
     setData(d);
     _trpLastSaveTs = ts;
-    // 1. localStorage (inmediato, sin red)
-    try {
-      localStorage.setItem(KEY, JSON.stringify(d));
-      localStorage.setItem(KEY + "_ts", ts.toString());
-    } catch(e) { console.error("[TRP] Error guardando en localStorage", e); }
-    // 2. Firebase (asíncrono, puede fallar por red)
+
+    // ══ FIREBASE PRIMERO — caché nunca se llena ═══════════════════════════════
     var settingsSnap = null;
     try { var ss = localStorage.getItem("trp_settings_v1"); if (ss) settingsSnap = JSON.parse(ss); } catch(e) {}
     var payload = {
@@ -6988,13 +6984,34 @@ function App(_appProps) {
       savedBy: _trpSessionId
     };
     if (settingsSnap) payload.settingsData = JSON.stringify(settingsSnap);
-    if (clientDataRef) {
+
+    if (clientDataRef && navigator.onLine) {
+      // CON INTERNET: Firebase primero, localStorage se libera
       clientDataRef.set(payload).then(function() {
-        localStorage.removeItem("trp_pending_sync_" + clientId);
+        // Firebase OK → solo guardar timestamp, borrar datos del caché
+        try {
+          localStorage.removeItem(KEY);
+          localStorage.setItem(KEY + "_ts", ts.toString());
+          localStorage.removeItem("trp_pending_sync_" + clientId);
+        } catch(e) {}
+        console.log("[TRP] ✅ Firebase guardado — caché liberado");
       }).catch(function(e) {
-        // Sin internet: marcar para sincronizar cuando vuelva
-        try { localStorage.setItem("trp_pending_sync_" + clientId, "1"); } catch(e2) {}
+        // Firebase falló → guardar en localStorage como emergencia
+        try {
+          localStorage.setItem(KEY, JSON.stringify(d));
+          localStorage.setItem(KEY + "_ts", ts.toString());
+          localStorage.setItem("trp_pending_sync_" + clientId, "1");
+        } catch(e2) {}
+        console.warn("[TRP] Firebase falló — respaldo local");
       });
+    } else {
+      // SIN INTERNET: localStorage como emergencia temporal
+      try {
+        localStorage.setItem(KEY, JSON.stringify(d));
+        localStorage.setItem(KEY + "_ts", ts.toString());
+        localStorage.setItem("trp_pending_sync_" + clientId, "1");
+      } catch(e) {}
+      console.warn("[TRP] Sin internet — guardado local temporal");
     }
     // 3. Actualizar lastSeen + estado online del usuario
     try {
