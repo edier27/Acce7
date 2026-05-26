@@ -847,18 +847,23 @@ var fmt = function fmt(n) {
 var uid = function uid() {
   return "id_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
 };
-var today = function today() {
-  return new Date().toISOString().split("T")[0];
-};
-// ── Fecha en hora Colombia (UTC-5) ──────────────────────────────────────────
-var getHoyColombia = function() {
+// ── Hora Colombia (UTC-5) — función central ──────────────────────────────────
+var colombiaDate = function() {
   var now = new Date();
-  // Colombia = UTC-5 siempre (no tiene horario de verano)
-  var colombia = new Date(now.getTime() - (5 * 60 * 60 * 1000));
-  return colombia.toISOString().slice(0,10);
+  return new Date(now.getTime() - (5 * 60 * 60 * 1000));
+};
+var getHoyColombia = function() {
+  return colombiaDate().toISOString().slice(0, 10);
 };
 var getMesColombia = function() {
-  return getHoyColombia().slice(0,7);
+  return getHoyColombia().slice(0, 7);
+};
+var getNowColombiaISO = function() {
+  return colombiaDate().toISOString();
+};
+// today() → siempre fecha Colombia
+var today = function today() {
+  return getHoyColombia();
 };
 
 var INIT = {
@@ -1295,7 +1300,7 @@ function ResumenDia(_props) {
   var data = _props.data, setView = _props.setView;
   var hoy = getHoyColombia();
   var fmtD = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
-  var diaSemana = new Date().toLocaleDateString("es-CO",{weekday:"long",day:"numeric",month:"long"});
+  var diaSemana = colombiaDate().toLocaleDateString("es-CO",{weekday:"long",day:"numeric",month:"long"});
 
   // ── Calcular movimientos del día ──
   var ventasHoy     = (data.sales||[]).filter(function(s){ return s.date===hoy; });
@@ -4997,11 +5002,11 @@ function VentasView(_ref18) {
     if (tipo === "diario") {
       lista = sales.filter(function(s){ return s.date === todayStr; });
       titulo = "Registro Diario";
-      subtitulo = new Date().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+      subtitulo = colombiaDate().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
     } else {
       lista = sales.filter(function(s){ return s.date && s.date.startsWith(mesStr); });
       titulo = "Registro Mensual";
-      subtitulo = new Date().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
+      subtitulo = colombiaDate().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
     }
 
     lista = lista.sort(function(a,b){ return a.date.localeCompare(b.date) || (a.id||"").localeCompare(b.id||""); });
