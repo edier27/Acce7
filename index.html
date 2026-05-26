@@ -42,6 +42,16 @@
     /* Sidebar blur on mobile overlay */
     .trp-sidebar{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 
+    /* ── Catálogo público siempre claro ── */
+    body.catalog-mode,
+    body.catalog-mode * {
+      background-attachment: initial !important;
+    }
+    body.catalog-mode {
+      background: #F8FAFC !important;
+      color: #1e293b !important;
+    }
+
     /* ════════════════════════════════════════════════════════════
        ACCE PRO — DISEÑO MATTE 3D
        Profundidad real · Superficies elevadas · Sin neón
@@ -4491,27 +4501,34 @@ function PublicView(_ref17) {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "white",
+      background: "#FFFFFF",
       borderRadius: 16,
       maxWidth: 580,
       width: "100%",
       overflow: "auto",
-      maxHeight: "90vh"
+      maxHeight: "90vh",
+      color: "#1e293b"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative",
-      height: 260,
+      height: 280,
       overflow: "hidden",
-      background: "#f1f5f9"
+      background: "#FFFFFF",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, selected.image && /*#__PURE__*/React.createElement("img", {
     src: selected.image,
     alt: selected.name,
     style: {
-      width: "100%",
-      height: "100%",
-      objectFit: "cover"
+      maxWidth: "100%",
+      maxHeight: "100%",
+      width: "auto",
+      height: "auto",
+      objectFit: "contain",
+      display: "block"
     },
     onError: function onError(e) {
       e.target.style.display = "none";
@@ -4789,23 +4806,22 @@ function PublicView(_ref17) {
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        height: 160,
+        height: 180,
         overflow: "hidden",
-        background: "#f8fafc",
-        position: "relative"
+        background: "#FFFFFF",
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
       }
     }, p.image && /*#__PURE__*/React.createElement("img", {
       src: p.image,
       alt: p.name,
-      style: {
-        width: "100%",
-        height: "100%",
-        objectFit: "cover"
-      },
-      onError: function onError(e) {
-        e.target.style.display = "none";
-      }
-    }), /*#__PURE__*/React.createElement("div", {
+      style: { maxWidth:"100%", maxHeight:"180px", width:"auto", height:"auto", objectFit:"contain", display:"block" },
+      onError: function(e){ e.target.style.display="none"; }
+    }), !p.image && /*#__PURE__*/React.createElement("div", {
+      style: { width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#CBD5E1", fontSize:48 }
+    }, "📦"), /*#__PURE__*/React.createElement("div", {
       style: {
         position: "absolute",
         top: 6,
@@ -8616,6 +8632,7 @@ function Root() {
     } catch(e){}
   }
   var isCatalog = window.location.hash === "#catalog";
+  if (isCatalog) document.body.classList.add("catalog-mode");
 
   useEffect(function() {
     // Admin y catálogo no necesitan auth
