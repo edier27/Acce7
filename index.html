@@ -7064,7 +7064,7 @@ function App(_appProps) {
     style: {
       animation: "spin 1s linear infinite"
     }
-  }), /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}"), "Cargando ACCE PRO...");
+  }), /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}"), "Cargando ACCE PRO...");
   if (publicMode) return /*#__PURE__*/React.createElement(PublicView, {
     data: data,
     settings: settings,
@@ -7549,6 +7549,7 @@ function AdminPanel() {
           createdAt:   d.createdAt || "",
           lastSeen:    d.lastSeen || "",
           software:    d.software || "ACCE PRO",
+          online:      d.online || false,
         });
       });
       // Enriquecer con info de lastSeen desde clientes collection
@@ -7896,11 +7897,17 @@ function AdminPanel() {
                           // Indicador online (activo en últimos 5 minutos)
                           (function(){
                             var msAgo = u.lastSeen ? Date.now() - new Date(u.lastSeen).getTime() : Infinity;
-                            var isOnline = msAgo < 5*60*1000;
+                            var isOnline = u.online === true && msAgo < 3*60*1000;
                             var isRecent = msAgo < 60*60*1000;
+                            var color = isOnline ? "#10E08A" : isRecent ? "#F59E0B" : "#CBD5E1";
+                            var label = isOnline ? "🟢 En línea" : isRecent ? "🟡 Activo recientemente" : "⚪ Desconectado";
                             return /*#__PURE__*/React.createElement("span", {
-                              title: isOnline ? "En línea ahora" : isRecent ? "Activo hace menos de 1h" : "Desconectado",
-                              style:{ width:9, height:9, borderRadius:"50%", background: isOnline ? "#10E08A" : isRecent ? "#F59E0B" : "#CBD5E1", display:"inline-block", flexShrink:0 }
+                              title: label,
+                              style:{ width:9, height:9, borderRadius:"50%", background: color,
+                                display:"inline-block", flexShrink:0,
+                                boxShadow: isOnline ? "0 0 0 3px rgba(16,224,138,0.25)" : "none",
+                                animation: isOnline ? "pulse 1.5s infinite" : "none"
+                              }
                             });
                           })(),
                           // Software badge
@@ -8409,11 +8416,32 @@ function Root() {
     setChecking(false);
   };
 
+  var _updateLastSeen = function(username) {
+    try {
+      var db = window.__firebaseDB;
+      if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+        db = firebase.apps[0].firestore();
+      if (db && username) {
+        db.collection("trp_users").doc(username.toLowerCase().trim())
+          .set({ lastSeen: new Date().toISOString(), software: "ACCE PRO", online: true }, { merge: true })
+          .catch(function(){});
+      }
+    } catch(e) {}
+  };
+
+  var _heartbeatInterval = null;
+
   var onLogin = function(userData) {
-    // Guardar sesión y usuario en localStorage para que persista al recargar
     localStorage.setItem("trp_session_" + userData.username, "active");
     localStorage.setItem("trp_current_user", userData.username);
     try { localStorage.setItem("trp_user_" + userData.username, JSON.stringify(userData)); } catch(e) {}
+    // Actualizar lastSeen al iniciar sesión
+    _updateLastSeen(userData.username);
+    // Heartbeat cada 2 minutos para mantener estado online
+    if (_heartbeatInterval) clearInterval(_heartbeatInterval);
+    _heartbeatInterval = setInterval(function() {
+      _updateLastSeen(userData.username);
+    }, 2 * 60 * 1000);
     _checkLicenseAndEnter(userData);
   };
 
@@ -8429,7 +8457,19 @@ function Root() {
   var onLogout = function() {
     if (currentUser) {
       localStorage.removeItem("trp_session_" + currentUser.username);
+      // Marcar como offline al cerrar sesión
+      try {
+        var db = window.__firebaseDB;
+        if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+          db = firebase.apps[0].firestore();
+        if (db) {
+          db.collection("trp_users").doc(currentUser.username.toLowerCase().trim())
+            .set({ online: false, lastSeen: new Date().toISOString() }, { merge: true })
+            .catch(function(){});
+        }
+      } catch(e) {}
     }
+    if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
     setCurrentUser(null);
     setScreen("login");
   };
