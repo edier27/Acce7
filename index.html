@@ -7415,9 +7415,11 @@ function verificarCodigo(raw) {
   }
 
   if ((p[0] === "DEMO" || p[0] === "TRIAL" || p[0] === "ANUAL") && p.length === 3) {
-    var dateStr = p[1], hash = p[2];
-    if (_hash(dateStr + _LS) !== hash) return { valid: false, error: "Código inválido." };
-    var exp = new Date(dateStr.slice(0,4)+"-"+dateStr.slice(4,6)+"-"+dateStr.slice(6,8)+"T23:59:59");
+    var dateStrFull = p[1], hash = p[2];
+    if (_hash(dateStrFull + _LS) !== hash) return { valid: false, error: "Código inválido." };
+    // Soporta formato antiguo (8 chars: YYYYMMDD) y nuevo (12 chars: YYYYMMDD+rnd4)
+    var dateOnly = dateStrFull.slice(0,8);
+    var exp = new Date(dateOnly.slice(0,4)+"-"+dateOnly.slice(4,6)+"-"+dateOnly.slice(6,8)+"T23:59:59");
     if (isNaN(exp.getTime())) return { valid: false, error: "Código con formato incorrecto." };
     var now = new Date();
     if (now > exp) return { valid: false, error: "Código expirado.", expired: true };
@@ -7636,8 +7638,12 @@ function AdminPanel() {
       var exp = new Date(now.getTime()+days*86400000);
       var dateStr = exp.getFullYear().toString()+String(exp.getMonth()+1).padStart(2,"0")+String(exp.getDate()).padStart(2,"0");
       var prefix = tipo==="trial"?"TRIAL":tipo==="anual"?"ANUAL":"DEMO";
-      var h = _hash(dateStr+_LS);
-      code = prefix+"-"+dateStr+"-"+h;
+      // Componente único: timestamp en base36 + random para garantizar unicidad absoluta
+      var ts36 = Date.now().toString(36).toUpperCase().slice(-3);
+      var rnd  = Math.random().toString(36).slice(2,5).toUpperCase();
+      var dateStrUniq = dateStr + ts36 + rnd; // ej: 20261231A2BXY7
+      var h = _hash(dateStrUniq+_LS);
+      code = prefix+"-"+dateStrUniq+"-"+h;
     }
     setCodigoGen(code); setCopied(false);
     var nuevo = { code:code, tipo:tipo, generadoEn:new Date().toISOString(), usado:false };
