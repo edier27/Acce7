@@ -41,6 +41,140 @@
     .trp-bottom-nav{backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
     /* Sidebar blur on mobile overlay */
     .trp-sidebar{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+
+    /* ── Catálogo público siempre claro ── */
+    body.catalog-mode,
+    body.catalog-mode * {
+      background-attachment: initial !important;
+    }
+    body.catalog-mode {
+      background: #F8FAFC !important;
+      color: #1e293b !important;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       ACCE PRO — DISEÑO MATTE 3D
+       Profundidad real · Superficies elevadas · Sin neón
+    ════════════════════════════════════════════════════════════ */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    /* Variables globales 3D */
+    :root {
+      --shadow-xs:  0 1px 2px rgba(0,0,0,0.25);
+      --shadow-sm:  0 2px 8px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+      --shadow-md:  0 4px 16px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+      --shadow-lg:  0 8px 32px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+      --shadow-xl:  0 16px 48px rgba(0,0,0,0.55), 0 8px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+      --shadow-2xl: 0 32px 80px rgba(0,0,0,0.65), 0 16px 32px rgba(0,0,0,0.4),  inset 0 1px 0 rgba(255,255,255,0.08);
+      /* Sombra inset para efecto "hundido" */
+      --inset-sm: inset 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 2px rgba(0,0,0,0.25);
+      --inset-md: inset 0 4px 12px rgba(0,0,0,0.4), inset 0 2px 4px rgba(0,0,0,0.3);
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 22px;
+    }
+
+    /* Fondo principal — textura matte sutil */
+    body {
+      background-attachment: fixed !important;
+      font-family: 'Inter', 'DM Sans', system-ui, sans-serif !important;
+    }
+
+    /* ── Animaciones 3D ── */
+    @keyframes lift3d {
+      from { transform: translateY(0) scale(1); box-shadow: var(--shadow-md); }
+      to   { transform: translateY(-4px) scale(1.01); box-shadow: var(--shadow-xl); }
+    }
+    @keyframes press3d {
+      from { transform: translateY(0); box-shadow: var(--shadow-md); }
+      to   { transform: translateY(2px); box-shadow: var(--shadow-xs); }
+    }
+    @keyframes slideUp3d {
+      from { opacity:0; transform:translateY(20px) scale(0.98); }
+      to   { opacity:1; transform:translateY(0) scale(1); }
+    }
+    @keyframes float3d {
+      0%,100% { transform:translateY(0px); }
+      50%      { transform:translateY(-6px); }
+    }
+
+    /* ── Cards con profundidad 3D ── */
+    [style*="borderRadius"][style*="background"][style*="padding"] {
+      transition: transform 0.2s cubic-bezier(0.34,1.2,0.64,1),
+                  box-shadow 0.2s ease !important;
+    }
+
+    /* Aplicar sombras 3D mediante CSS global */
+    .trp-card-hover {
+      box-shadow: var(--shadow-md) !important;
+      transition: transform 0.25s cubic-bezier(0.34,1.2,0.64,1),
+                  box-shadow 0.25s ease !important;
+    }
+    .trp-card-hover:hover {
+      transform: translateY(-5px) scale(1.005) !important;
+      box-shadow: var(--shadow-xl) !important;
+    }
+
+    /* ── Botones 3D ── */
+    button:not([style*="background:none"]):not([style*="background: none"]) {
+      transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+    }
+    button:not([style*="background:none"]):not([style*="background: none"]):active {
+      transform: translateY(2px) !important;
+    }
+
+    /* ── Sidebar 3D ── */
+    .trp-sidebar {
+      box-shadow: var(--shadow-xl) !important;
+    }
+
+    /* ── Animación entrada de páginas ── */
+    .trp-fade {
+      animation: slideUp3d 0.35s cubic-bezier(0.34,1.2,0.64,1) both !important;
+    }
+
+    /* ── Inputs 3D efecto hundido ── */
+    input:focus, select:focus, textarea:focus {
+      box-shadow: var(--inset-sm) !important;
+    }
+
+    /* ── MODO OSCURO — Matte 3D profundo ── */
+    body[data-theme="dark"],
+    body.dark {
+      background: linear-gradient(145deg, #08080C 0%, #0C0C12 50%, #090911 100%) !important;
+    }
+
+    /* ── MODO CLARO — Matte 3D elevado ── */
+    body:not([data-theme="dark"]):not(.dark) {
+      background: linear-gradient(145deg, #E8EAF0 0%, #ECEEF5 50%, #E6E8EE 100%) !important;
+    }
+
+    /* ── Scrollbar matte ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.15);
+      border-radius: 5px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(128,128,150,0.25);
+      border-radius: 5px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(128,128,150,0.4);
+    }
+
+    /* ── Responsive 3D ── */
+    @media (max-width: 768px) {
+      :root {
+        --shadow-md: 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04);
+        --shadow-lg: 0 8px 24px rgba(0,0,0,0.35);
+      }
+      .trp-card-hover:hover {
+        transform: none !important;
+        box-shadow: var(--shadow-md) !important;
+      }
+    }
   </style>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -443,35 +577,36 @@ var _LucideReact = LucideReact,
 
 // ─── Theme System — Windows 11 Fluent Design ──────────────
 var DARK = {
-  bg: "#090E1A",
-  surface: "#0F1729",
-  card: "#141E32",
-  border: "#1E2D45",
-  text: "#F0F4FF",
-  muted: "#7A8EAA",
-  dim: "#445566"
+  bg:      "#09090D",
+  surface: "#111116",
+  card:    "#16161C",
+  border:  "#252530",
+  text:    "#E8EAF0",
+  muted:   "#6B7190",
+  dim:     "#3A3D52"
 };
 var LIGHT = {
-  bg: "#F4F6FB",
-  surface: "#FFFFFF",
-  card: "#FFFFFF",
-  border: "#E2E8F4",
-  text: "#0D1B35",
-  muted: "#64748B",
-  dim: "#94A3B8"
+  bg:      "#ECEEF4",
+  surface: "#F4F5FA",
+  card:    "#FFFFFF",
+  border:  "#D8DCE8",
+  text:    "#0D1020",
+  muted:   "#5A6070",
+  dim:     "#9AA0B0"
 };
 var T = _objectSpread(_objectSpread({}, LIGHT), {}, {
   accent: "#10E08A",
   accentDim: "rgba(16,224,138,0.10)",
-  orange: "#FF6B35",
-  green: "#10E08A",
-  red: "#EF4444",
-  yellow: "#F59E0B",
-  purple: "#8B5CF6",
-  blue: "#4F8EFF"
+  orange: "#E8621A",
+  green: "#0DC97A",
+  red: "#DC3545",
+  yellow: "#E8960A",
+  purple: "#7B52E0",
+  blue: "#3A7BDC"
 });
 var applyTheme = function applyTheme(settings) {
-  var base = settings.theme === "light" ? LIGHT : DARK;
+  var isDark = settings.theme === "dark";
+  var base = isDark ? DARK : LIGHT;
   var accent = settings.accentColor || "#10E08A";
   var hex = accent.replace("#", "");
   var r = parseInt(hex.slice(0, 2), 16),
@@ -481,6 +616,15 @@ var applyTheme = function applyTheme(settings) {
     accent: accent,
     accentDim: "rgba(".concat(r, ",").concat(g, ",").concat(b, ",0.12)")
   });
+  // Aplicar clase al body para el CSS 3D matte
+  document.body.classList.toggle("dark", isDark);
+  document.body.setAttribute("data-theme", isDark ? "dark" : "light");
+  // Fondo con gradiente matte 3D
+  if (isDark) {
+    document.body.style.background = "linear-gradient(145deg,#08080C 0%,#0C0C12 50%,#090911 100%)";
+  } else {
+    document.body.style.background = "linear-gradient(145deg,#E8EAF0 0%,#ECEEF5 50%,#E6E8EE 100%)";
+  }
 };
 // ─── Sistema de Licencias GlobalAcce ─────────────────────
 var LICENSE_WA = "573214016292";
@@ -643,7 +787,7 @@ function LicLoginScreen(_ref) {
     style:{ position:"fixed", inset:0, background:"#F3F3F3", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"'Inter',system-ui,sans-serif", padding:24 }
   },
     /*#__PURE__*/React.createElement("div", {
-      style:{ background:"#fff", border:"1px solid #E0E0E0", borderRadius:8, padding:"40px 36px", width:"100%", maxWidth:420, boxShadow:"0 4px 24px rgba(0,0,0,0.08)", textAlign:"center" }
+      style:{ background:"#fff", border:"1px solid #E0E0E0", borderRadius:8, padding:"40px 36px", width:"100%", maxWidth:420, boxShadow:"0 32px 80px rgba(0,0,0,0.5), 0 12px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07)", textAlign:"center" }
     },
       /*#__PURE__*/React.createElement("div", { style:{fontSize:48, marginBottom:12} }, "🔧"),
       /*#__PURE__*/React.createElement("div", { style:{fontSize:22, fontWeight:700, color:"#1C1C1C", marginBottom:4} }, "ACCE PRO"),
@@ -713,9 +857,25 @@ var fmt = function fmt(n) {
 var uid = function uid() {
   return "id_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
 };
-var today = function today() {
-  return new Date().toISOString().split("T")[0];
+// ── Hora Colombia (UTC-5) — función central ──────────────────────────────────
+var colombiaDate = function() {
+  var now = new Date();
+  return new Date(now.getTime() - (5 * 60 * 60 * 1000));
 };
+var getHoyColombia = function() {
+  return colombiaDate().toISOString().slice(0, 10);
+};
+var getMesColombia = function() {
+  return getHoyColombia().slice(0, 7);
+};
+var getNowColombiaISO = function() {
+  return colombiaDate().toISOString();
+};
+// today() → siempre fecha Colombia
+var today = function today() {
+  return getHoyColombia();
+};
+
 var INIT = {
   repairs: [{
     id: "init_inv_001",
@@ -947,7 +1107,7 @@ var Btn = function Btn(_ref3) {
       background: T.surface,
       color: T.text,
       border: "1px solid ".concat(T.border),
-      boxShadow: "0 1px 4px rgba(0,0,0,0.06)"
+      boxShadow: "0 4px 16px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)"
     },
     success: {
       background: T.green,
@@ -1039,7 +1199,7 @@ var Card = function Card(_ref5) {
       border: "1px solid ".concat(T.border),
       borderRadius: 20,
       padding: 22,
-      boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)",
       transition: "box-shadow 0.2s"
     }, s)
   }, children);
@@ -1127,7 +1287,7 @@ var Toast = function Toast(_ref7) {
       borderRadius: 14,
       fontWeight: 600,
       fontSize: 15,
-      boxShadow: "0 4px 16px rgba(0,0,0,0.14)",
+      boxShadow: "0 8px 28px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)",
       display: "flex",
       alignItems: "center",
       gap: 10,
@@ -1148,9 +1308,9 @@ var Toast = function Toast(_ref7) {
 // ─── RESUMEN DEL DÍA ─────────────────────────────────────────────────────────
 function ResumenDia(_props) {
   var data = _props.data, setView = _props.setView;
-  var hoy = new Date().toISOString().slice(0,10);
+  var hoy = getHoyColombia();
   var fmtD = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
-  var diaSemana = new Date().toLocaleDateString("es-CO",{weekday:"long",day:"numeric",month:"long"});
+  var diaSemana = colombiaDate().toLocaleDateString("es-CO",{weekday:"long",day:"numeric",month:"long"});
 
   // ── Calcular movimientos del día ──
   var ventasHoy     = (data.sales||[]).filter(function(s){ return s.date===hoy; });
@@ -2080,7 +2240,7 @@ function RepairModal(_ref0) {
   // Agregar abono
   var addAbono = function() {
     if (!abonoMonto || Number(abonoMonto) <= 0) { notify("Ingresa un monto válido", "error"); return; }
-    var newAdv = { id: uid(), amount: Number(abonoMonto), date: new Date().toISOString().slice(0,10), note: abonoNota || "Abono" };
+    var newAdv = { id: uid(), amount: Number(abonoMonto), date: getHoyColombia(), note: abonoNota || "Abono" };
     set("advances", [].concat(advances, [newAdv]));
     setAbonoMonto(""); setAbonoNota("");
     // Si el total cubre el costo, marcar como pagado
@@ -2295,7 +2455,7 @@ function RepairModal(_ref0) {
           }),
           custSearch.length >= 1 && /*#__PURE__*/React.createElement("span", { style:{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", color:T.muted, fontSize:16 } }, "🔍"),
           showDropdown && filteredCusts.length > 0 && /*#__PURE__*/React.createElement("div", {
-            style:{ position:"absolute", top:"100%", left:0, right:0, background:T.card, border:"1px solid ".concat(T.border), borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,0.15)", zIndex:100, maxHeight:200, overflowY:"auto", marginTop:4 }
+            style:{ position:"absolute", top:"100%", left:0, right:0, background:T.card, border:"1px solid ".concat(T.border), borderRadius:12, boxShadow:"0 12px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)", zIndex:100, maxHeight:200, overflowY:"auto", marginTop:4 }
           }, filteredCusts.map(function(c) {
             return /*#__PURE__*/React.createElement("div", {
               key:c.id,
@@ -2432,6 +2592,37 @@ function InventoryView(_ref11) {
     _useState10 = _slicedToArray(_useState1, 2),
     filterCat = _useState10[0],
     setFilterCat = _useState10[1];
+  // ── Sincronizar inventario completo → Productos ──────────────────────────
+  var sincronizarInventarioProductos = function() {
+    var inventory = data.inventory || [];
+    if (inventory.length === 0) { notify("No hay repuestos en inventario"); return; }
+    var products = _toConsumableArray(data.products || []);
+    var synced = 0, updated = 0;
+    inventory.forEach(function(item) {
+      var idx = products.findIndex(function(p) {
+        return p.id === item.productId || p.id === item.id ||
+               p.name.toLowerCase().trim() === (item.name||"").toLowerCase().trim();
+      });
+      var prod = {
+        id:          idx >= 0 ? products[idx].id : (item.productId || item.id || uid()),
+        name:        item.name || "",
+        category:    item.category || "General",
+        brand:       item.brand || "",
+        price:       Number(item.price) || 0,
+        stock:       Number(item.qty) || 0,
+        specs:       idx >= 0 ? (products[idx].specs || []) : [],
+        description: idx >= 0 ? (products[idx].description || "") : "",
+        public:      idx >= 0 ? (products[idx].public !== false) : false
+      };
+      if (idx >= 0) { products[idx] = prod; updated++; }
+      else { products.push(prod); synced++; }
+    });
+    if (window.confirm("Sincronizar " + inventory.length + " repuestos del inventario a Productos? (" + synced + " nuevos + " + updated + " por actualizar)")) {
+      save(_objectSpread(_objectSpread({}, data), {}, { products: products }));
+      notify("✅ " + synced + " productos nuevos + " + updated + " actualizados desde inventario");
+    }
+  };
+
   var _useState11 = useState(null),
     _useState12 = _slicedToArray(_useState11, 2),
     modal = _useState12[0],
@@ -2575,7 +2766,11 @@ function InventoryView(_ref11) {
         item: _objectSpread({}, EMPTY)
       });
     }
-  }, "Agregar Repuesto")), /*#__PURE__*/React.createElement(Card, {
+  }, "Agregar Repuesto"),
+  /*#__PURE__*/React.createElement(Btn, {
+    style: { background: "transparent", border: "1px solid "+T.accent, color: T.accent },
+    onClick: function onClick() { sincronizarInventarioProductos(); }
+  }, "🔄 Sync → Productos")), /*#__PURE__*/React.createElement(Card, {
     style: {
       padding: 0,
       overflow: "hidden"
@@ -2807,10 +3002,39 @@ function InventoryModal(_ref12) {
     var inventory = isNew ? [].concat(_toConsumableArray(data.inventory || []), [item]) : (data.inventory || []).map(function (i) {
       return i.id === form.id ? item : i;
     });
+
+    // ── Sincronizar automáticamente con Productos ──────────────────────────
+    var products = _toConsumableArray(data.products || []);
+    var prodIdx = products.findIndex(function(p) {
+      return p.id === item.productId ||
+             p.name.toLowerCase().trim() === item.name.toLowerCase().trim();
+    });
+    var syncedProduct = {
+      id:       prodIdx >= 0 ? products[prodIdx].id : (item.productId || uid()),
+      name:     item.name,
+      category: item.category || "General",
+      brand:    item.brand || "",
+      price:    Number(item.price) || 0,
+      stock:    Number(item.qty) || 0,
+      specs:    prodIdx >= 0 ? (products[prodIdx].specs || []) : [],
+      description: prodIdx >= 0 ? (products[prodIdx].description || "") : ""
+    };
+    // Actualizar productId en inventory para enlazar
+    var inventoryFinal = inventory.map(function(i) {
+      return i.id === item.id ? _objectSpread(_objectSpread({}, i), {}, { productId: syncedProduct.id }) : i;
+    });
+    if (prodIdx >= 0) {
+      products[prodIdx] = syncedProduct;
+    } else {
+      products = [].concat(_toConsumableArray(products), [syncedProduct]);
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     save(_objectSpread(_objectSpread({}, data), {}, {
-      inventory: inventory
+      inventory: inventoryFinal,
+      products: products
     }));
-    notify(isNew ? "Repuesto agregado" : "Repuesto actualizado");
+    notify(isNew ? "Repuesto agregado y sincronizado con Productos ✅" : "Repuesto actualizado");
     setModal(null);
   };
   return /*#__PURE__*/React.createElement(ModalWrap, {
@@ -4046,7 +4270,7 @@ function PublicView(_ref17) {
       bottom: 0,
       width: 360,
       background: "white",
-      boxShadow: "-6px 0 24px rgba(0,0,0,0.12)",
+      boxShadow: "-8px 0 40px rgba(0,0,0,0.6), -4px 0 16px rgba(0,0,0,0.4)",
       zIndex: 200,
       display: "flex",
       flexDirection: "column"
@@ -4277,27 +4501,34 @@ function PublicView(_ref17) {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "white",
+      background: "#FFFFFF",
       borderRadius: 16,
       maxWidth: 580,
       width: "100%",
       overflow: "auto",
-      maxHeight: "90vh"
+      maxHeight: "90vh",
+      color: "#1e293b"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative",
-      height: 260,
+      height: 280,
       overflow: "hidden",
-      background: "#f1f5f9"
+      background: "#FFFFFF",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, selected.image && /*#__PURE__*/React.createElement("img", {
     src: selected.image,
     alt: selected.name,
     style: {
-      width: "100%",
-      height: "100%",
-      objectFit: "cover"
+      maxWidth: "100%",
+      maxHeight: "100%",
+      width: "auto",
+      height: "auto",
+      objectFit: "contain",
+      display: "block"
     },
     onError: function onError(e) {
       e.target.style.display = "none";
@@ -4575,23 +4806,22 @@ function PublicView(_ref17) {
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        height: 160,
+        height: 180,
         overflow: "hidden",
-        background: "#f8fafc",
-        position: "relative"
+        background: "#FFFFFF",
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
       }
     }, p.image && /*#__PURE__*/React.createElement("img", {
       src: p.image,
       alt: p.name,
-      style: {
-        width: "100%",
-        height: "100%",
-        objectFit: "cover"
-      },
-      onError: function onError(e) {
-        e.target.style.display = "none";
-      }
-    }), /*#__PURE__*/React.createElement("div", {
+      style: { maxWidth:"100%", maxHeight:"180px", width:"auto", height:"auto", objectFit:"contain", display:"block" },
+      onError: function(e){ e.target.style.display="none"; }
+    }), !p.image && /*#__PURE__*/React.createElement("div", {
+      style: { width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", color:"#CBD5E1", fontSize:48 }
+    }, "📦"), /*#__PURE__*/React.createElement("div", {
       style: {
         position: "absolute",
         top: 6,
@@ -4782,7 +5012,35 @@ function printRepair(r) {
   var notesHtml = r.notes ? "<p style=\"margin-top:12px;font-size:11px;color:#666;border-top:1px dashed #ddd;padding-top:10px\"><strong>Notas:</strong> "+r.notes+"</p>" : "";
   var advHtml = r.advances && r.advances.length ? "<p style=\"margin-top:8px;font-size:11px;color:#666\"><strong>Abonos:</strong> "+r.advances.map(function(a){return fmt(a.amount)+" ("+a.date+")"}).join(", ")+"</p>" : "";
   var win = window.open("","_blank","width=400,height=600");
-  win.document.write("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+(r.id||"").slice(-6).toUpperCase()+"</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:20px;max-width:340px}h1{font-size:17px;font-weight:bold;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:16px;font-size:11px}table{width:100%;border-collapse:collapse}.footer{text-align:center;margin-top:18px;color:#666;font-size:11px}@media print{button{display:none}}</style></head><body><h1>"+storeName+"</h1><div class=\"sub\">Orden de Reparación #"+(r.id||"").slice(-6).toUpperCase()+"</div><table><tbody>"+rowsHtml+"</tbody></table>"+notesHtml+advHtml+"<div class=\"footer\">¡Gracias por su confianza!<br><button onclick=\"window.print();window.close()\" style=\"margin-top:14px;padding:8px 22px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit\">🖨 Imprimir</button></div></body></html>");
+  win.document.write("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+(r.id||"").slice(-6).toUpperCase()+"</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:20px;max-width:340px}h1{font-size:17px;font-weight:bold;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:16px;font-size:11px}table{width:100%;border-collapse:collapse}.footer{text-align:center;margin-top:18px;color:#666;font-size:11px}@media print{button{display:none}}</style></head><body><h1>"+storeName+"</h1><div class=\"sub\">Orden de Reparación #"+(r.id||"").slice(-6).toUpperCase()+"</div><table><tbody>"+rowsHtml+"</tbody></table>"+notesHtml+advHtml+"<div class=\"footer\">¡Gracias por su confianza!<br><button onclick=\"window.print();window.close()\" style=\"margin-top:14px;padding:8px 22px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit\">🖨 Imprimir</button></div>
+  <script>
+    // Registrar Service Worker para PWA / APK
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js')
+          .then(function(reg) { console.log('[SW] Registrado:', reg.scope); })
+          .catch(function(err) { console.warn('[SW] Error:', err); });
+      });
+    }
+    // Instalar como PWA
+    var _deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      _deferredPrompt = e;
+      var btn = document.getElementById('pwa-install-btn');
+      if (btn) btn.style.display = 'flex';
+    });
+    function installPWA() {
+      if (!_deferredPrompt) return;
+      _deferredPrompt.prompt();
+      _deferredPrompt.userChoice.then(function(r) {
+        _deferredPrompt = null;
+        var btn = document.getElementById('pwa-install-btn');
+        if (btn) btn.style.display = 'none';
+      });
+    }
+  </script>
+</body></html>");
   win.document.close();
 }
 
@@ -4843,20 +5101,20 @@ function VentasView(_ref18) {
 
   var imprimirRegistro = function(tipo) {
     setShowRegistros(false);
-    var hoy = new Date();
-    var todayStr = hoy.toISOString().slice(0,10);
-    var mesStr = todayStr.slice(0,7);
+    var todayStr = getHoyColombia();
+    var mesStr = getMesColombia();
+    var hoy = new Date(todayStr+"T12:00:00");
     var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
 
     var lista, titulo, subtitulo;
     if (tipo === "diario") {
       lista = sales.filter(function(s){ return s.date === todayStr; });
       titulo = "Registro Diario";
-      subtitulo = new Date().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+      subtitulo = colombiaDate().toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
     } else {
       lista = sales.filter(function(s){ return s.date && s.date.startsWith(mesStr); });
       titulo = "Registro Mensual";
-      subtitulo = new Date().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
+      subtitulo = colombiaDate().toLocaleDateString("es-CO",{year:"numeric",month:"long"});
     }
 
     lista = lista.sort(function(a,b){ return a.date.localeCompare(b.date) || (a.id||"").localeCompare(b.id||""); });
@@ -5403,7 +5661,7 @@ function SaleModal(_ref19) {
       zIndex: 50,
       maxHeight: 200,
       overflow: "auto",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+      boxShadow: "0 6px 20px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12)",
       marginTop: 4
     }
   }, pickerFiltered.length === 0 && /*#__PURE__*/React.createElement("div", {
@@ -6225,7 +6483,7 @@ function CashflowView(_props) {
     var _f2 = useState(isNew ? ""        : String(modal.entry.amount)), _fa2 = _slicedToArray(_f2,2), monto = _fa2[0], setMonto = _fa2[1];
     var _f3 = useState(isNew ? ""        : (modal.entry.description||"")), _fa3 = _slicedToArray(_f3,2), desc  = _fa3[0], setDesc  = _fa3[1];
     var _f4 = useState(isNew ? (defType==="ingreso"?CATS_ING[0]:CATS_EGR[0]) : (modal.entry.category||"")), _fa4 = _slicedToArray(_f4,2), cat = _fa4[0], setCat = _fa4[1];
-    var _f5 = useState(isNew ? new Date().toISOString().slice(0,10) : (modal.entry.date||"")), _fa5 = _slicedToArray(_f5,2), fecha = _fa5[0], setFecha = _fa5[1];
+    var _f5 = useState(isNew ? getHoyColombia() : (modal.entry.date||"")), _fa5 = _slicedToArray(_f5,2), fecha = _fa5[0], setFecha = _fa5[1];
     var _f6 = useState(isNew ? "" : (modal.entry.notes||"")), _fa6 = _slicedToArray(_f6,2), notas = _fa6[0], setNotas = _fa6[1];
 
     var cats = tipo==="ingreso" ? CATS_ING : CATS_EGR;
@@ -6259,7 +6517,7 @@ function CashflowView(_props) {
       style:{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16, backdropFilter:"blur(4px)" }
     },
       /*#__PURE__*/React.createElement("div", {
-        style:{ background:T.card, border:"1px solid "+T.border, borderRadius:20, padding:28, width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }
+        style:{ background:T.card, border:"1px solid "+T.border, borderRadius:20, padding:28, width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto", boxShadow:"0 40px 100px rgba(0,0,0,0.65), 0 20px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)" }
       },
         /* Header */
         /*#__PURE__*/React.createElement("div", { style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:22} },
@@ -6428,7 +6686,7 @@ function ReporteView(_props) {
   var data = _props.data;
   var fmtR = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
 
-  var hoy = new Date().toISOString().slice(0,10);
+  var hoy = getHoyColombia();
 
   // ── Estados ──
   var _s1 = useState(hoy),            _sa1 = _slicedToArray(_s1,2), fechaSel = _sa1[0], setFechaSel = _sa1[1];
@@ -6963,12 +7221,8 @@ function App(_appProps) {
     var ts  = Date.now();
     setData(d);
     _trpLastSaveTs = ts;
-    // 1. localStorage (inmediato, sin red)
-    try {
-      localStorage.setItem(KEY, JSON.stringify(d));
-      localStorage.setItem(KEY + "_ts", ts.toString());
-    } catch(e) { console.error("[TRP] Error guardando en localStorage", e); }
-    // 2. Firebase (asíncrono, puede fallar por red)
+
+    // ══ FIREBASE PRIMERO — caché nunca se llena ═══════════════════════════════
     var settingsSnap = null;
     try { var ss = localStorage.getItem("trp_settings_v1"); if (ss) settingsSnap = JSON.parse(ss); } catch(e) {}
     var payload = {
@@ -6977,18 +7231,41 @@ function App(_appProps) {
       savedBy: _trpSessionId
     };
     if (settingsSnap) payload.settingsData = JSON.stringify(settingsSnap);
-    if (clientDataRef) {
+
+    if (clientDataRef && navigator.onLine) {
+      // CON INTERNET: Firebase primero, localStorage se libera
       clientDataRef.set(payload).then(function() {
-        localStorage.removeItem("trp_pending_sync_" + clientId);
+        // Firebase OK → solo guardar timestamp, borrar datos del caché
+        try {
+          localStorage.removeItem(KEY);
+          localStorage.setItem(KEY + "_ts", ts.toString());
+          localStorage.removeItem("trp_pending_sync_" + clientId);
+        } catch(e) {}
+        console.log("[TRP] ✅ Firebase guardado — caché liberado");
       }).catch(function(e) {
-        // Sin internet: marcar para sincronizar cuando vuelva
-        try { localStorage.setItem("trp_pending_sync_" + clientId, "1"); } catch(e2) {}
+        // Firebase falló → guardar en localStorage como emergencia
+        try {
+          localStorage.setItem(KEY, JSON.stringify(d));
+          localStorage.setItem(KEY + "_ts", ts.toString());
+          localStorage.setItem("trp_pending_sync_" + clientId, "1");
+        } catch(e2) {}
+        console.warn("[TRP] Firebase falló — respaldo local");
       });
+    } else {
+      // SIN INTERNET: localStorage como emergencia temporal
+      try {
+        localStorage.setItem(KEY, JSON.stringify(d));
+        localStorage.setItem(KEY + "_ts", ts.toString());
+        localStorage.setItem("trp_pending_sync_" + clientId, "1");
+      } catch(e) {}
+      console.warn("[TRP] Sin internet — guardado local temporal");
     }
-    // 3. Actualizar lastSeen del usuario
+    // 3. Actualizar lastSeen + estado online del usuario
     try {
-      var _uRef = _getUserRef ? _getUserRef(clientId) : null;
-      if (_uRef) _uRef.set({ lastSeen: new Date().toISOString() }, { merge: true }).catch(function(){});
+      var _curUser = null;
+      try { _curUser = localStorage.getItem("trp_current_user"); } catch(e2) {}
+      var _uRefOnline = _getUserRef ? _getUserRef(_curUser || clientId) : null;
+      if (_uRefOnline) _uRefOnline.set({ lastSeen: new Date().toISOString(), online: true, software: "ACCE PRO" }, { merge: true }).catch(function(){});
     } catch(e) {}
   };
 
@@ -7064,7 +7341,7 @@ function App(_appProps) {
     style: {
       animation: "spin 1s linear infinite"
     }
-  }), /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}"), "Cargando ACCE PRO...");
+  }), /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}"), "Cargando ACCE PRO...");
   if (publicMode) return /*#__PURE__*/React.createElement(PublicView, {
     data: data,
     settings: settings,
@@ -7370,7 +7647,7 @@ function App(_appProps) {
   showIdleWarn && /*#__PURE__*/React.createElement("div", {
     style: { position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }
   }, /*#__PURE__*/React.createElement("div", {
-    style: { background:T.card, border:"1px solid ".concat(T.border), borderRadius:20, padding:32, maxWidth:360, width:"90%", textAlign:"center", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }
+    style: { background:T.card, border:"1px solid ".concat(T.border), borderRadius:20, padding:32, maxWidth:360, width:"90%", textAlign:"center", boxShadow:"0 40px 100px rgba(0,0,0,0.65), 0 20px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)" }
   },
     /*#__PURE__*/React.createElement("div", { style:{fontSize:48, marginBottom:12} }, "⏱️"),
     /*#__PURE__*/React.createElement("div", { style:{fontWeight:800, fontSize:20, color:T.text, marginBottom:8, letterSpacing:"-0.02em"} }, "¿Sigues ahí?"),
@@ -7548,6 +7825,8 @@ function AdminPanel() {
           licenseType: d.licenseType || "",
           createdAt:   d.createdAt || "",
           lastSeen:    d.lastSeen || "",
+          software:    d.software || "ACCE PRO",
+          online:      d.online || false,
         });
       });
       // Enriquecer con info de lastSeen desde clientes collection
@@ -7577,7 +7856,16 @@ function AdminPanel() {
   };
 
   useEffect(function() {
-    if (tab === "cuentas") cargarCuentas();
+    if (tab === "cuentas") {
+      cargarCuentas();
+      // Auto-refresh cada 30s para ver quién está en línea
+      if (window._cuentasInterval) clearInterval(window._cuentasInterval);
+      window._cuentasInterval = setInterval(function(){
+        if (document.getElementById && document.visibilityState !== "hidden") cargarCuentas();
+      }, 30000);
+    } else {
+      if (window._cuentasInterval) { clearInterval(window._cuentasInterval); window._cuentasInterval = null; }
+    }
   }, [tab]);
 
   // ── Eliminar cuenta ──
@@ -7638,10 +7926,10 @@ function AdminPanel() {
       var exp = new Date(now.getTime()+days*86400000);
       var dateStr = exp.getFullYear().toString()+String(exp.getMonth()+1).padStart(2,"0")+String(exp.getDate()).padStart(2,"0");
       var prefix = tipo==="trial"?"TRIAL":tipo==="anual"?"ANUAL":"DEMO";
-      // Agregar 4 chars aleatorios AL FINAL de dateStr para unicidad
-      // El validador usa _hash(p[1]+_LS) y extrae fecha de primeros 8 chars
-      var rnd = Math.random().toString(36).slice(2,6).toUpperCase();
-      var dateStrUniq = dateStr + rnd; // ej: 20261231ABCD
+      // Componente único: timestamp en base36 + random para garantizar unicidad absoluta
+      var ts36 = Date.now().toString(36).toUpperCase().slice(-3);
+      var rnd  = Math.random().toString(36).slice(2,5).toUpperCase();
+      var dateStrUniq = dateStr + ts36 + rnd; // ej: 20261231A2BXY7
       var h = _hash(dateStrUniq+_LS);
       code = prefix+"-"+dateStrUniq+"-"+h;
     }
@@ -7686,7 +7974,13 @@ function AdminPanel() {
     var r = verificarCodigo(u.licenseCode);
     if (!r.valid) return { txt:"Vencida", color:"#EF4444" };
     if (r.type==="pro") return { txt:"PRO — Permanente", color:"#10B981" };
-    return { txt:"Activa — "+r.daysLeft+" días", color:"#3B82F6" };
+    // Si daysLeft es mayor a 1100 días (3 años), probablemente el reloj del sistema está mal
+    if (r.daysLeft > 1100) return { txt:"⚠️ Reloj incorrecto", color:"#F59E0B" };
+    // Si daysLeft es negativo (expirado)
+    if (r.daysLeft <= 0) return { txt:"Vencida", color:"#EF4444" };
+    // Colores por urgencia
+    var color = r.daysLeft <= 3 ? "#EF4444" : r.daysLeft <= 7 ? "#F59E0B" : "#3B82F6";
+    return { txt:"Activa — "+r.daysLeft+" días", color:color };
   };
 
   var fmtDate = function(iso) {
@@ -7701,8 +7995,18 @@ function AdminPanel() {
   var cardStyle = { background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", marginBottom:16 };
   var lblStyle  = { fontSize:12, fontWeight:600, color:"#606060", marginBottom:6, display:"block" };
 
+  // Detectar reloj del sistema incorrecto
+  var ahora = new Date();
+  var anioActual = ahora.getFullYear();
+  var relojMal = anioActual < 2025 || anioActual > 2035;
+
   return /*#__PURE__*/React.createElement("div", { style:{ minHeight:"100dvh", background:"#F0F2F5", fontFamily:"'DM Sans',system-ui,sans-serif", padding:20 } },
     /*#__PURE__*/React.createElement("div", { style:{ maxWidth:600, margin:"0 auto" } },
+    relojMal && /*#__PURE__*/React.createElement("div", {
+      style:{ background:"#FEF3C7", border:"2px solid #F59E0B", borderRadius:12, padding:"12px 16px",
+              marginBottom:16, fontSize:13, fontWeight:700, color:"#92400E" }
+    }, "⚠️ ADVERTENCIA: El reloj del sistema está incorrecto (" + ahora.toLocaleDateString("es-CO") + "). " +
+       "Los días de licencia no se mostrarán correctamente. Corrija la fecha del sistema."),
 
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:12, marginBottom:20 } },
         /*#__PURE__*/React.createElement("div", { style:{ width:40, height:40, background:"linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" } },
@@ -7881,12 +8185,40 @@ function AdminPanel() {
                         /*#__PURE__*/React.createElement("span", { style:{ color:"#fff", fontWeight:800, fontSize:16 } }, u.username[0].toUpperCase())
                       ),
                       /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:0 } },
-                        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:14, color:"#0D1B35" } }, u.username),
+                        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:8 } },
+                          /*#__PURE__*/React.createElement("span", { style:{ fontWeight:700, fontSize:14, color:"#0D1B35" } }, u.username),
+                          // Indicador online (activo en últimos 5 minutos)
+                          (function(){
+                            var msAgo = u.lastSeen ? Date.now() - new Date(u.lastSeen).getTime() : Infinity;
+                            // Verde: online=true Y activo en últimos 5 min, O activo en último 1 min
+                            var isOnline = (u.online === true && msAgo < 5*60*1000) || msAgo < 60*1000;
+                            var isRecent = msAgo < 30*60*1000;
+                            var color = isOnline ? "#10E08A" : isRecent ? "#F59E0B" : "#CBD5E1";
+                            var label = isOnline ? "En línea ahora" : isRecent ? "Activo hace "+(Math.floor(msAgo/60000))+"min" : "Desconectado";
+                            return /*#__PURE__*/React.createElement("span", {
+                              title: label,
+                              style:{ width:9, height:9, borderRadius:"50%", background: color,
+                                display:"inline-block", flexShrink:0,
+                                boxShadow: isOnline ? "0 0 0 3px rgba(16,224,138,0.25)" : "none"
+                              }
+                            });
+                          })(),
+                          // Software badge
+                          /*#__PURE__*/React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:"#fff", background: u.software==="FerneyMotos" ? "#8B5CF6" : "#4F8EFF", padding:"1px 7px", borderRadius:10 } },
+                            u.software || "ACCE PRO"
+                          )
+                        ),
                         /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 } },
                           /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, fontWeight:600, color:lic.color, background:lic.color+"18", padding:"2px 8px", borderRadius:20 } }, lic.txt),
                           u.createdAt && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Creada: "+fmtDate(u.createdAt)),
                           u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color: dias30 ? "#F59E0B" : "#10B981" } },
-                            (dias30?"⚠️ ":"✅ ")+"Última uso: "+fmtDate(u.lastSeen)
+                            (function(){
+                              var msAgo = Date.now() - new Date(u.lastSeen).getTime();
+                              if (msAgo < 5*60*1000)   return "🟢 En línea ahora";
+                              if (msAgo < 60*60*1000)  return "🟡 Activo hace "+(Math.floor(msAgo/60000))+"min";
+                              if (msAgo < 24*60*60*1000) return "✅ Hoy: "+fmtDate(u.lastSeen);
+                              return (dias30?"⚠️ ":"✅ ")+"Última vez: "+fmtDate(u.lastSeen);
+                            })()
                           ),
                           !u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Sin actividad registrada")
                         )
@@ -8344,6 +8676,7 @@ function Root() {
     } catch(e){}
   }
   var isCatalog = window.location.hash === "#catalog";
+  if (isCatalog) document.body.classList.add("catalog-mode");
 
   useEffect(function() {
     // Admin y catálogo no necesitan auth
@@ -8377,11 +8710,32 @@ function Root() {
     setChecking(false);
   };
 
+  var _updateLastSeen = function(username) {
+    try {
+      var db = window.__firebaseDB;
+      if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+        db = firebase.apps[0].firestore();
+      if (db && username) {
+        db.collection("trp_users").doc(username.toLowerCase().trim())
+          .set({ lastSeen: new Date().toISOString(), software: "ACCE PRO", online: true }, { merge: true })
+          .catch(function(){});
+      }
+    } catch(e) {}
+  };
+
+  var _heartbeatInterval = null;
+
   var onLogin = function(userData) {
-    // Guardar sesión y usuario en localStorage para que persista al recargar
     localStorage.setItem("trp_session_" + userData.username, "active");
     localStorage.setItem("trp_current_user", userData.username);
     try { localStorage.setItem("trp_user_" + userData.username, JSON.stringify(userData)); } catch(e) {}
+    // Actualizar lastSeen al iniciar sesión
+    _updateLastSeen(userData.username);
+    // Heartbeat cada 2 minutos para mantener estado online
+    if (_heartbeatInterval) clearInterval(_heartbeatInterval);
+    _heartbeatInterval = setInterval(function() {
+      _updateLastSeen(userData.username);
+    }, 2 * 60 * 1000);
     _checkLicenseAndEnter(userData);
   };
 
@@ -8397,7 +8751,19 @@ function Root() {
   var onLogout = function() {
     if (currentUser) {
       localStorage.removeItem("trp_session_" + currentUser.username);
+      // Marcar como offline al cerrar sesión
+      try {
+        var db = window.__firebaseDB;
+        if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+          db = firebase.apps[0].firestore();
+        if (db) {
+          db.collection("trp_users").doc(currentUser.username.toLowerCase().trim())
+            .set({ online: false, lastSeen: new Date().toISOString() }, { merge: true })
+            .catch(function(){});
+        }
+      } catch(e) {}
     }
+    if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
     setCurrentUser(null);
     setScreen("login");
   };
