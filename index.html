@@ -5018,35 +5018,7 @@ function printRepair(r) {
   var notesHtml = r.notes ? "<p style=\"margin-top:12px;font-size:11px;color:#666;border-top:1px dashed #ddd;padding-top:10px\"><strong>Notas:</strong> "+r.notes+"</p>" : "";
   var advHtml = r.advances && r.advances.length ? "<p style=\"margin-top:8px;font-size:11px;color:#666\"><strong>Abonos:</strong> "+r.advances.map(function(a){return fmt(a.amount)+" ("+a.date+")"}).join(", ")+"</p>" : "";
   var win = window.open("","_blank","width=400,height=600");
-  win.document.write("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+(r.id||"").slice(-6).toUpperCase()+"</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:20px;max-width:340px}h1{font-size:17px;font-weight:bold;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:16px;font-size:11px}table{width:100%;border-collapse:collapse}.footer{text-align:center;margin-top:18px;color:#666;font-size:11px}@media print{button{display:none}}</style></head><body><h1>"+storeName+"</h1><div class=\"sub\">Orden de Reparación #"+(r.id||"").slice(-6).toUpperCase()+"</div><table><tbody>"+rowsHtml+"</tbody></table>"+notesHtml+advHtml+"<div class=\"footer\">¡Gracias por su confianza!<br><button onclick=\"window.print();window.close()\" style=\"margin-top:14px;padding:8px 22px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit\">🖨 Imprimir</button></div>
-  <script>
-    // Registrar Service Worker para PWA / APK
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('sw.js')
-          .then(function(reg) { console.log('[SW] Registrado:', reg.scope); })
-          .catch(function(err) { console.warn('[SW] Error:', err); });
-      });
-    }
-    // Instalar como PWA
-    var _deferredPrompt = null;
-    window.addEventListener('beforeinstallprompt', function(e) {
-      e.preventDefault();
-      _deferredPrompt = e;
-      var btn = document.getElementById('pwa-install-btn');
-      if (btn) btn.style.display = 'flex';
-    });
-    function installPWA() {
-      if (!_deferredPrompt) return;
-      _deferredPrompt.prompt();
-      _deferredPrompt.userChoice.then(function(r) {
-        _deferredPrompt = null;
-        var btn = document.getElementById('pwa-install-btn');
-        if (btn) btn.style.display = 'none';
-      });
-    }
-  </script>
-</body></html>");
+  win.document.write("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+(r.id||"").slice(-6).toUpperCase()+"</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:20px;max-width:340px}h1{font-size:17px;font-weight:bold;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:16px;font-size:11px}table{width:100%;border-collapse:collapse}.footer{text-align:center;margin-top:18px;color:#666;font-size:11px}@media print{button{display:none}}</style></head><body><h1>"+storeName+"</h1><div class=\"sub\">Orden de Reparación #"+(r.id||"").slice(-6).toUpperCase()+"</div><table><tbody>"+rowsHtml+"</tbody></table>"+notesHtml+advHtml+"<div class=\"footer\">¡Gracias por su confianza!<br><button onclick=\"window.print();window.close()\" style=\"margin-top:14px;padding:8px 22px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit\">🖨 Imprimir</button></div>\n</body></html>");
   win.document.close();
 }
 
