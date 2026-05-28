@@ -5012,7 +5012,35 @@ function printRepair(r) {
   var notesHtml = r.notes ? "<p style=\"margin-top:12px;font-size:11px;color:#666;border-top:1px dashed #ddd;padding-top:10px\"><strong>Notas:</strong> "+r.notes+"</p>" : "";
   var advHtml = r.advances && r.advances.length ? "<p style=\"margin-top:8px;font-size:11px;color:#666\"><strong>Abonos:</strong> "+r.advances.map(function(a){return fmt(a.amount)+" ("+a.date+")"}).join(", ")+"</p>" : "";
   var win = window.open("","_blank","width=400,height=600");
-  win.document.write("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+(r.id||"").slice(-6).toUpperCase()+"</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:20px;max-width:340px}h1{font-size:17px;font-weight:bold;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:16px;font-size:11px}table{width:100%;border-collapse:collapse}.footer{text-align:center;margin-top:18px;color:#666;font-size:11px}@media print{button{display:none}}</style></head><body><h1>"+storeName+"</h1><div class=\"sub\">Orden de Reparación #"+(r.id||"").slice(-6).toUpperCase()+"</div><table><tbody>"+rowsHtml+"</tbody></table>"+notesHtml+advHtml+"<div class=\"footer\">¡Gracias por su confianza!<br><button onclick=\"window.print();window.close()\" style=\"margin-top:14px;padding:8px 22px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit\">🖨 Imprimir</button></div></body></html>");
+  win.document.write("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+(r.id||"").slice(-6).toUpperCase()+"</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:20px;max-width:340px}h1{font-size:17px;font-weight:bold;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:16px;font-size:11px}table{width:100%;border-collapse:collapse}.footer{text-align:center;margin-top:18px;color:#666;font-size:11px}@media print{button{display:none}}</style></head><body><h1>"+storeName+"</h1><div class=\"sub\">Orden de Reparación #"+(r.id||"").slice(-6).toUpperCase()+"</div><table><tbody>"+rowsHtml+"</tbody></table>"+notesHtml+advHtml+"<div class=\"footer\">¡Gracias por su confianza!<br><button onclick=\"window.print();window.close()\" style=\"margin-top:14px;padding:8px 22px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit\">🖨 Imprimir</button></div>
+  <script>
+    // Registrar Service Worker para PWA / APK
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js')
+          .then(function(reg) { console.log('[SW] Registrado:', reg.scope); })
+          .catch(function(err) { console.warn('[SW] Error:', err); });
+      });
+    }
+    // Instalar como PWA
+    var _deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      _deferredPrompt = e;
+      var btn = document.getElementById('pwa-install-btn');
+      if (btn) btn.style.display = 'flex';
+    });
+    function installPWA() {
+      if (!_deferredPrompt) return;
+      _deferredPrompt.prompt();
+      _deferredPrompt.userChoice.then(function(r) {
+        _deferredPrompt = null;
+        var btn = document.getElementById('pwa-install-btn');
+        if (btn) btn.style.display = 'none';
+      });
+    }
+  </script>
+</body></html>");
   win.document.close();
 }
 
@@ -7946,7 +7974,13 @@ function AdminPanel() {
     var r = verificarCodigo(u.licenseCode);
     if (!r.valid) return { txt:"Vencida", color:"#EF4444" };
     if (r.type==="pro") return { txt:"PRO — Permanente", color:"#10B981" };
-    return { txt:"Activa — "+r.daysLeft+" días", color:"#3B82F6" };
+    // Si daysLeft es mayor a 1100 días (3 años), probablemente el reloj del sistema está mal
+    if (r.daysLeft > 1100) return { txt:"⚠️ Reloj incorrecto", color:"#F59E0B" };
+    // Si daysLeft es negativo (expirado)
+    if (r.daysLeft <= 0) return { txt:"Vencida", color:"#EF4444" };
+    // Colores por urgencia
+    var color = r.daysLeft <= 3 ? "#EF4444" : r.daysLeft <= 7 ? "#F59E0B" : "#3B82F6";
+    return { txt:"Activa — "+r.daysLeft+" días", color:color };
   };
 
   var fmtDate = function(iso) {
@@ -7961,8 +7995,18 @@ function AdminPanel() {
   var cardStyle = { background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", marginBottom:16 };
   var lblStyle  = { fontSize:12, fontWeight:600, color:"#606060", marginBottom:6, display:"block" };
 
+  // Detectar reloj del sistema incorrecto
+  var ahora = new Date();
+  var anioActual = ahora.getFullYear();
+  var relojMal = anioActual < 2025 || anioActual > 2035;
+
   return /*#__PURE__*/React.createElement("div", { style:{ minHeight:"100dvh", background:"#F0F2F5", fontFamily:"'DM Sans',system-ui,sans-serif", padding:20 } },
     /*#__PURE__*/React.createElement("div", { style:{ maxWidth:600, margin:"0 auto" } },
+    relojMal && /*#__PURE__*/React.createElement("div", {
+      style:{ background:"#FEF3C7", border:"2px solid #F59E0B", borderRadius:12, padding:"12px 16px",
+              marginBottom:16, fontSize:13, fontWeight:700, color:"#92400E" }
+    }, "⚠️ ADVERTENCIA: El reloj del sistema está incorrecto (" + ahora.toLocaleDateString("es-CO") + "). " +
+       "Los días de licencia no se mostrarán correctamente. Corrija la fecha del sistema."),
 
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:12, marginBottom:20 } },
         /*#__PURE__*/React.createElement("div", { style:{ width:40, height:40, background:"linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" } },
