@@ -2535,19 +2535,51 @@ function RepairModal(_ref0) {
       style:{ background:T.surface, border:"1px solid ".concat(T.border), borderRadius:14, padding:14, marginBottom:4 }
     },
       /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, color:T.text, fontSize:14, marginBottom:10 } }, "🔧 Repuestos utilizados"),
-      // Selector de repuesto
-      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" } },
-        /*#__PURE__*/React.createElement("select", {
-          id:"part-select",
-          style:{ flex:1, minWidth:160, padding:"8px 10px", borderRadius:8, border:"1px solid ".concat(T.border),
-                  background:T.surface, color:T.text, fontSize:13, fontFamily:"inherit" },
-          defaultValue:""
-        },
-          /*#__PURE__*/React.createElement("option", { value:"" }, "-- Seleccionar repuesto --"),
-          (data.inventory || []).filter(function(i){ return i.qty > 0; }).map(function(item){
-            return /*#__PURE__*/React.createElement("option", { key:item.id, value:item.id },
-              item.name + " (" + item.qty + " en stock) — " + fmt(item.price)
-            );
+      // Buscador de repuesto con autocompletado
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap", alignItems:"flex-start" } },
+        /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:180, position:"relative" } },
+          /*#__PURE__*/React.createElement("input", {
+            id:"part-search",
+            type:"text",
+            placeholder:"🔍 Buscar repuesto...",
+            autoComplete:"off",
+            style:{ width:"100%", padding:"8px 12px", borderRadius:8, border:"1px solid ".concat(T.border),
+                    background:T.surface, color:T.text, fontSize:13, fontFamily:"inherit", boxSizing:"border-box" },
+            onInput:function(e){
+              var val = e.target.value.toLowerCase();
+              var dd = document.getElementById("part-dropdown");
+              if(!dd) return;
+              if(!val){ dd.style.display="none"; return; }
+              var inv = (data.inventory||[]).filter(function(i){
+                return i.qty>0 && (i.name.toLowerCase().includes(val) || (i.brand||"").toLowerCase().includes(val) || (i.category||"").toLowerCase().includes(val));
+              });
+              if(inv.length===0){ dd.innerHTML="<div style='padding:10px;color:#888;font-size:12px'>Sin resultados</div>"; dd.style.display="block"; return; }
+              dd.innerHTML = inv.slice(0,8).map(function(item){
+                return "<div data-id=\""+item.id+"\" data-nm=\""+encodeURIComponent(item.name)+"\" class=\"pdi\" style=\"padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid rgba(128,128,128,0.1)\">"+
+                  "<div style=\"font-weight:600\">"+item.name+"</div>"+
+                  "<div style=\"font-size:11px;color:#888\">"+item.category+" · Stock: "+item.qty+" · "+fmt(item.price)+"</div></div>";
+              }).join("");
+              dd.querySelectorAll(".pdi").forEach(function(el){
+                el.onmouseover=function(){ el.style.background="rgba(232,98,26,0.08)"; };
+                el.onmouseout=function(){ el.style.background=""; };
+                el.onclick=function(){
+                  var sr=document.getElementById("part-search");
+                  var si=document.getElementById("part-selected-id");
+                  if(sr) sr.value=decodeURIComponent(el.getAttribute("data-nm"));
+                  if(si) si.value=el.getAttribute("data-id");
+                  if(sr) sr.style.borderColor="#E8621A";
+                  dd.style.display="none";
+                };
+              })
+              dd.style.display="block";
+            }
+          }),
+          /*#__PURE__*/React.createElement("input", { type:"hidden", id:"part-selected-id" }),
+          /*#__PURE__*/React.createElement("div", {
+            id:"part-dropdown",
+            style:{ display:"none", position:"absolute", top:"100%", left:0, right:0, zIndex:999,
+                    background:T.surface, border:"1px solid ".concat(T.border), borderRadius:8,
+                    boxShadow:"0 8px 24px rgba(0,0,0,0.2)", maxHeight:220, overflowY:"auto", marginTop:4 }
           })
         ),
         /*#__PURE__*/React.createElement("input", {
@@ -2559,11 +2591,12 @@ function RepairModal(_ref0) {
         }),
         /*#__PURE__*/React.createElement("button", {
           onClick:function(){
-            var sel = document.getElementById("part-select");
+            var partId = document.getElementById("part-selected-id").value;
+            var partSearch = document.getElementById("part-search");
             var qty = Number(document.getElementById("part-qty").value)||1;
-            if(!sel.value) return;
-            var item = (data.inventory||[]).find(function(i){ return i.id===sel.value; });
-            if(!item) return;
+            if(!partId){ notify("Selecciona un repuesto de la lista"); return; }
+            var item = (data.inventory||[]).find(function(i){ return i.id===partId; });
+            if(!item){ notify("Repuesto no encontrado"); return; }
             if(qty > item.qty){ notify("Stock insuficiente: solo hay "+item.qty+" en inventario"); return; }
             // Agregar a la lista de repuestos de la reparación
             var existing = usedParts.find(function(p){ return p.id===item.id; });
@@ -2573,18 +2606,30 @@ function RepairModal(_ref0) {
             } else {
               newParts = usedParts.concat([{ id:item.id, name:item.name, qty:qty, price:item.price }]);
             }
-            // Descontar stock del inventario
+            // Descontar stock del inventario Y productos Y catálogo
             var newInv = (data.inventory||[]).map(function(i){
               return i.id===item.id ? _objectSpread(_objectSpread({},i),{qty:i.qty-qty}) : i;
             });
-            save(_objectSpread(_objectSpread({},data),{},{inventory:newInv}));
+            // Buscar y actualizar el producto correspondiente por nombre
+            var newProds = (data.products||[]).map(function(p){
+              var match = p.id===item.productId || p.id===item.id ||
+                p.name.toLowerCase().trim()===item.name.toLowerCase().trim();
+              if(match){
+                var newStock = Math.max(0, (Number(p.stock)||0) - qty);
+                return _objectSpread(_objectSpread({},p),{stock:newStock});
+              }
+              return p;
+            });
+            save(_objectSpread(_objectSpread({},data),{},{inventory:newInv, products:newProds}));
             set("parts", newParts);
             // Actualizar costo si no tiene
             if(!form.cost || form.cost===0){
               set("cost", newParts.reduce(function(a,p){ return a+p.price*p.qty; },0));
             }
-            sel.value="";
+            if(partSearch){ partSearch.value=""; partSearch.style.borderColor=""; }
+            document.getElementById("part-selected-id").value="";
             document.getElementById("part-qty").value=1;
+            var dd=document.getElementById("part-dropdown"); if(dd) dd.style.display="none";
             notify("✅ ".concat(item.name," agregado. Stock: ").concat(item.qty-qty," restantes"));
           },
           style:{ padding:"8px 14px", background:T.accent, color:"#fff", border:"none",
@@ -2605,11 +2650,20 @@ function RepairModal(_ref0) {
               /*#__PURE__*/React.createElement("span", { style:{ color:T.green, fontWeight:700 } }, fmt(p.price*p.qty)),
               /*#__PURE__*/React.createElement("button", {
                 onClick:function(){
-                  // Devolver stock al inventario
-                  var newInv = (data.inventory||[]).map(function(i){
+                  // Devolver stock al inventario Y productos
+                  var invItem = (data.inventory||[]).find(function(i){ return i.id===p.id; });
+                  var newInv2 = (data.inventory||[]).map(function(i){
                     return i.id===p.id ? _objectSpread(_objectSpread({},i),{qty:i.qty+p.qty}) : i;
                   });
-                  save(_objectSpread(_objectSpread({},data),{},{inventory:newInv}));
+                  var newProds2 = (data.products||[]).map(function(prod){
+                    var match = prod.id===p.id ||
+                      prod.name.toLowerCase().trim()===(p.name||"").toLowerCase().trim();
+                    if(match){
+                      return _objectSpread(_objectSpread({},prod),{stock:(Number(prod.stock)||0)+p.qty});
+                    }
+                    return prod;
+                  });
+                  save(_objectSpread(_objectSpread({},data),{},{inventory:newInv2, products:newProds2}));
                   set("parts", usedParts.filter(function(_,j){ return j!==i; }));
                 },
                 style:{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:16, padding:0 }
