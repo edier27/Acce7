@@ -2813,8 +2813,16 @@ function InventoryView(_ref11) {
         qty: Math.max(0, i.qty + d)
       }) : i;
     });
+    // Sync stock to products too
+    var changedItem = inventory.find(function(i){ return i.id === id; });
+    var products = (data.products || []).map(function(p) {
+      var match = p.id === id || p.id === changedItem.productId ||
+        p.name.toLowerCase().trim() === (changedItem.name||"").toLowerCase().trim();
+      return match ? _objectSpread(_objectSpread({}, p), {}, { stock: changedItem ? changedItem.qty : p.stock }) : p;
+    });
     save(_objectSpread(_objectSpread({}, data), {}, {
-      inventory: inventory
+      inventory: inventory,
+      products: products
     }));
   };
   var totalValue = (data.inventory || []).reduce(function (a, i) {
