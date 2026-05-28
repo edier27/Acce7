@@ -5112,7 +5112,29 @@ function PublicView(_ref17) {
         marginBottom: 8,
         lineHeight: 1.3
       }
-    }, p.name), /*#__PURE__*/React.createElement("div", {
+    }, p.name),
+    /*#__PURE__*/React.createElement("div", {
+      style: { marginBottom: 8 }
+    },
+      (p.stock||0) === 0
+        ? /*#__PURE__*/React.createElement("span", {
+            style: { fontSize:11, fontWeight:700, color:"#ef4444",
+                     background:"rgba(239,68,68,0.1)", padding:"3px 8px",
+                     borderRadius:20 }
+          }, "⛔ Agotado")
+        : (p.stock||0) <= 3
+          ? /*#__PURE__*/React.createElement("span", {
+              style: { fontSize:11, fontWeight:700, color:"#f59e0b",
+                       background:"rgba(245,158,11,0.1)", padding:"3px 8px",
+                       borderRadius:20 }
+            }, "⚠️ Últimas "+p.stock+" unidades")
+          : /*#__PURE__*/React.createElement("span", {
+              style: { fontSize:11, fontWeight:700, color:"#10b981",
+                       background:"rgba(16,185,129,0.1)", padding:"3px 8px",
+                       borderRadius:20 }
+            }, "✅ Disponible · "+p.stock+" en stock")
+    ),
+    /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         alignItems: "center",
