@@ -5196,25 +5196,21 @@ var PAYMENT_METHODS = ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarje
 
 // ── REPAIR TICKET PRINT HELPER ─────────────────────────
 // ── HELPER UNIVERSAL DE IMPRESIÓN (web + escritorio .exe) ──
-function _getPrinterType() {
+function _getCurrentSettings() {
+  // Los settings se guardan en trp_settings_v1
   try {
-    var raw = localStorage.getItem("trp_data");
-    if (raw) {
-      var d = JSON.parse(raw);
-      if (d.settings && d.settings.printerType) return d.settings.printerType;
-    }
+    var s = localStorage.getItem("trp_settings_v1");
+    if (s) return JSON.parse(s);
   } catch(e){}
-  return "normal";
+  return {};
+}
+function _getPrinterType() {
+  var s = _getCurrentSettings();
+  return (s && s.printerType) ? s.printerType : "normal";
 }
 function _getThermalWidth() {
-  try {
-    var raw = localStorage.getItem("trp_data");
-    if (raw) {
-      var d = JSON.parse(raw);
-      if (d.settings && d.settings.thermalWidth) return d.settings.thermalWidth;
-    }
-  } catch(e){}
-  return "58";
+  var s = _getCurrentSettings();
+  return (s && s.thermalWidth) ? s.thermalWidth : "58";
 }
 
 function _printHTML(htmlContent, forceType) {
