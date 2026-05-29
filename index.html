@@ -5224,8 +5224,17 @@ function _printHTML(htmlContent, forceType) {
   if (ptype === "termica") {
     var tw = _getThermalWidth();
     var mm = tw === "80" ? "80mm" : "58mm";
-    var pad = tw === "80" ? "6px 8px" : "4px 5px";
-    pageCSS = "<style>@media print{@page{size:"+mm+" auto;margin:0}body{width:"+mm+"!important;max-width:"+mm+"!important;padding:"+pad+"!important}.no-print{display:none!important}}body{width:"+mm+";max-width:"+mm+";margin:0 auto}</style>";
+    // Ancho útil real: 58mm de papel = ~48mm imprimible, 80mm = ~72mm
+    var useW = tw === "80" ? "72mm" : "48mm";
+    pageCSS = "<style>"+
+      "@page{size:"+mm+" auto;margin:0}"+
+      "@media print{"+
+        "html,body{width:"+useW+"!important;max-width:"+useW+"!important;margin:0!important;padding:0!important}"+
+        ".no-print{display:none!important}"+
+        "*{-webkit-print-color-adjust:exact;print-color-adjust:exact}"+
+      "}"+
+      "html,body{width:"+useW+";max-width:"+useW+";margin:0 auto}"+
+      "</style>";
   } else {
     pageCSS = "<style>@media print{@page{size:auto;margin:14mm}.no-print{display:none!important}}</style>";
   }
@@ -5338,25 +5347,25 @@ function printRepair(r) {
     _printHTML(
       "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+orderId+"</title>"+
       "<style>*{margin:0;padding:0;box-sizing:border-box}"+
-      "body{font-family:'Courier New',monospace;font-size:"+baseFont+";line-height:1.3;color:#000;padding:6px}"+
+      "body{font-family:'Courier New',monospace;font-size:"+baseFont+";line-height:1.35;color:#000;padding:2px;width:100%}"+
       ".c{text-align:center}"+
-      ".store{font-size:"+storeFont+";font-weight:bold;letter-spacing:1px}"+
+      ".store{font-size:"+storeFont+";font-weight:bold;letter-spacing:0.5px}"+
       ".small{font-size:9px;color:#000}"+
-      ".dash{font-size:"+baseFont+";letter-spacing:-1px;margin:6px 0;overflow:hidden;white-space:nowrap}"+
+      ".dash{border-top:1px dashed #000;margin:6px 0;height:1px}"+
       ".big{font-size:"+bigFont+";font-weight:bold}"+
-      ".tag{display:inline-block;border:1px solid #000;padding:2px 8px;font-weight:bold;font-size:10px;margin:2px}"+
+      ".tag{display:inline-block;border:1px solid #000;padding:1px 6px;font-weight:bold;font-size:9px;margin:1px}"+
       "@media print{.no-print{display:none}}</style></head><body>"+
       "<div class=\"c store\">"+storeName+"</div>"+
       "<div class=\"c small\">GESTION DE TALLER</div>"+
-      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"dash\"></div>"+
       "<div class=\"c\"><span class=\"big\">ORDEN #"+orderId+"</span><br><span class=\"small\">"+(r.date||"")+"</span></div>"+
-      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"dash\"></div>"+
       fields+
-      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"dash\"></div>"+
       "<div class=\"c\"><div class=\"small\">COSTO TOTAL</div><div class=\"big\">"+fmt(r.cost)+"</div></div>"+
       "<div class=\"c\" style=\"margin-top:4px\"><span class=\"tag\">"+(r.status||"").toUpperCase()+"</span><span class=\"tag\">"+(r.paid?"PAGADO":"PENDIENTE")+"</span></div>"+
       notesHtml + advHtml + garantiaT +
-      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"dash\"></div>"+
       "<div class=\"c small\">Gracias por confiar<br>en nosotros</div>"+
       "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>"+
       "</body></html>"
@@ -5441,23 +5450,23 @@ function printReceipt(sale) {
     _printHTML(
       "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Recibo #"+recId+"</title>"+
       "<style>*{margin:0;padding:0;box-sizing:border-box}"+
-      "body{font-family:'Courier New',monospace;font-size:"+baseFont+";line-height:1.3;color:#000;padding:6px}"+
+      "body{font-family:'Courier New',monospace;font-size:"+baseFont+";line-height:1.35;color:#000;padding:2px;width:100%}"+
       ".c{text-align:center}"+
-      ".store{font-size:"+storeFont+";font-weight:bold;letter-spacing:1px}"+
+      ".store{font-size:"+storeFont+";font-weight:bold;letter-spacing:0.5px}"+
       ".small{font-size:9px}"+
-      ".dash{font-size:"+baseFont+";letter-spacing:-1px;margin:6px 0;overflow:hidden;white-space:nowrap}"+
+      ".dash{border-top:1px dashed #000;margin:6px 0;height:1px}"+
       ".big{font-size:"+bigFont+";font-weight:bold}"+
       ".total-row{display:flex;justify-content:space-between;font-weight:bold;font-size:"+bigFont+";border-top:1px solid #000;padding-top:5px;margin-top:5px}"+
       "@media print{.no-print{display:none}}</style></head><body>"+
       "<div class=\"c store\">"+storeName+"</div>"+
       "<div class=\"c small\">RECIBO DE VENTA</div>"+
-      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"dash\"></div>"+
       "<div class=\"c\"><span class=\"big\">#"+recId+"</span><br><span class=\"small\">"+sale.date+" | "+sale.payment+"</span></div>"+
-      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"dash\"></div>"+
       items+
       "<div class=\"total-row\"><span>TOTAL</span><span>"+fmtCOP(sale.total)+"</span></div>"+
       (sale.customer?"<div style=\"margin-top:6px;font-size:10px\"><b>Cliente:</b> "+sale.customer+"</div>":"")+
-      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"dash\"></div>"+
       "<div class=\"c small\">Gracias por su compra</div>"+
       "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>"+
       "</body></html>"
