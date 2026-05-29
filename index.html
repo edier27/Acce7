@@ -7471,7 +7471,18 @@ function App(_appProps) {
 
   var openCatalog = function openCatalog() {
     var base = window.location.href.split("#")[0].split("?")[0];
-    window.open(base + "?client=" + encodeURIComponent(clientId) + "#catalog", "_blank");
+    // En la app de escritorio (.exe) o APK la ruta es local (file://),
+    // entonces usamos siempre la URL web pública del catálogo
+    if (base.indexOf("file://") === 0 || base.indexOf("app://") === 0 || base.indexOf("android") >= 0 || base.indexOf("localhost") >= 0) {
+      base = "https://edier27.github.io/Acce7/";
+    }
+    var url = base + "?client=" + encodeURIComponent(clientId) + "#catalog";
+    // Si está en Electron usar el shell del sistema, si no window.open normal
+    if (window.electronAPI && window.electronAPI.isDesktop) {
+      window.open(url, "_blank");
+    } else {
+      window.open(url, "_blank");
+    }
   };
   var notify = function notify(msg) {
     var type = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "success";
