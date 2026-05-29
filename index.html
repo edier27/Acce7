@@ -5317,9 +5317,9 @@ function printRepair(r) {
     // Cada campo en su propia línea: etiqueta arriba en negrita pequeña, valor abajo
     var field = function(label, value){
       if(!value) return "";
-      return "<div style=\"margin-bottom:6px\">"+
-        "<div style=\"font-weight:bold;font-size:10px;color:#000\">"+label+"</div>"+
-        "<div style=\"font-size:"+baseFont+";word-wrap:break-word\">"+value+"</div>"+
+      return "<div style=\"margin-bottom:7px\">"+
+        "<div style=\"font-weight:900;font-size:11px;color:#000\">"+label+"</div>"+
+        "<div style=\"font-size:"+baseFont+";font-weight:bold;word-wrap:break-word\">"+value+"</div>"+
       "</div>";
     };
 
@@ -5343,13 +5343,14 @@ function printRepair(r) {
     _printHTML(
       "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+orderId+"</title>"+
       "<style>*{margin:0;padding:0;box-sizing:border-box}"+
-      "body{font-family:'Courier New',monospace;font-size:"+baseFont+";line-height:1.35;color:#000;padding:2px;width:100%}"+
+      "body{font-family:'Arial',sans-serif;font-size:"+baseFont+";line-height:1.4;color:#000;padding:2px;width:100%;font-weight:bold;-webkit-font-smoothing:none}"+
+      "*{font-weight:bold!important}"+
       ".c{text-align:center}"+
-      ".store{font-size:"+storeFont+";font-weight:bold;letter-spacing:0.5px}"+
-      ".small{font-size:9px;color:#000}"+
-      ".dash{border-top:1px dashed #000;margin:6px 0;height:1px}"+
-      ".big{font-size:"+bigFont+";font-weight:bold}"+
-      ".tag{display:inline-block;border:1px solid #000;padding:1px 6px;font-weight:bold;font-size:9px;margin:1px}"+
+      ".store{font-size:"+storeFont+";font-weight:900;letter-spacing:0.5px}"+
+      ".small{font-size:10px;color:#000;font-weight:bold}"+
+      ".dash{border-top:2px solid #000;margin:6px 0;height:1px}"+
+      ".big{font-size:"+bigFont+";font-weight:900}"+
+      ".tag{display:inline-block;border:2px solid #000;padding:1px 6px;font-weight:900;font-size:10px;margin:1px}"+
       "@media print{.no-print{display:none}}</style></head><body>"+
       "<div class=\"c store\">"+storeName+"</div>"+
       "<div class=\"c small\">GESTION DE TALLER</div>"+
@@ -5446,12 +5447,13 @@ function printReceipt(sale) {
     _printHTML(
       "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Recibo #"+recId+"</title>"+
       "<style>*{margin:0;padding:0;box-sizing:border-box}"+
-      "body{font-family:'Courier New',monospace;font-size:"+baseFont+";line-height:1.35;color:#000;padding:2px;width:100%}"+
+      "body{font-family:'Arial',sans-serif;font-size:"+baseFont+";line-height:1.4;color:#000;padding:2px;width:100%;font-weight:bold;-webkit-font-smoothing:none}"+
+      "*{font-weight:bold!important}"+
       ".c{text-align:center}"+
-      ".store{font-size:"+storeFont+";font-weight:bold;letter-spacing:0.5px}"+
-      ".small{font-size:9px}"+
-      ".dash{border-top:1px dashed #000;margin:6px 0;height:1px}"+
-      ".big{font-size:"+bigFont+";font-weight:bold}"+
+      ".store{font-size:"+storeFont+";font-weight:900;letter-spacing:0.5px}"+
+      ".small{font-size:10px;font-weight:bold}"+
+      ".dash{border-top:2px solid #000;margin:6px 0;height:1px}"+
+      ".big{font-size:"+bigFont+";font-weight:900}"+
       ".total-row{display:flex;justify-content:space-between;font-weight:bold;font-size:"+bigFont+";border-top:1px solid #000;padding-top:5px;margin-top:5px}"+
       "@media print{.no-print{display:none}}</style></head><body>"+
       "<div class=\"c store\">"+storeName+"</div>"+
