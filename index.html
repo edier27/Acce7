@@ -5220,16 +5220,16 @@ function _printHTML(htmlContent, forceType) {
   if (ptype === "termica") {
     var tw = _getThermalWidth();
     var mm = tw === "80" ? "80mm" : "58mm";
-    // Ancho útil real: 58mm de papel = ~48mm imprimible, 80mm = ~72mm
-    var useW = tw === "80" ? "72mm" : "48mm";
+    var useW = tw === "80" ? "76mm" : "55mm";
     pageCSS = "<style>"+
       "@page{size:"+mm+" auto;margin:0}"+
       "@media print{"+
         "html,body{width:"+useW+"!important;max-width:"+useW+"!important;margin:0!important;padding:0!important}"+
         ".no-print{display:none!important}"+
-        "*{-webkit-print-color-adjust:exact;print-color-adjust:exact}"+
+        "*{-webkit-print-color-adjust:exact;print-color-adjust:exact;word-wrap:break-word!important;overflow-wrap:break-word!important;white-space:normal!important}"+
       "}"+
       "html,body{width:"+useW+";max-width:"+useW+";margin:0 auto}"+
+      "*{word-wrap:break-word;overflow-wrap:break-word}"+
       "</style>";
   } else {
     pageCSS = "<style>@media print{@page{size:auto;margin:14mm}.no-print{display:none!important}}</style>";
