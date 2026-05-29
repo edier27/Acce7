@@ -181,7 +181,8 @@
         box-shadow: var(--shadow-md) !important;
       }
     }
-  </style>
+  @keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
+</style>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -831,7 +832,8 @@ var DEFAULT_SETTINGS = {
   whatsapp: "",
   theme: "dark",
   accentColor: "#10E08A",
-  printerType: "normal"
+  printerType: "normal",
+  thermalWidth: "58"
 };
 var ACCENT_PRESETS = ["#10E08A", "#0078FF", "#FF6B35", "#8B5CF6", "#EF4444", "#F59E0B", "#06B6D4", "#EC4899", "#10B981", "#6366F1"];
 var STATUSES = ["Recibido", "Diagnóstico", "En Reparación", "Listo", "Entregado", "Cancelado"];
@@ -5204,23 +5206,67 @@ function _getPrinterType() {
   } catch(e){}
   return "normal";
 }
+function _getThermalWidth() {
+  try {
+    var raw = localStorage.getItem("trp_data");
+    if (raw) {
+      var d = JSON.parse(raw);
+      if (d.settings && d.settings.thermalWidth) return d.settings.thermalWidth;
+    }
+  } catch(e){}
+  return "58";
+}
 
 function _printHTML(htmlContent, forceType) {
   // Tipo de impresora: "termica" (58/80mm) o "normal" (carta)
   var ptype = forceType || _getPrinterType();
-  // Inyectar CSS de página según el tipo de impresora
   var pageCSS = "";
   if (ptype === "termica") {
-    pageCSS = "<style>@media print{@page{size:80mm auto;margin:0}body{width:80mm!important;max-width:80mm!important;padding:6px 8px!important;font-size:12px!important}h1{font-size:15px!important}button{display:none!important}}body{width:80mm;max-width:80mm}</style>";
+    var tw = _getThermalWidth();
+    var mm = tw === "80" ? "80mm" : "58mm";
+    var pad = tw === "80" ? "6px 8px" : "4px 5px";
+    pageCSS = "<style>@media print{@page{size:"+mm+" auto;margin:0}body{width:"+mm+"!important;max-width:"+mm+"!important;padding:"+pad+"!important}.no-print{display:none!important}}body{width:"+mm+";max-width:"+mm+";margin:0 auto}</style>";
   } else {
-    pageCSS = "<style>@media print{@page{size:auto;margin:14mm}button{display:none!important}}</style>";
+    pageCSS = "<style>@media print{@page{size:auto;margin:14mm}.no-print{display:none!important}}</style>";
   }
-  // Insertar el CSS antes de </head>
   if (htmlContent.indexOf("</head>") >= 0) {
     htmlContent = htmlContent.replace("</head>", pageCSS + "</head>");
   } else {
     htmlContent = pageCSS + htmlContent;
   }
+
+  // Detectar si estamos en la app de escritorio (Electron)
+  var isElectron = !!(window.electronAPI && window.electronAPI.isDesktop);
+
+  if (isElectron) {
+    // ── EN ESCRITORIO (.exe): abrir ventana visible con vista previa ──
+    // window.open con una ventana real funciona mejor que iframe en Electron
+    var w = window.open("", "_blank", "width=420,height=640");
+    if (w) {
+      w.document.open();
+      w.document.write(htmlContent);
+      w.document.close();
+      // No imprimir automáticamente — dejar que el usuario vea y dé al botón
+      w.focus();
+    } else {
+      // Si el popup fue bloqueado, usar iframe como respaldo
+      _printViaIframe(htmlContent);
+    }
+  } else {
+    // ── EN WEB / APK: usar ventana nueva con vista previa ──
+    var w2 = window.open("", "_blank", "width=420,height=640");
+    if (w2) {
+      w2.document.open();
+      w2.document.write(htmlContent);
+      w2.document.close();
+      w2.focus();
+    } else {
+      _printViaIframe(htmlContent);
+    }
+  }
+}
+
+function _printViaIframe(htmlContent) {
   var existing = document.getElementById("_print_frame");
   if (existing) existing.remove();
   var iframe = document.createElement("iframe");
@@ -5245,6 +5291,7 @@ function _printHTML(htmlContent, forceType) {
   }, 400);
 }
 
+
 function printRepair(r) {
   var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ACCE PRO";
   var fmt = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
@@ -5253,12 +5300,67 @@ function printRepair(r) {
   var notesHtml, advHtml;
 
   if (ptype === "termica") {
-    // ── FORMATO TÉRMICO (rollo 80mm) ──
-    var rows = [["Cliente", r.customer||""], ["Teléfono", r.phone||""], ["Equipo", r.device||""], ["Categoría", r.category||""], ["Problema", r.problem||""], ["Técnico", r.technician||""], ["Costo", fmt(r.cost)], ["Pago", r.paid ? "Pagado" : "Pendiente"], ["Estado", r.status||""], ["Fecha", r.date||""]];
-    var rowsHtml = rows.map(function(x){ return "<tr><td style=\"padding:4px 2px;border-bottom:1px dashed #999;font-weight:700;width:38%;font-size:11px;vertical-align:top\">"+x[0]+"</td><td style=\"padding:4px 2px;border-bottom:1px dashed #999;font-size:11px\">"+x[1]+"</td></tr>"; }).join("");
-    notesHtml = r.notes ? "<p style=\"margin-top:8px;font-size:10px;border-top:1px dashed #999;padding-top:6px\"><strong>Notas:</strong> "+r.notes+"</p>" : "";
-    advHtml = r.advances && r.advances.length ? "<p style=\"margin-top:6px;font-size:10px\"><strong>Abonos:</strong> "+r.advances.map(function(a){return fmt(a.amount)+" ("+a.date+")"}).join(", ")+"</p>" : "";
-    _printHTML("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+orderId+"</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:12px;padding:8px}h1{font-size:15px;font-weight:bold;text-align:center;margin-bottom:2px}.sub{text-align:center;color:#444;margin-bottom:12px;font-size:10px}table{width:100%;border-collapse:collapse}.footer{text-align:center;margin-top:14px;font-size:10px}@media print{button{display:none}}</style></head><body><h1>"+storeName+"</h1><div class=\"sub\">ORDEN DE REPARACION<br>#"+orderId+"</div><table><tbody>"+rowsHtml+"</tbody></table>"+notesHtml+advHtml+(r.paid && r.status==="Entregado" ? "<div style=\"margin-top:10px;padding:6px;border:1px dashed #000;text-align:center;font-size:10px;font-weight:bold\">GARANTIA: 15 DIAS<br>Valida presentando este recibo</div>" : "")+"<div class=\"footer\">--------------------------------<br>Gracias por su confianza<br>--------------------------------<br><button onclick=\"window.print();window.close()\" style=\"margin-top:10px;padding:6px 16px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit\">Imprimir</button></div></body></html>");
+    // ── FORMATO TÉRMICO (rollo 58/80mm) — diseño limpio ──
+    var tw = _getThermalWidth();
+    var baseFont = tw === "80" ? "12px" : "11px";
+    var bigFont = tw === "80" ? "15px" : "13px";
+    var storeFont = tw === "80" ? "17px" : "15px";
+    var dashCount = tw === "80" ? 32 : 24;
+    var dash = "";
+    for (var di=0; di<dashCount; di++){ dash += "-"; }
+
+    // Cada campo en su propia línea: etiqueta arriba en negrita pequeña, valor abajo
+    var field = function(label, value){
+      if(!value) return "";
+      return "<div style=\"margin-bottom:6px\">"+
+        "<div style=\"font-weight:bold;font-size:10px;color:#000\">"+label+"</div>"+
+        "<div style=\"font-size:"+baseFont+";word-wrap:break-word\">"+value+"</div>"+
+      "</div>";
+    };
+
+    var fields = field("CLIENTE", r.customer) +
+                 field("TELEFONO", r.phone) +
+                 field("EQUIPO", r.device) +
+                 field("CATEGORIA", r.category) +
+                 field("PROBLEMA", r.problem) +
+                 field("TECNICO", r.technician);
+
+    var garantiaT = (r.paid && r.status==="Entregado")
+      ? "<div style=\"margin-top:8px;border:1px solid #000;padding:6px;text-align:center\">"+
+        "<div style=\"font-weight:bold;font-size:"+baseFont+"\">GARANTIA 15 DIAS</div>"+
+        "<div style=\"font-size:9px;margin-top:3px;line-height:1.3\">Valida presentando este recibo. No cubre golpes, humedad ni mal manejo.</div>"+
+        "</div>"
+      : "";
+
+    notesHtml = r.notes ? "<div style=\"margin-top:6px;font-size:10px\"><b>NOTAS:</b><br>"+r.notes+"</div>" : "";
+    advHtml = (r.advances && r.advances.length) ? "<div style=\"margin-top:6px;font-size:10px\"><b>ABONOS:</b><br>"+r.advances.map(function(a){return fmt(a.amount)+" - "+a.date}).join("<br>")+"</div>" : "";
+
+    _printHTML(
+      "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+orderId+"</title>"+
+      "<style>*{margin:0;padding:0;box-sizing:border-box}"+
+      "body{font-family:'Courier New',monospace;font-size:"+baseFont+";line-height:1.3;color:#000;padding:6px}"+
+      ".c{text-align:center}"+
+      ".store{font-size:"+storeFont+";font-weight:bold;letter-spacing:1px}"+
+      ".small{font-size:9px;color:#000}"+
+      ".dash{font-size:"+baseFont+";letter-spacing:-1px;margin:6px 0;overflow:hidden;white-space:nowrap}"+
+      ".big{font-size:"+bigFont+";font-weight:bold}"+
+      ".tag{display:inline-block;border:1px solid #000;padding:2px 8px;font-weight:bold;font-size:10px;margin:2px}"+
+      "@media print{.no-print{display:none}}</style></head><body>"+
+      "<div class=\"c store\">"+storeName+"</div>"+
+      "<div class=\"c small\">GESTION DE TALLER</div>"+
+      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"c\"><span class=\"big\">ORDEN #"+orderId+"</span><br><span class=\"small\">"+(r.date||"")+"</span></div>"+
+      "<div class=\"c dash\">"+dash+"</div>"+
+      fields+
+      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"c\"><div class=\"small\">COSTO TOTAL</div><div class=\"big\">"+fmt(r.cost)+"</div></div>"+
+      "<div class=\"c\" style=\"margin-top:4px\"><span class=\"tag\">"+(r.status||"").toUpperCase()+"</span><span class=\"tag\">"+(r.paid?"PAGADO":"PENDIENTE")+"</span></div>"+
+      notesHtml + advHtml + garantiaT +
+      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"c small\">Gracias por confiar<br>en nosotros</div>"+
+      "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>"+
+      "</body></html>"
+    );
 
   } else {
     // ── FORMATO CARTA (documento profesional) ──
@@ -5320,13 +5422,46 @@ function printReceipt(sale) {
   var recId = sale.id.slice(-6).toUpperCase();
 
   if (ptype === "termica") {
-    // ── RECIBO TÉRMICO (rollo 80mm) ──
+    // ── RECIBO TÉRMICO DE VENTA (rollo 58/80mm) — diseño limpio ──
+    var tw = _getThermalWidth();
+    var baseFont = tw === "80" ? "12px" : "11px";
+    var bigFont = tw === "80" ? "15px" : "13px";
+    var storeFont = tw === "80" ? "17px" : "15px";
+    var dashCount = tw === "80" ? 32 : 24;
+    var dash = "";
+    for (var di=0; di<dashCount; di++){ dash += "-"; }
+
     var items = sale.items.map(function(i){
-      return "<tr><td style=\"padding:3px 2px;border-bottom:1px dashed #999;font-size:11px\">"+i.name+"</td>"+
-        "<td style=\"padding:3px 2px;border-bottom:1px dashed #999;text-align:center;font-size:11px\">"+i.qty+"</td>"+
-        "<td style=\"padding:3px 2px;border-bottom:1px dashed #999;text-align:right;font-size:11px\">"+fmtCOP(i.total)+"</td></tr>";
+      return "<div style=\"margin-bottom:5px;font-size:"+baseFont+"\">"+
+        "<div style=\"font-weight:bold\">"+i.name+"</div>"+
+        "<div style=\"display:flex;justify-content:space-between\"><span>"+i.qty+" x "+fmtCOP(i.unitPrice)+"</span><span style=\"font-weight:bold\">"+fmtCOP(i.total)+"</span></div>"+
+      "</div>";
     }).join("");
-    _printHTML("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Recibo</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:12px;padding:8px}h1{font-size:15px;font-weight:bold;text-align:center;margin-bottom:2px}.sub{text-align:center;color:#444;margin-bottom:12px;font-size:10px}table{width:100%;border-collapse:collapse}th{padding:3px 2px;border-bottom:1px solid #000;text-align:left;font-size:10px}th:last-child{text-align:right}th:nth-child(2){text-align:center}.total-row td{font-weight:bold;font-size:14px;border-top:1px solid #000;padding-top:6px}.footer{text-align:center;margin-top:12px;font-size:10px}@media print{button{display:none}}</style></head><body><h1>"+storeName+"</h1><div class=\"sub\">RECIBO #"+recId+"<br>"+sale.date+" | "+sale.payment+"</div><table><thead><tr><th>Producto</th><th>Cant</th><th>Total</th></tr></thead><tbody>"+items+"<tr class=\"total-row\"><td colspan=\"2\" style=\"text-align:right;padding-right:6px\">TOTAL</td><td style=\"text-align:right\">"+fmtCOP(sale.total)+"</td></tr></tbody></table>"+(sale.customer?"<p style=\"margin-top:8px;font-size:11px\">Cliente: "+sale.customer+"</p>":"")+"<div class=\"footer\">--------------------------------<br>Gracias por su compra<br>--------------------------------<br><button onclick=\"window.print();window.close()\" style=\"margin-top:10px;padding:6px 16px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit\">Imprimir</button></div></body></html>");
+
+    _printHTML(
+      "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Recibo #"+recId+"</title>"+
+      "<style>*{margin:0;padding:0;box-sizing:border-box}"+
+      "body{font-family:'Courier New',monospace;font-size:"+baseFont+";line-height:1.3;color:#000;padding:6px}"+
+      ".c{text-align:center}"+
+      ".store{font-size:"+storeFont+";font-weight:bold;letter-spacing:1px}"+
+      ".small{font-size:9px}"+
+      ".dash{font-size:"+baseFont+";letter-spacing:-1px;margin:6px 0;overflow:hidden;white-space:nowrap}"+
+      ".big{font-size:"+bigFont+";font-weight:bold}"+
+      ".total-row{display:flex;justify-content:space-between;font-weight:bold;font-size:"+bigFont+";border-top:1px solid #000;padding-top:5px;margin-top:5px}"+
+      "@media print{.no-print{display:none}}</style></head><body>"+
+      "<div class=\"c store\">"+storeName+"</div>"+
+      "<div class=\"c small\">RECIBO DE VENTA</div>"+
+      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"c\"><span class=\"big\">#"+recId+"</span><br><span class=\"small\">"+sale.date+" | "+sale.payment+"</span></div>"+
+      "<div class=\"c dash\">"+dash+"</div>"+
+      items+
+      "<div class=\"total-row\"><span>TOTAL</span><span>"+fmtCOP(sale.total)+"</span></div>"+
+      (sale.customer?"<div style=\"margin-top:6px;font-size:10px\"><b>Cliente:</b> "+sale.customer+"</div>":"")+
+      "<div class=\"c dash\">"+dash+"</div>"+
+      "<div class=\"c small\">Gracias por su compra</div>"+
+      "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>"+
+      "</body></html>"
+    );
 
   } else {
     // ── FACTURA CARTA (documento profesional) ──
@@ -6558,7 +6693,36 @@ function SettingsView(_ref20) {
     ),
     /*#__PURE__*/React.createElement("div", {
       style:{ marginTop:10, fontSize:12, color:T.muted, display:"flex", alignItems:"center", gap:6 }
-    }, "💡 El formato de impresión se ajusta automáticamente al tipo seleccionado.")
+    }, "💡 El formato de impresión se ajusta automáticamente al tipo seleccionado."),
+    form.printerType === "termica" && /*#__PURE__*/React.createElement("div", {
+      style:{ marginTop:16, paddingTop:16, borderTop:"1px solid "+T.border }
+    },
+      /*#__PURE__*/React.createElement("label", { style: labelStyle }, "📏 Ancho del rollo térmico"),
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:10, marginTop:8 } },
+        /*#__PURE__*/React.createElement("div", {
+          onClick: function(){ set("thermalWidth", "58"); },
+          style: {
+            flex:1, cursor:"pointer", padding:"12px 16px", borderRadius:10, textAlign:"center",
+            background: (form.thermalWidth||"58")==="58" ? T.accent+"15" : T.surface,
+            border: (form.thermalWidth||"58")==="58" ? "2px solid "+T.accent : "2px solid "+T.border
+          }
+        },
+          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:T.text } }, "58 mm"),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:T.muted } }, "POS-58 (más común)")
+        ),
+        /*#__PURE__*/React.createElement("div", {
+          onClick: function(){ set("thermalWidth", "80"); },
+          style: {
+            flex:1, cursor:"pointer", padding:"12px 16px", borderRadius:10, textAlign:"center",
+            background: form.thermalWidth==="80" ? T.accent+"15" : T.surface,
+            border: form.thermalWidth==="80" ? "2px solid "+T.accent : "2px solid "+T.border
+          }
+        },
+          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:T.text } }, "80 mm"),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:T.muted } }, "Rollo ancho")
+        )
+      )
+    )
   ),
 
   /*#__PURE__*/React.createElement("div", {
@@ -9002,6 +9166,78 @@ function PublicCatalogLoader(_ref) {
   });
 }
 
+// ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
+var APP_VERSION = "1.0.0";
+var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
+
+function compareVersions(a, b) {
+  var pa = a.split(".").map(Number), pb = b.split(".").map(Number);
+  for (var i = 0; i < 3; i++) {
+    if ((pa[i]||0) > (pb[i]||0)) return 1;
+    if ((pa[i]||0) < (pb[i]||0)) return -1;
+  }
+  return 0;
+}
+
+function UpdateBanner() {
+  var _u = useState(null), _ua = _slicedToArray(_u, 2), update = _ua[0], setUpdate = _ua[1];
+  var _d = useState(false), _da = _slicedToArray(_d, 2), dismissed = _da[0], setDismissed = _da[1];
+
+  useEffect(function() {
+    // Revisar versión al iniciar
+    fetch(VERSION_CHECK_URL + "?t=" + Date.now())
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data && data.version && compareVersions(data.version, APP_VERSION) > 0) {
+          setUpdate(data);
+        }
+      })
+      .catch(function(){ /* sin internet o sin archivo, ignorar */ });
+  }, []);
+
+  if (!update || dismissed) return null;
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed", bottom: 20, right: 20, zIndex: 99999,
+      background: "#fff", borderRadius: 16, padding: "20px 22px",
+      boxShadow: "0 12px 48px rgba(0,0,0,0.25)", maxWidth: 340,
+      border: "1px solid #E5E7EB", animation: "slideUp 0.4s ease"
+    }
+  },
+    /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:10, marginBottom:10 } },
+      /*#__PURE__*/React.createElement("div", { style:{ fontSize:28 } }, "🎉"),
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:800, fontSize:16, color:"#0A0A0A" } }, "Nueva versión disponible"),
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#888" } }, "Versión " + update.version + " · Actual: " + APP_VERSION)
+      )
+    ),
+    update.notes ? /*#__PURE__*/React.createElement("div", {
+      style:{ fontSize:13, color:"#555", lineHeight:1.5, marginBottom:14,
+              background:"#F9FAFB", padding:"10px 12px", borderRadius:8 }
+    }, update.notes) : null,
+    /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
+      /*#__PURE__*/React.createElement("a", {
+        href: update.url || "https://edier27.github.io/Descargas/",
+        target: "_blank",
+        style: {
+          flex: 1, textAlign:"center", padding:"11px 16px", borderRadius:10,
+          background:"#E8621A", color:"#fff", textDecoration:"none",
+          fontWeight:700, fontSize:14
+        }
+      }, "⬇️ Descargar"),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: function(){ setDismissed(true); },
+        style: {
+          padding:"11px 16px", borderRadius:10, background:"#F3F4F6",
+          color:"#555", border:"none", cursor:"pointer", fontWeight:600,
+          fontSize:14, fontFamily:"inherit"
+        }
+      }, "Después")
+    )
+  );
+}
+
 function Root() {
   var _r1 = useState(null), _ra1 = _slicedToArray(_r1, 2), currentUser = _ra1[0], setCurrentUser = _ra1[1];
   var _r2 = useState(true), _ra2 = _slicedToArray(_r2, 2), checking = _ra2[0], setChecking = _ra2[1];
@@ -9142,7 +9378,8 @@ function Root() {
   var licInfo = verificarCodigo(currentUser.licenseCode || "");
   return /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", height:"100dvh" } },
     licInfo.type === "demo" && /*#__PURE__*/React.createElement(DemoBanner, { daysLeft: licInfo.daysLeft, minsLeft: licInfo.minsLeft }),
-    /*#__PURE__*/React.createElement(App, { clientId: currentUser.clientId, onLogout: onLogout })
+    /*#__PURE__*/React.createElement(App, { clientId: currentUser.clientId, onLogout: onLogout }),
+    /*#__PURE__*/React.createElement(UpdateBanner, null)
   );
 }
 
