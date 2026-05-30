@@ -840,54 +840,47 @@ var DEFAULT_SETTINGS = {
 var ACCENT_PRESETS = ["#10E08A", "#0078FF", "#FF6B35", "#8B5CF6", "#EF4444", "#F59E0B", "#06B6D4", "#EC4899", "#10B981", "#6366F1"];
 var STATUSES = ["Recibido", "Diagnóstico", "En Reparación", "Listo", "Entregado", "Cancelado"];
 function buildWAMessage(customer, device, status, paid, cost) {
-  var nombre = (customer || "").split(" ")[0];
+  var nombre = customer ? customer.split(" ")[0] : "cliente";
   var equipo = device || "su equipo";
   var tienda = "ACCE PRO";
   var pagado = paid ? "PAGADO" : "PENDIENTE DE PAGO";
-  var costoInfo = cost ? ("\nValor de la reparacion: *$" + Number(cost).toLocaleString("es-CO") + "*") : "";
+  var costoInfo = (cost && Number(cost) > 0) ? ("\nValor de la reparacion: *$" + Number(cost).toLocaleString("es-CO") + "*") : "";
   var msg = "";
-  switch (status) {
-    case "Recibido":
-      msg = "Hola " + nombre + ", le confirmamos que hemos recibido su equipo *" + equipo + "* en *" + tienda + "*."
-          + "\n\nEn breve comenzaremos a revisarlo y le notificaremos el diagnostico."
-          + "\n\nGracias por confiar en nosotros.";
-      break;
-    case "Diagn\u00f3stico":
-      msg = "Hola " + nombre + ", su equipo *" + equipo + "* se encuentra actualmente en *diagnostico* en *" + tienda + "*."
-          + "\n\nNuestros tecnicos lo estan revisando. Pronto le informaremos el resultado y el costo de la reparacion."
-          + "\n\nGracias por su paciencia.";
-      break;
-    case "En Reparaci\u00f3n":
-      msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* esta siendo *reparado* en este momento en *" + tienda + "*."
-          + "\n\nEn cuanto este listo le avisaremos de inmediato."
-          + "\n\nGracias por su paciencia y confianza.";
-      break;
-    case "Listo":
-      msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* ya esta *LISTO PARA RETIRAR* en *" + tienda + "*."
-          + costoInfo
-          + "\nEstado de pago: *" + pagado + "*"
-          + "\n\nPuede pasar a recogerlo en nuestro horario de atencion. Le esperamos."
-          + "\n\nGracias por confiar en *" + tienda + "*.";
-      break;
-    case "Entregado":
-      msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* ha sido *entregado* exitosamente en *" + tienda + "*."
-          + "\n\n*Garantia de 15 dias* a partir de la fecha de entrega. Si presenta algun inconveniente con la reparacion realizada, traigalo y con gusto lo revisamos sin costo adicional."
-          + "\n\n*La garantia aplica unicamente para fallas de fabrica relacionadas con la reparacion realizada.* No cubre danos causados por golpes, humedad, presiones fuertes en pantalla ni mal uso del equipo."
-          + "\n\nSi tiene alguna pregunta, no dude en contactarnos."
-          + "\n\nGracias por confiar en *" + tienda + "*. Fue un placer atenderle.";
-      break;
-    case "Cancelado":
-      msg = "Hola " + nombre + ", le informamos que el servicio de su equipo *" + equipo + "* en *" + tienda + "* ha sido *cancelado*."
-          + "\n\nPuede pasar a recoger su equipo en nuestro horario de atencion. Si tiene alguna duda, con gusto le atendemos."
-          + "\n\nGracias por comunicarse con *" + tienda + "*.";
-      break;
-    default:
-      msg = "Hola " + nombre + ", le informamos sobre su equipo *" + equipo + "* en *" + tienda + "*."
-          + "\n\nEstado actual: *" + (status || "Sin estado") + "*"
-          + "\n\nGracias por su confianza.";
+  if (status === "Recibido") {
+    msg = "Hola " + nombre + ", le confirmamos que hemos recibido su equipo *" + equipo + "* en *" + tienda + "*."
+        + "\n\nEn breve comenzaremos a revisarlo y le notificaremos el diagnostico."
+        + "\n\nGracias por confiar en nosotros.";
+  } else if (status === "Diagn\u00f3stico") {
+    msg = "Hola " + nombre + ", su equipo *" + equipo + "* se encuentra en *diagnostico* en *" + tienda + "*."
+        + "\n\nNuestros tecnicos lo estan revisando. Pronto le informaremos el resultado y el costo de la reparacion."
+        + "\n\nGracias por su paciencia.";
+  } else if (status === "En Reparaci\u00f3n") {
+    msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* esta siendo *reparado* en *" + tienda + "*."
+        + "\n\nEn cuanto este listo le avisaremos de inmediato."
+        + "\n\nGracias por su paciencia y confianza.";
+  } else if (status === "Listo") {
+    msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* ya esta *LISTO PARA RETIRAR* en *" + tienda + "*."
+        + costoInfo
+        + "\nEstado de pago: *" + pagado + "*"
+        + "\n\nPuede pasar a recogerlo en nuestro horario de atencion. Le esperamos."
+        + "\n\nGracias por confiar en *" + tienda + "*.";
+  } else if (status === "Entregado") {
+    msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* ha sido *entregado* exitosamente en *" + tienda + "*."
+        + "\n\n*Garantia de 15 dias* a partir de la fecha de entrega. Si presenta algun inconveniente con la reparacion realizada, traigalo y con gusto lo revisamos sin costo adicional."
+        + "\n\nImportante: *la garantia aplica unicamente para fallas de fabrica* relacionadas con la reparacion realizada. No cubre danos por golpes, humedad, presiones fuertes en pantalla ni mal uso del equipo."
+        + "\n\nGracias por confiar en *" + tienda + "*. Fue un placer atenderle.";
+  } else if (status === "Cancelado") {
+    msg = "Hola " + nombre + ", le informamos que el servicio de su equipo *" + equipo + "* en *" + tienda + "* ha sido *cancelado*."
+        + "\n\nPuede pasar a recoger su equipo en nuestro horario de atencion. Si tiene alguna duda, con gusto le atendemos."
+        + "\n\nGracias por comunicarse con *" + tienda + "*.";
+  } else {
+    msg = "Hola " + nombre + ", le informamos sobre su equipo *" + equipo + "* en *" + tienda + "*."
+        + "\n\nEstado actual: *" + (status || "Sin estado") + "*"
+        + "\n\nGracias por su confianza.";
   }
   return msg;
 }
+
 
 var S_COLOR = {
   "Recibido": "#6B7280",
