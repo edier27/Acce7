@@ -187,6 +187,7 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
     var __firebaseOK = false;
     var __dataRef = null;
@@ -1880,7 +1881,8 @@ function DashboardView(_ref8) {
 function RepairsView(_ref9) {
   var data = _ref9.data,
     save = _ref9.save,
-    notify = _ref9.notify;
+    notify = _ref9.notify,
+    clientId = _ref9.clientId;
   var _useState = useState(""),
     _useState2 = _slicedToArray(_useState, 2),
     search = _useState2[0],
@@ -2154,7 +2156,20 @@ function RepairsView(_ref9) {
       size: 14
     })), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
-        return printRepair(r);
+        return showQRModal(clientId, r);
+      },
+      title: "Código QR de seguimiento",
+      style: {
+        background: "none",
+        border: "none",
+        color: T.muted,
+        cursor: "pointer",
+        padding: 5,
+        fontSize: 14
+      }
+    }, "🔳"), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return printRepair(r, (data.settings && data.settings.storeName) || "ACCE PRO", clientId);
       },
       title: "Imprimir orden",
       style: {
@@ -5298,12 +5313,82 @@ function _printViaIframe(htmlContent) {
 }
 
 
+function _buildTrackUrl(clientId, r) {
+  var base = "https://edier27.github.io/Acce7/";
+  var rid = (r.id||"").slice(-6).toUpperCase();
+  return base + "?client=" + encodeURIComponent(clientId) + "&r=" + encodeURIComponent(rid) + "#track";
+}
+
+function showQRModal(clientId, r) {
+  var url = _buildTrackUrl(clientId, r);
+  var rid = (r.id||"").slice(-6).toUpperCase();
+  // Crear overlay
+  var overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;z-index:999999;background:rgba(10,8,14,0.75);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)";
+  var box = document.createElement("div");
+  box.style.cssText = "background:#fff;border-radius:24px;padding:32px 28px;max-width:360px;width:100%;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,0.3);font-family:'DM Sans',system-ui,sans-serif";
+  box.innerHTML =
+    "<div style='font-size:13px;color:#8A8398;font-weight:600;letter-spacing:1px;text-transform:uppercase'>Seguimiento</div>"+
+    "<div style='font-size:22px;font-weight:800;color:#15101D;margin:4px 0 4px'>Orden #"+rid+"</div>"+
+    "<div style='font-size:13px;color:#8A8398;margin-bottom:20px'>"+(r.customer||"")+" · "+(r.device||"")+"</div>"+
+    "<div id='_qrbox' style='display:flex;justify-content:center;padding:16px;background:#fff;border-radius:16px;border:1px solid #EEE'></div>"+
+    "<div style='font-size:12px;color:#8A8398;margin-top:16px;line-height:1.5'>El cliente escanea este código para ver el estado de su reparación en tiempo real</div>"+
+    "<div style='display:flex;gap:10px;margin-top:20px'>"+
+      "<button id='_qrprint' style='flex:1;padding:12px;background:#fff;border:1.5px solid rgba(20,15,30,0.12);border-radius:12px;cursor:pointer;font-weight:600;font-size:14;font-family:inherit;color:#15101D'>🖨 Imprimir</button>"+
+      "<button id='_qrclose' style='flex:1;padding:12px;background:linear-gradient(135deg,#E8540F,#FF6A2B);border:none;border-radius:12px;cursor:pointer;font-weight:700;font-size:14;font-family:inherit;color:#fff'>Cerrar</button>"+
+    "</div>";
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  // Generar QR
+  try {
+    new QRCode(document.getElementById("_qrbox"), { text:url, width:200, height:200, colorDark:"#15101D", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.M });
+  } catch(e) {
+    document.getElementById("_qrbox").innerHTML = "<div style='color:#888;font-size:13px;padding:40px'>No se pudo generar el QR</div>";
+  }
+  var close = function(){ overlay.remove(); };
+  document.getElementById("_qrclose").onclick = close;
+  overlay.onclick = function(e){ if(e.target===overlay) close(); };
+  document.getElementById("_qrprint").onclick = function(){
+    var qrImg = "";
+    var canvas = document.querySelector("#_qrbox canvas");
+    var img = document.querySelector("#_qrbox img");
+    if (canvas) qrImg = canvas.toDataURL("image/png");
+    else if (img) qrImg = img.src;
+    var w = window.open("", "_blank", "width=400,height=560");
+    if (w) {
+      w.document.write("<html><head><title>QR Orden #"+rid+"</title></head><body style='font-family:Arial;text-align:center;padding:30px'>"+
+        "<h2 style='margin:0 0 4px'>Seguimiento de Reparación</h2>"+
+        "<p style='margin:0 0 4px;font-size:18px;font-weight:bold'>Orden #"+rid+"</p>"+
+        "<p style='margin:0 0 16px;color:#666;font-size:13px'>"+(r.customer||"")+" · "+(r.device||"")+"</p>"+
+        "<img src='"+qrImg+"' style='width:240px;height:240px'/>"+
+        "<p style='margin:16px 0 0;font-size:12px;color:#666'>Escanea para ver el estado de tu reparación</p>"+
+        "<button onclick='window.print()' style='margin-top:20px;padding:10px 24px;background:#E8540F;color:#fff;border:none;border-radius:8px;cursor:pointer'>Imprimir</button>"+
+        "</body></html>");
+      w.document.close();
+    }
+  };
+}
+
 function printRepair(r) {
   var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ACCE PRO";
+  var clientId = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : (localStorage.getItem("trp_permanent_clientId_" + (localStorage.getItem("trp_current_user")||"")) || "");
   var fmt = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
   var ptype = _getPrinterType();
   var orderId = (r.id||"").slice(-6).toUpperCase();
   var notesHtml, advHtml;
+  // Generar QR de seguimiento como imagen (data URL)
+  var qrDataUrl = "";
+  if (clientId && typeof QRCode !== "undefined") {
+    try {
+      var trackUrl = _buildTrackUrl(clientId, r);
+      var tmpDiv = document.createElement("div");
+      new QRCode(tmpDiv, { text:trackUrl, width:130, height:130, correctLevel: QRCode.CorrectLevel.M });
+      var qc = tmpDiv.querySelector("canvas");
+      var qi = tmpDiv.querySelector("img");
+      if (qc) qrDataUrl = qc.toDataURL("image/png");
+      else if (qi) qrDataUrl = qi.src;
+    } catch(e){}
+  }
 
   if (ptype === "termica") {
     // ── FORMATO TÉRMICO (rollo 58/80mm) — diseño limpio ──
@@ -5364,6 +5449,7 @@ function printRepair(r) {
       "<div class=\"c\" style=\"margin-top:4px\"><span class=\"tag\">"+(r.status||"").toUpperCase()+"</span><span class=\"tag\">"+(r.paid?"PAGADO":"PENDIENTE")+"</span></div>"+
       notesHtml + advHtml + garantiaT +
       "<div class=\"dash\"></div>"+
+      (qrDataUrl ? "<div class=\"c\" style=\"margin:10px 0\"><img src='"+qrDataUrl+"' style='width:110px;height:110px'/><div style=\"font-size:9px;margin-top:4px\">Escanea para ver tu estado</div></div>" : "")+
       "<div class=\"c small\">Gracias por confiar<br>en nosotros</div>"+
       "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>"+
       "</body></html>"
@@ -5415,6 +5501,7 @@ function printRepair(r) {
       notesHtml+advHtml+
       (r.paid && r.status==="Entregado" ? "<div style=\"background:#F0FDF4;border:2px solid #16A34A;border-radius:12px;padding:16px 20px;margin:20px 0;display:flex;align-items:center;gap:14px\"><div style=\"font-size:32px\">🛡️</div><div><div style=\"font-weight:800;font-size:16px;color:#16A34A\">GARANTÍA DE 15 DÍAS</div><div style=\"font-size:13px;color:#555;margin-top:2px\">Este equipo cuenta con 15 días de garantía a partir de la fecha de entrega. Válida presentando este recibo. No cubre daños físicos, humedad o mal manejo.</div></div></div>" : "")+
       "<div class=\"sign-row\"><div class=\"sign-box\">Firma del técnico</div><div class=\"sign-box\">Firma del cliente</div></div>"+
+      (qrDataUrl ? "<div style=\"text-align:center;margin:24px 0 8px;padding:18px;background:#FAFAFC;border-radius:12px;border:1px solid #EEE\"><img src='"+qrDataUrl+"' style='width:120px;height:120px'/><div style=\"font-size:12px;color:#666;margin-top:8px;font-weight:600\">📱 Escanea para ver el estado de tu reparación</div></div>" : "")+
       "<div class=\"footer\">¡Gracias por confiar en nosotros!<br>Conserve este documento para reclamar su equipo</div>"+
       "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">🖨 Imprimir</button></div>"+
       "</body></html>");
@@ -8099,7 +8186,7 @@ function App(_appProps) {
     style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24 }
   },
   view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile }),
-  view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify }),
+  view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
   view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
   view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
   view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
@@ -9163,6 +9250,196 @@ function ExpiredScreen(_ref) {
 
 // ─── ROOT COMPONENT ────────────────────────────────────────
 // ─── CATÁLOGO PÚBLICO (sin login) ─────────────────────────
+function TrackingLoader(_ref) {
+  var clientId = _ref.clientId, repairId = _ref.repairId;
+  var _tk1 = useState(null), _tka1 = _slicedToArray(_tk1, 2), repair = _tka1[0], setRepair = _tka1[1];
+  var _tk2 = useState(true), _tka2 = _slicedToArray(_tk2, 2), loading = _tka2[0], setLoading = _tka2[1];
+  var _tk3 = useState(""), _tka3 = _slicedToArray(_tk3, 2), errorMsg = _tka3[0], setErrorMsg = _tka3[1];
+  var _tk4 = useState(null), _tka4 = _slicedToArray(_tk4, 2), store = _tka4[0], setStore = _tka4[1];
+
+  var loadTrack = function(retries) {
+    if (!clientId || !repairId) { setLoading(false); setErrorMsg("Enlace de seguimiento no válido."); return; }
+    try {
+      var db = window.__firebaseDB;
+      if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
+        db = firebase.apps[0].firestore();
+      if (!db) { setLoading(false); setErrorMsg("Sin conexión al servidor."); return; }
+      db.collection("clientes").doc(clientId).get().then(function(doc) {
+        if (doc.exists && doc.data().appData) {
+          try {
+            var d = JSON.parse(doc.data().appData);
+            var found = (d.repairs||[]).find(function(r){ return (r.id||"").slice(-6).toUpperCase() === repairId.toUpperCase() || r.id === repairId; });
+            var st = {};
+            if (doc.data().settingsData) { try { st = JSON.parse(doc.data().settingsData); } catch(e2){} }
+            setStore(st);
+            if (found) { setRepair(found); setLoading(false); }
+            else { setLoading(false); setErrorMsg("No encontramos una reparación con este código."); }
+          } catch(e) { setLoading(false); setErrorMsg("Error al leer los datos."); }
+        } else { setLoading(false); setErrorMsg("No encontramos información de este taller."); }
+      }).catch(function(e) {
+        if (retries > 0) { setTimeout(function(){ loadTrack(retries-1); }, 2000); }
+        else { setLoading(false); setErrorMsg("No se pudo cargar. Verifica tu conexión."); }
+      });
+    } catch(e) { setLoading(false); setErrorMsg("Error al cargar el seguimiento."); }
+  };
+
+  useEffect(function() { loadTrack(3); }, [clientId, repairId]);
+
+  var fmt = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
+  var storeName = (store && store.storeName) ? store.storeName : "ACCE PRO";
+
+  // Estados con su progreso
+  var STAGES = ["Recibido","Diagnóstico","En Reparación","Listo","Entregado"];
+  var STAGE_ICONS = { "Recibido":"📥", "Diagnóstico":"🔍", "En Reparación":"🔧", "Listo":"✅", "Entregado":"📦", "Cancelado":"❌" };
+
+  if (loading) return /*#__PURE__*/React.createElement("div", {
+    style:{ minHeight:"100dvh", background:"#F7F6FA", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:14, fontFamily:"'DM Sans',system-ui,sans-serif" }
+  },
+    /*#__PURE__*/React.createElement("div", { style:{ width:48, height:48, borderRadius:14, background:"linear-gradient(135deg,#E8540F,#FF6A2B)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, animation:"pulse 1.5s ease-in-out infinite" } }, "📱"),
+    /*#__PURE__*/React.createElement("style", null, "@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}"),
+    /*#__PURE__*/React.createElement("div", { style:{color:"#8A8398",fontSize:14,fontWeight:500} }, "Cargando seguimiento...")
+  );
+
+  if (errorMsg) return /*#__PURE__*/React.createElement("div", {
+    style:{ minHeight:"100dvh", background:"#F7F6FA", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16, padding:24, fontFamily:"'DM Sans',system-ui,sans-serif" }
+  },
+    /*#__PURE__*/React.createElement("div", { style:{fontSize:48} }, "🔍"),
+    /*#__PURE__*/React.createElement("div", { style:{color:"#15101D",fontSize:18,fontWeight:700,textAlign:"center",maxWidth:320} }, errorMsg),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: function(){ setLoading(true); setErrorMsg(""); loadTrack(3); },
+      style:{padding:"12px 28px",background:"linear-gradient(135deg,#E8540F,#FF6A2B)",color:"#fff",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700,fontSize:14}
+    }, "🔄 Reintentar")
+  );
+
+  var r = repair;
+  var curIdx = STAGES.indexOf(r.status);
+  var isCancelled = r.status === "Cancelado";
+  var statusColor = isCancelled ? "#EF4444" : (r.status==="Entregado" ? "#8B5CF6" : (r.status==="Listo" ? "#16A85F" : (r.status==="En Reparación" ? "#0078FF" : "#E8540F")));
+  var totalAbonos = (r.advances||[]).reduce(function(s,a){ return s+(Number(a.amount)||0); }, 0);
+  var saldo = (r.cost||0) - totalAbonos;
+
+  return /*#__PURE__*/React.createElement("div", {
+    style:{ minHeight:"100dvh", background:"#F7F6FA", fontFamily:"'DM Sans',system-ui,sans-serif", paddingBottom:40 }
+  },
+    // Header
+    /*#__PURE__*/React.createElement("div", {
+      style:{ background:"linear-gradient(155deg,#15101D,#2A1810 70%,#E8540F 180%)", padding:"36px 24px 56px", textAlign:"center", position:"relative", overflow:"hidden" }
+    },
+      /*#__PURE__*/React.createElement("div", { style:{ position:"absolute", width:300, height:300, borderRadius:"50%", background:"radial-gradient(circle,rgba(255,106,43,0.3),transparent 70%)", top:-100, right:-80, filter:"blur(50px)" } }),
+      /*#__PURE__*/React.createElement("div", { style:{ position:"relative", zIndex:2 } },
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, color:"rgba(255,255,255,0.7)", fontWeight:600, letterSpacing:"1px", textTransform:"uppercase", marginBottom:6 } }, storeName),
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:26, color:"#fff", fontWeight:800, letterSpacing:"-0.5px" } }, "Seguimiento de Reparación"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"inline-block", marginTop:12, padding:"6px 16px", borderRadius:30, background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.18)", fontSize:14, color:"#fff", fontWeight:700, backdropFilter:"blur(10px)" } }, "Orden #" + (r.id||"").slice(-6).toUpperCase())
+      )
+    ),
+    // Card container (pulls up over header)
+    /*#__PURE__*/React.createElement("div", { style:{ maxWidth:520, margin:"-32px auto 0", padding:"0 16px" } },
+      // Estado actual destacado
+      /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:20, padding:"26px 24px", boxShadow:"0 8px 32px rgba(20,15,30,0.10)", marginBottom:16, textAlign:"center", border:"1px solid rgba(20,15,30,0.05)" }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:40, marginBottom:8 } }, STAGE_ICONS[r.status]||"🔧"),
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, color:"#8A8398", fontWeight:500, marginBottom:4 } }, "Estado actual"),
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:24, fontWeight:800, color:statusColor, letterSpacing:"-0.5px" } }, r.status||"—")
+      ),
+      // Barra de progreso por etapas
+      !isCancelled && /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:20, padding:"24px 22px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:18 } }, "Progreso"),
+        STAGES.map(function(stage, i){
+          var done = i <= curIdx;
+          var current = i === curIdx;
+          return /*#__PURE__*/React.createElement("div", { key:stage, style:{ display:"flex", alignItems:"center", gap:14, marginBottom: i<STAGES.length-1?16:0, position:"relative" } },
+            /*#__PURE__*/React.createElement("div", {
+              style:{ width:34, height:34, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:700,
+                background: done ? "linear-gradient(135deg,#E8540F,#FF6A2B)" : "#F0EEF4",
+                color: done ? "#fff" : "#B0AAB8",
+                boxShadow: current ? "0 0 0 4px rgba(232,84,15,0.15)" : "none",
+                transition:"all .3s" }
+            }, done ? "✓" : (i+1)),
+            i < STAGES.length-1 && /*#__PURE__*/React.createElement("div", { style:{ position:"absolute", left:16, top:34, width:2, height:18, background: i<curIdx ? "#FF6A2B" : "#F0EEF4" } }),
+            /*#__PURE__*/React.createElement("div", { style:{ flex:1 } },
+              /*#__PURE__*/React.createElement("div", { style:{ fontSize:15, fontWeight: current?700:500, color: done ? "#15101D" : "#B0AAB8" } }, stage),
+              current && /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#E8540F", fontWeight:600 } }, "● En este momento")
+            )
+          );
+        })
+      ),
+      isCancelled && /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#FEF2F2", borderRadius:20, padding:"20px", marginBottom:16, textAlign:"center", border:"1px solid #FECACA", color:"#DC2626", fontWeight:600 }
+      }, "Esta reparación fue cancelada. Contáctanos para más información."),
+      // Datos del equipo
+      /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:16 } }, "📱 Datos del equipo"),
+        [["Cliente", r.customer], ["Equipo", r.device], ["Categoría", r.category], ["Problema", r.problem], ["Técnico", r.technician], ["Fecha de ingreso", r.date]].map(function(row){
+          if(!row[1]) return null;
+          return /*#__PURE__*/React.createElement("div", { key:row[0], style:{ display:"flex", justifyContent:"space-between", gap:16, padding:"9px 0", borderBottom:"1px solid #F4F2F7" } },
+            /*#__PURE__*/React.createElement("span", { style:{ fontSize:13, color:"#8A8398", fontWeight:500, flexShrink:0 } }, row[0]),
+            /*#__PURE__*/React.createElement("span", { style:{ fontSize:14, color:"#15101D", fontWeight:600, textAlign:"right" } }, row[1])
+          );
+        })
+      ),
+      // Costo
+      /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:16 } }, "💰 Información de pago"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:"1px solid #F4F2F7" } },
+          /*#__PURE__*/React.createElement("span", { style:{ fontSize:13, color:"#8A8398", fontWeight:500 } }, "Costo total"),
+          /*#__PURE__*/React.createElement("span", { style:{ fontSize:16, color:"#15101D", fontWeight:800 } }, fmt(r.cost))
+        ),
+        totalAbonos > 0 && /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:"1px solid #F4F2F7" } },
+          /*#__PURE__*/React.createElement("span", { style:{ fontSize:13, color:"#8A8398", fontWeight:500 } }, "Abonado"),
+          /*#__PURE__*/React.createElement("span", { style:{ fontSize:14, color:"#16A85F", fontWeight:700 } }, fmt(totalAbonos))
+        ),
+        !r.paid && saldo > 0 && /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", padding:"9px 0" } },
+          /*#__PURE__*/React.createElement("span", { style:{ fontSize:13, color:"#8A8398", fontWeight:500 } }, "Saldo pendiente"),
+          /*#__PURE__*/React.createElement("span", { style:{ fontSize:16, color:"#E8540F", fontWeight:800 } }, fmt(saldo))
+        ),
+        /*#__PURE__*/React.createElement("div", { style:{ marginTop:14, textAlign:"center" } },
+          /*#__PURE__*/React.createElement("span", {
+            style:{ display:"inline-block", padding:"7px 18px", borderRadius:30, fontSize:13, fontWeight:700,
+              background: r.paid ? "#DCFCE7" : "#FEF3E2", color: r.paid ? "#16A34A" : "#C24A12" }
+          }, r.paid ? "✓ PAGADO" : "⏳ PAGO PENDIENTE")
+        )
+      ),
+      // Historial de abonos
+      (r.advances && r.advances.length > 0) && /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:14 } }, "📋 Historial de abonos"),
+        r.advances.map(function(adv, i){
+          return /*#__PURE__*/React.createElement("div", { key:i, style:{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom: i<r.advances.length-1?"1px solid #F4F2F7":"none" } },
+            /*#__PURE__*/React.createElement("div", null,
+              /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, color:"#15101D", fontWeight:600 } }, "Abono " + (i+1)),
+              /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#8A8398" } }, adv.date||"")
+            ),
+            /*#__PURE__*/React.createElement("span", { style:{ fontSize:15, color:"#16A85F", fontWeight:700 } }, fmt(adv.amount))
+          );
+        })
+      ),
+      // Notas
+      r.notes && /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:10 } }, "📝 Notas del técnico"),
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, color:"#6B6478", lineHeight:1.6 } }, r.notes)
+      ),
+      // Footer
+      /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", marginTop:24, padding:"0 12px" } },
+        store && store.whatsapp ? /*#__PURE__*/React.createElement("a", {
+          href:"https://wa.me/"+(store.whatsapp||"").replace(/[^0-9]/g,""), target:"_blank",
+          style:{ display:"inline-flex", alignItems:"center", gap:8, padding:"13px 28px", background:"#25D366", color:"#fff", borderRadius:12, fontWeight:700, fontSize:14, textDecoration:"none", marginBottom:18 }
+        }, "💬 Contactar al taller") : null,
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#A39DB0", marginTop:8 } }, "Powered by GlobalAcce · Actualizado en tiempo real")
+      )
+    )
+  );
+}
+
 function PublicCatalogLoader(_ref) {
   var clientId = _ref.clientId;
   var _pc1 = useState(null), _pca1 = _slicedToArray(_pc1, 2), pubData = _pca1[0], setPubData = _pca1[1];
@@ -9329,6 +9606,7 @@ function Root() {
     } catch(e){}
   }
   var isCatalog = window.location.hash === "#catalog";
+  var isTracking = window.location.hash.indexOf("#track") === 0;
   if (isCatalog) document.body.classList.add("catalog-mode");
 
   useEffect(function() {
@@ -9426,6 +9704,10 @@ function Root() {
   if (isCatalog) {
     var _urlP = new URLSearchParams(window.location.search);
     return /*#__PURE__*/React.createElement(PublicCatalogLoader, { clientId: _urlP.get("client") });
+  }
+  if (isTracking) {
+    var _urlT = new URLSearchParams(window.location.search);
+    return /*#__PURE__*/React.createElement(TrackingLoader, { clientId: _urlT.get("client"), repairId: _urlT.get("r") });
   }
 
   if (checking) return /*#__PURE__*/React.createElement("div", {
