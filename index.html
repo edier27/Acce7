@@ -182,6 +182,7 @@
       }
     }
   @keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:860px){.auth-visual{display:none!important}}
 </style>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -8751,17 +8752,38 @@ function AdminPanel() {
 
 
 var _AS = {
-  page: { minHeight:"100dvh", background:"linear-gradient(135deg,#090E1A 0%,#0F1729 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"'DM Sans',system-ui,sans-serif" },
-  card: { background:"rgba(20,30,50,0.95)", backdropFilter:"blur(20px)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:24, boxShadow:"0 24px 80px rgba(0,0,0,0.5)", padding:36, width:"100%", maxWidth:420 },
-  logo: { width:56, height:56, background:"linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius:16, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 14px", boxShadow:"0 8px 24px rgba(16,224,138,0.25)" },
-  title: { fontWeight:800, fontSize:22, color:"#F0F4FF", letterSpacing:"-0.03em", textAlign:"center" },
-  sub: { fontSize:13, color:"#7A8EAA", textAlign:"center", marginTop:4, marginBottom:24 },
-  input: { width:"100%", padding:"13px 16px", border:"1px solid rgba(255,255,255,0.1)", borderRadius:14, fontSize:15, outline:"none", fontFamily:"inherit", marginBottom:12, boxSizing:"border-box", background:"rgba(255,255,255,0.06)", color:"#F0F4FF" },
-  btn: { width:"100%", padding:"14px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:14, fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", marginBottom:10, boxShadow:"0 4px 16px rgba(16,224,138,0.3)", letterSpacing:"-0.02em" },
-  btnGhost: { width:"100%", padding:"13px", background:"rgba(255,255,255,0.06)", color:"#F0F4FF", border:"1px solid rgba(255,255,255,0.12)", borderRadius:14, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:10 },
-  err: { background:"rgba(239,68,68,0.12)", color:"#FF8080", borderRadius:10, padding:"10px 14px", fontSize:13, marginBottom:12 },
-  ok: { background:"rgba(16,224,138,0.1)", color:"#10E08A", borderRadius:10, padding:"10px 14px", fontSize:13, marginBottom:12 },
-  link: { background:"none", border:"none", color:"#10E08A", fontSize:13, cursor:"pointer", fontFamily:"inherit" }
+  page: { minHeight:"100dvh", background:"#F7F6FA", display:"flex", fontFamily:"'DM Sans',system-ui,sans-serif", position:"relative" },
+  // Panel visual izquierdo
+  visual: { flex:"1.1", position:"relative", background:"linear-gradient(155deg,#15101D 0%,#23140E 55%,#3A1E0C 150%)", display:"flex", flexDirection:"column", justifyContent:"space-between", padding:"56px 52px", overflow:"hidden" },
+  visualPhoto: { position:"absolute", inset:0, zIndex:1, backgroundImage:"linear-gradient(155deg,rgba(21,16,29,0.88) 0%,rgba(35,20,14,0.74) 50%,rgba(232,84,15,0.42) 150%), url('https://images.unsplash.com/premium_photo-1663047430590-f2947119c3f0?fm=jpg&q=85&w=3000&auto=format&fit=crop')", backgroundSize:"cover", backgroundPosition:"center" },
+  visualIllustration: { position:"absolute", inset:0, zIndex:0, backgroundImage:"url(\"data:image/svg+xml;charset=utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20600%20800%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22pg%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%231a1320%22/%3E%3Cstop%20offset%3D%220.5%22%20stop-color%3D%22%232a1a12%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233a1e0c%22/%3E%3C/linearGradient%3E%3CradialGradient%20id%3D%22rg%22%20cx%3D%220.7%22%20cy%3D%220.35%22%20r%3D%220.8%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ff6a2b%22%20stop-opacity%3D%220.35%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ff6a2b%22%20stop-opacity%3D%220%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect%20width%3D%22600%22%20height%3D%22800%22%20fill%3D%22url%28%23pg%29%22/%3E%3Crect%20width%3D%22600%22%20height%3D%22800%22%20fill%3D%22url%28%23rg%29%22/%3E%3Cg%20opacity%3D%220.08%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%221%22%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22240%22%20fill%3D%22none%22/%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22180%22%20fill%3D%22none%22/%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22120%22%20fill%3D%22none%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28300%20360%29%20rotate%28-18%29%22%3E%3Crect%20x%3D%22-90%22%20y%3D%22-160%22%20width%3D%22180%22%20height%3D%22320%22%20rx%3D%2226%22%20fill%3D%22%230d0a12%22%20stroke%3D%22%23ff6a2b%22%20stroke-width%3D%222.5%22%20opacity%3D%220.9%22/%3E%3Crect%20x%3D%22-78%22%20y%3D%22-145%22%20width%3D%22156%22%20height%3D%22278%22%20rx%3D%2214%22%20fill%3D%22%23151019%22/%3E%3Crect%20x%3D%22-78%22%20y%3D%22-145%22%20width%3D%22156%22%20height%3D%22278%22%20rx%3D%2214%22%20fill%3D%22url%28%23rg%29%22%20opacity%3D%220.5%22/%3E%3Ccircle%20cx%3D%220%22%20cy%3D%22148%22%20r%3D%2210%22%20fill%3D%22none%22%20stroke%3D%22%23ff6a2b%22%20stroke-width%3D%222%22%20opacity%3D%220.6%22/%3E%3Crect%20x%3D%22-30%22%20y%3D%22-152%22%20width%3D%2260%22%20height%3D%227%22%20rx%3D%223.5%22%20fill%3D%22%23ff6a2b%22%20opacity%3D%220.4%22/%3E%3Cg%20opacity%3D%220.55%22%20stroke%3D%22%23ff8c42%22%20stroke-width%3D%222%22%20fill%3D%22none%22%3E%3Ccircle%20cx%3D%22-40%22%20cy%3D%22-80%22%20r%3D%2213%22/%3E%3Ccircle%20cx%3D%22-40%22%20cy%3D%22-80%22%20r%3D%224%22%20fill%3D%22%23ff8c42%22/%3E%3Cpath%20d%3D%22M-40%20-67%20v40%20M-53%20-54%20h26%22/%3E%3Ccircle%20cx%3D%2235%22%20cy%3D%2220%22%20r%3D%2211%22/%3E%3Ccircle%20cx%3D%2235%22%20cy%3D%2220%22%20r%3D%223.5%22%20fill%3D%22%23ff8c42%22/%3E%3Cpath%20d%3D%22M35%2031%20v34%20M24%2042%20h22%22/%3E%3Ccircle%20cx%3D%22-20%22%20cy%3D%2290%22%20r%3D%2210%22/%3E%3C/g%3E%3C/g%3E%3Cg%20transform%3D%22translate%28170%20250%29%20rotate%2835%29%22%20opacity%3D%220.8%22%3E%3Crect%20x%3D%22-7%22%20y%3D%22-90%22%20width%3D%2214%22%20height%3D%22150%22%20rx%3D%226%22%20fill%3D%22%23c0c0c8%22/%3E%3Crect%20x%3D%22-9%22%20y%3D%22-100%22%20width%3D%2218%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23ff6a2b%22/%3E%3Cpath%20d%3D%22M-7%2060%20L0%2078%20L7%2060%20Z%22%20fill%3D%22%23909098%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28440%20470%29%20rotate%28-42%29%22%20opacity%3D%220.8%22%3E%3Crect%20x%3D%22-6%22%20y%3D%22-80%22%20width%3D%2212%22%20height%3D%22130%22%20rx%3D%225%22%20fill%3D%22%23b0b0b8%22/%3E%3Crect%20x%3D%22-13%22%20y%3D%2248%22%20width%3D%2226%22%20height%3D%2240%22%20rx%3D%225%22%20fill%3D%22%23ff6a2b%22/%3E%3Cpath%20d%3D%22M-6%20-80%20Q0%20-96%206%20-80%20Z%22%20fill%3D%22%23d0d0d8%22/%3E%3C/g%3E%3Cg%20opacity%3D%220.5%22%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%22600%22%20r%3D%225%22%20fill%3D%22%23ff8c42%22/%3E%3Ccircle%20cx%3D%22480%22%20cy%3D%22180%22%20r%3D%224%22%20fill%3D%22%23ff8c42%22/%3E%3Ccircle%20cx%3D%2290%22%20cy%3D%22420%22%20r%3D%223%22%20fill%3D%22%23ffb088%22/%3E%3Ccircle%20cx%3D%22510%22%20cy%3D%22620%22%20r%3D%226%22%20fill%3D%22%23ff6a2b%22/%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%22700%22%20r%3D%223%22%20fill%3D%22%23ffb088%22/%3E%3C/g%3E%3C/svg%3E\")", backgroundSize:"cover", backgroundPosition:"center" },
+  visualGlow: { position:"absolute", zIndex:1, width:500, height:500, borderRadius:"50%", background:"radial-gradient(circle,rgba(255,106,43,0.4),transparent 70%)", bottom:-150, right:-100, filter:"blur(70px)", pointerEvents:"none" },
+  visualGlow2: { position:"absolute", zIndex:1, width:360, height:360, borderRadius:"50%", background:"radial-gradient(circle,rgba(124,79,232,0.25),transparent 70%)", top:-80, left:-60, filter:"blur(60px)", pointerEvents:"none" },
+  visualPattern: { position:"absolute", zIndex:1, inset:0, opacity:0.5, backgroundImage:"radial-gradient(rgba(255,255,255,0.06) 1px,transparent 1px)", backgroundSize:"22px 22px", pointerEvents:"none" },
+  visualBrand: { position:"relative", zIndex:2, display:"flex", alignItems:"center", gap:12 },
+  visualBrandMark: { width:42, height:42, borderRadius:12, background:"linear-gradient(135deg,#E8540F,#FF6A2B)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:21, color:"#fff", boxShadow:"0 8px 24px rgba(232,84,15,0.4)" },
+  visualBrandName: { fontWeight:800, fontSize:19, color:"#fff", letterSpacing:"-0.02em" },
+  visualCenter: { position:"relative", zIndex:2, maxWidth:440 },
+  visualBadge: { display:"inline-flex", alignItems:"center", gap:8, padding:"7px 15px", borderRadius:30, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", fontSize:12, fontWeight:600, color:"#FFD0B0", marginBottom:26, backdropFilter:"blur(10px)" },
+  visualHeadline: { fontSize:42, fontWeight:800, color:"#fff", lineHeight:1.08, letterSpacing:"-0.04em", marginBottom:18 },
+  visualHeadlineEm: { background:"linear-gradient(120deg,#FF8C42,#FFD0B0)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" },
+  visualText: { fontSize:16, color:"rgba(255,255,255,0.7)", lineHeight:1.7, marginBottom:32 },
+  visualFeats: { display:"flex", flexDirection:"column", gap:14 },
+  visualFeat: { display:"flex", alignItems:"center", gap:13, fontSize:15, color:"rgba(255,255,255,0.9)", fontWeight:500 },
+  visualFeatIcon: { width:38, height:38, borderRadius:11, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 },
+  visualFooter: { position:"relative", zIndex:2, fontSize:13, color:"rgba(255,255,255,0.5)" },
+  // Lado derecho del formulario
+  formSide: { flex:"0.9", display:"flex", alignItems:"center", justifyContent:"center", padding:24, position:"relative", overflowY:"auto", maxHeight:"100dvh" },
+  card: { background:"#FFFFFF", borderRadius:24, padding:"44px 40px", width:"100%", maxWidth:400, position:"relative", zIndex:2 },
+  logo: { width:62, height:62, background:"linear-gradient(135deg,#E8540F,#FF6A2B)", borderRadius:17, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 18px", boxShadow:"0 10px 28px rgba(232,84,15,0.28), inset 0 1px 2px rgba(255,255,255,0.3)" },
+  title: { fontWeight:800, fontSize:27, color:"#15101D", letterSpacing:"-0.04em", textAlign:"center", lineHeight:1.1 },
+  sub: { fontSize:14, color:"#8A8398", textAlign:"center", marginTop:6, marginBottom:30 },
+  input: { width:"100%", padding:"15px 18px", border:"1.5px solid rgba(20,15,30,0.10)", borderRadius:14, fontSize:15, outline:"none", fontFamily:"inherit", marginBottom:13, boxSizing:"border-box", background:"#FAFAFC", color:"#15101D", transition:"all .2s", fontWeight:500 },
+  btn: { width:"100%", padding:"15px", background:"linear-gradient(135deg,#E8540F,#FF6A2B)", color:"#fff", border:"none", borderRadius:14, fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"inherit", marginBottom:11, boxShadow:"0 8px 24px rgba(232,84,15,0.32)", letterSpacing:"-0.01em", transition:"all .25s" },
+  btnGhost: { width:"100%", padding:"14px", background:"#FFFFFF", color:"#15101D", border:"1.5px solid rgba(20,15,30,0.10)", borderRadius:14, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:10, transition:"all .2s" },
+  err: { background:"rgba(232,84,15,0.08)", color:"#C24A12", borderRadius:12, padding:"12px 16px", fontSize:13, marginBottom:14, border:"1px solid rgba(232,84,15,0.15)", fontWeight:500 },
+  ok: { background:"rgba(22,168,95,0.08)", color:"#16A85F", borderRadius:12, padding:"12px 16px", fontSize:13, marginBottom:14, border:"1px solid rgba(22,168,95,0.15)", fontWeight:500 },
+  link: { background:"none", border:"none", color:"#E8540F", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }
 };
 
 // ─── HELPERS DE CUENTAS ────────────────────────────────────
@@ -8796,6 +8818,42 @@ function _loadUserLocal(username) {
 }
 
 // ─── PANTALLA: INICIO DE SESIÓN ────────────────────────────
+function _buildVisualPanel(headline1, headlineEm) {
+  return /*#__PURE__*/React.createElement("div", { style: _AS.visual, className:"auth-visual" },
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualIllustration }),
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualPhoto }),
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualGlow }),
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualGlow2 }),
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualPattern }),
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualBrand },
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualBrandMark }, "G"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualBrandName }, "GlobalAcce")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualCenter },
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualBadge }, "🔧 Software de gestión #1"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualHeadline },
+        headline1, " ",
+        /*#__PURE__*/React.createElement("span", { style: _AS.visualHeadlineEm }, headlineEm)
+      ),
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualText },
+        "Reparaciones, inventario, ventas y catálogo online en un solo lugar. Todo sincronizado en la nube."
+      ),
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualFeats },
+        /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
+          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, "🔧"), "Control total de reparaciones"
+        ),
+        /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
+          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, "📦"), "Inventario y catálogo sincronizado"
+        ),
+        /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
+          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, "☁️"), "Respaldo automático en la nube"
+        )
+      )
+    ),
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualFooter }, "© 2026 GlobalAcce · Tecnología para tu negocio")
+  );
+}
+
 function LoginScreen(_ref) {
   var onLogin = _ref.onLogin, onCreateNew = _ref.onCreateNew;
   var _l1 = useState(""), _la1 = _slicedToArray(_l1, 2), user = _la1[0], setUser = _la1[1];
@@ -8871,8 +8929,10 @@ function LoginScreen(_ref) {
   };
 
   if (resetMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
+    _buildVisualPanel("Recupera el acceso", "a tu cuenta"),
+    /*#__PURE__*/React.createElement("div", { style: _AS.formSide },
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:24, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Restablecer contraseña"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Solicita el código de recuperación a GlobalAcce"),
       err && /*#__PURE__*/React.createElement("div", { style: err.startsWith("✅") ? _AS.ok : _AS.err }, err),
@@ -8887,23 +8947,29 @@ function LoginScreen(_ref) {
       /*#__PURE__*/React.createElement("button", { onClick:doReset, style:_AS.btn }, "Restablecer contraseña"),
       /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(false);setErr("");}, style:_AS.btnGhost }, "← Volver")
     )
+    )
   );
 
+  var _visualPanel = _buildVisualPanel("Gestiona tu taller", "sin complicaciones");
+
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
+    _visualPanel,
+    /*#__PURE__*/React.createElement("div", { style: _AS.formSide },
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:24, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "ACCE PRO"),
-      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Inicia sesión en tu cuenta"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Bienvenido de nuevo · Inicia sesión"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
       /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Usuario", value:user, onChange:function(e){setUser(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();}, style:_AS.input }),
       /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("button", { onClick:doLogin, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#334",color:"#7A8EAA",boxShadow:"none"}:{}) },
+      /*#__PURE__*/React.createElement("button", { onClick:doLogin, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
         loading ? "Verificando..." : "Iniciar sesión"
       ),
       /*#__PURE__*/React.createElement("button", { onClick:onCreateNew, style:_AS.btnGhost }, "➕ Crear cuenta nueva"),
       /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:4} },
         /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(true);setErr("");}, style:_AS.link }, "¿Olvidaste tu contraseña?")
       )
+    )
     )
   );
 }
@@ -8993,8 +9059,10 @@ function CreateAccountScreen(_ref) {
   };
 
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
+    _buildVisualPanel("Empieza a gestionar", "tu negocio hoy"),
+    /*#__PURE__*/React.createElement("div", { style: _AS.formSide },
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:24, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Crear cuenta nueva"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Necesitas un código de activación para registrarte"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
@@ -9002,14 +9070,15 @@ function CreateAccountScreen(_ref) {
       /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña (mín. 4 caracteres)", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, style:_AS.input }),
       /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Confirmar contraseña", value:pwd2, onChange:function(e){setPwd2(e.target.value);setErr("");}, style:_AS.input }),
       /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Código de activación (ej: DEMO-20260527-XXXX)", value:code, onChange:function(e){setCode(e.target.value.toUpperCase());setErr("");}, onKeyDown:function(e){if(e.key==="Enter")crear();}, style:Object.assign({},_AS.input,{letterSpacing:"0.05em"}) }),
-      /*#__PURE__*/React.createElement("button", { onClick:crear, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#334",color:"#7A8EAA",boxShadow:"none"}:{}) },
+      /*#__PURE__*/React.createElement("button", { onClick:crear, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
         loading ? "Creando cuenta..." : "Crear cuenta y entrar"
       ),
       /*#__PURE__*/React.createElement("button", { onClick:onBack, style:_AS.btnGhost }, "← Volver al login"),
       /*#__PURE__*/React.createElement("div", { style:{fontSize:11,color:"#556",textAlign:"center",marginTop:4} },
         "¿No tienes código? ",
-        /*#__PURE__*/React.createElement("a", { href:"https://wa.me/"+WHATSAPP, target:"_blank", style:{color:"#10E08A",textDecoration:"none"} }, "Contáctanos — "+PRECIO)
+        /*#__PURE__*/React.createElement("a", { href:"https://wa.me/"+WHATSAPP, target:"_blank", style:{color:"#E8540F",textDecoration:"none",fontWeight:600} }, "Contáctanos — "+PRECIO)
       )
+    )
     )
   );
 }
@@ -9076,7 +9145,7 @@ function ExpiredScreen(_ref) {
         onKeyDown:function(e){if(e.key==="Enter")renovar();},
         style:Object.assign({},_AS.input,{letterSpacing:"0.06em",textAlign:"center",fontSize:16,fontWeight:600})
       }),
-      /*#__PURE__*/React.createElement("button", { onClick:renovar, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#334",color:"#7A8EAA",boxShadow:"none"}:{}) },
+      /*#__PURE__*/React.createElement("button", { onClick:renovar, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
         loading ? "Activando..." : "🔓 Activar y continuar"
       ),
       /*#__PURE__*/React.createElement("a", {
