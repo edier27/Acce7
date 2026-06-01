@@ -1379,6 +1379,13 @@ function ResumenDia(_props) {
   var totalEntradas = totalVentas + totalReps + totalIngresos;
   var balanceDia    = totalEntradas - totalEgresos;
 
+  // ── TOTAL EN CAJA ACUMULADO (todo el histórico) ──
+  var cajaVentas    = (data.sales||[]).reduce(function(a,s){ return a+(s.total||0); },0);
+  var cajaReps      = (data.repairs||[]).filter(function(r){ return r.paid; }).reduce(function(a,r){ return a+(r.cost||0); },0);
+  var cajaIngresos  = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso"; }).reduce(function(a,e){ return a+(e.amount||0); },0);
+  var cajaEgresos   = (data.cashflow||[]).filter(function(e){ return e.type==="egreso"; }).reduce(function(a,e){ return a+(e.amount||0); },0);
+  var totalEnCaja   = cajaVentas + cajaReps + cajaIngresos - cajaEgresos;
+
   var movimientos = [
     ventasHoy.map(function(s){ return { tipo:"venta", icon:"🛒", label:"Venta"+(s.customer?" — "+s.customer:""), valor:s.total, positivo:true }; }),
     repsHoy.map(function(r){ return { tipo:"rep", icon:"🔧", label:"Reparación — "+(r.customer||r.device||""), valor:r.cost, positivo:true }; }),
@@ -1388,7 +1395,23 @@ function ResumenDia(_props) {
 
   var sinMovimientos = movimientos.length === 0;
 
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+    // ══ TARJETA TOTAL EN CAJA ══
+    /*#__PURE__*/React.createElement("div", {
+      style:{ background:"linear-gradient(135deg,#0EA968 0%,#0B8F57 100%)", borderRadius:16, padding:"22px 24px", marginBottom:16, position:"relative", overflow:"hidden", boxShadow:"0 8px 24px rgba(14,169,104,0.25)" }
+    },
+      /*#__PURE__*/React.createElement("div", { style:{ position:"absolute", right:-20, top:-20, fontSize:120, opacity:0.12 } }, "💰"),
+      /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,0.85)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:6 } }, "💰 Debes tener en caja"),
+      /*#__PURE__*/React.createElement("div", { style:{ fontSize:38, fontWeight:900, color:"#fff", lineHeight:1, marginBottom:14, fontFamily:"inherit" } }, fmtD(totalEnCaja)),
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:16, flexWrap:"wrap", fontSize:12, color:"rgba(255,255,255,0.9)" } },
+        /*#__PURE__*/React.createElement("span", null, "🛒 Ventas: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaVentas))),
+        /*#__PURE__*/React.createElement("span", null, "🔧 Reparaciones: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaReps))),
+        /*#__PURE__*/React.createElement("span", null, "⬆ Ingresos: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaIngresos))),
+        /*#__PURE__*/React.createElement("span", null, "⬇ Egresos: ", /*#__PURE__*/React.createElement("strong", null, "-"+fmtD(cajaEgresos)))
+      )
+    ),
+    // ══ RESUMEN DEL DÍA (original) ══
+    /*#__PURE__*/React.createElement("div", {
     style:{ background:T.card, border:"2px solid "+(balanceDia>=0?T.green:T.red), borderRadius:16, padding:"20px 22px", position:"relative", overflow:"hidden" }
   },
     // Franja de color arriba
@@ -1460,6 +1483,7 @@ function ResumenDia(_props) {
       /*#__PURE__*/React.createElement("span",null,"="),
       /*#__PURE__*/React.createElement("span",{ style:{color:balanceDia>=0?T.green:T.red,fontWeight:900,fontSize:14} }, fmtD(balanceDia))
     )
+  )
   );
 }
 
