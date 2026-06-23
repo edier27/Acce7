@@ -9380,6 +9380,7 @@ function TrackingLoader(_ref) {
   var _tk2 = useState(true), _tka2 = _slicedToArray(_tk2, 2), loading = _tka2[0], setLoading = _tka2[1];
   var _tk3 = useState(""), _tka3 = _slicedToArray(_tk3, 2), errorMsg = _tka3[0], setErrorMsg = _tka3[1];
   var _tk4 = useState(null), _tka4 = _slicedToArray(_tk4, 2), store = _tka4[0], setStore = _tka4[1];
+  var _tk5 = useState(null), _tka5 = _slicedToArray(_tk5, 2), lightboxSrc = _tka5[0], setLightboxSrc = _tka5[1];
 
   var loadTrack = function(retries) {
     if (!clientId || !repairId) { setLoading(false); setErrorMsg("Enlace de seguimiento no válido."); return; }
@@ -9562,11 +9563,28 @@ function TrackingLoader(_ref) {
               /*#__PURE__*/React.createElement("img", {
                 src: src,
                 style:{ width:"100%", height:"100%", objectFit:"cover", display:"block", cursor:"pointer" },
-                onClick: function() { window.open(src); }
+                onClick: function() { setLightboxSrc(src); }
               })
             );
           })
         )
+      ),
+      lightboxSrc && /*#__PURE__*/React.createElement("div", {
+        onClick: function() { setLightboxSrc(null); },
+        style:{
+          position:"fixed", inset:0, zIndex:999999,
+          background:"rgba(0,0,0,0.92)",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          padding:16, WebkitTapHighlightColor:"transparent"
+        }
+      },
+        /*#__PURE__*/React.createElement("img", {
+          src: lightboxSrc,
+          style:{ maxWidth:"100%", maxHeight:"100%", borderRadius:10, objectFit:"contain", boxShadow:"0 8px 40px rgba(0,0,0,0.6)", pointerEvents:"none" }
+        }),
+        /*#__PURE__*/React.createElement("div", {
+          style:{ position:"absolute", top:18, right:18, width:36, height:36, borderRadius:"50%", background:"rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, color:"#fff", cursor:"pointer", backdropFilter:"blur(4px)" }
+        }, "\xD7")
       ),
       // Footer
       /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", marginTop:24, padding:"0 12px" } },
