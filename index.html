@@ -7650,6 +7650,145 @@ function ReporteView(_props) {
 }
 
 
+// ─── Proveedores View ────────────────────────────────────────────────────────
+function ProveedoresView(_pRef) {
+  var data = _pRef.data, save = _pRef.save, notify = _pRef.notify;
+  var _pm1 = useState(null), _pm1a = _slicedToArray(_pm1, 2), modal = _pm1a[0], setModal = _pm1a[1];
+  var _pf1 = useState({ name: "", whatsapp: "", notes: "" }), _pf1a = _slicedToArray(_pf1, 2), pForm = _pf1a[0], setPForm = _pf1a[1];
+  var _po1 = useState({}), _po1a = _slicedToArray(_po1, 2), orderDrafts = _po1a[0], setOrderDrafts = _po1a[1];
+  var _pe1 = useState(null), _pe1a = _slicedToArray(_pe1, 2), editId = _pe1a[0], setEditId = _pe1a[1];
+
+  var providers = data.providers || [];
+
+  var openAdd = function() {
+    setPForm({ name: "", whatsapp: "", notes: "" });
+    setEditId(null);
+    setModal("form");
+  };
+  var openEdit = function(p) {
+    setPForm({ name: p.name, whatsapp: p.whatsapp, notes: p.notes || "" });
+    setEditId(p.id);
+    setModal("form");
+  };
+  var saveProvider = function() {
+    if (!pForm.name.trim() || !pForm.whatsapp.trim()) { notify("Completa nombre y WhatsApp"); return; }
+    var waNum = pForm.whatsapp.replace(/[^0-9]/g, "");
+    if (!editId) {
+      var newP = { id: uid(), name: pForm.name.trim(), whatsapp: waNum, notes: pForm.notes.trim() };
+      save(Object.assign({}, data, { providers: providers.concat([newP]) }));
+      notify("✅ Proveedor añadido");
+    } else {
+      save(Object.assign({}, data, { providers: providers.map(function(p) { return p.id === editId ? Object.assign({}, p, { name: pForm.name.trim(), whatsapp: waNum, notes: pForm.notes.trim() }) : p; }) }));
+      notify("✅ Proveedor actualizado");
+    }
+    setModal(null);
+  };
+  var delProvider = function(id) {
+    if (!confirm("¿Eliminar este proveedor?")) return;
+    save(Object.assign({}, data, { providers: providers.filter(function(p) { return p.id !== id; }) }));
+    notify("Proveedor eliminado");
+  };
+  var openOrder = function(p) {
+    setModal({ mode: "order", provider: p });
+  };
+  var sendOrder = function() {
+    var prov = modal.provider;
+    var draft = (orderDrafts[prov.id] || "").trim();
+    if (!draft) { notify("Escribe lo que necesitas pedir"); return; }
+    var msg = "🛒 *PEDIDO - GLOBALACCE*\n\n" + draft + "\n\n_Enviado desde ACCE PRO_";
+    window.open("https://wa.me/" + prov.whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
+    setOrderDrafts(function(d) { var nd = Object.assign({}, d); delete nd[prov.id]; return nd; });
+    setModal(null);
+  };
+
+  return /*#__PURE__*/React.createElement("div", null,
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 } },
+      /*#__PURE__*/React.createElement("h2", { style: { margin: 0, fontSize: 20, fontWeight: 700, color: T.text } }, "📦 Proveedores"),
+      /*#__PURE__*/React.createElement(Btn, { icon: /*#__PURE__*/React.createElement(Plus, { size: 15 }), onClick: openAdd }, "Añadir Proveedor")
+    ),
+    providers.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: { textAlign: "center", padding: "48px 24px", color: T.muted, background: T.surface, borderRadius: 14, border: "1px dashed " + T.border }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 40, marginBottom: 12 } }, "📦"),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 600, marginBottom: 6 } }, "Sin proveedores aún"),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13 } }, "Añade un proveedor para comenzar a enviarle pedidos por WhatsApp")
+    ),
+    providers.length > 0 && /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 } },
+      providers.map(function(p) {
+        return /*#__PURE__*/React.createElement("div", {
+          key: p.id,
+          style: { background: T.surface, border: "1px solid " + T.border, borderRadius: 14, padding: "18px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }
+        },
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between" } },
+            /*#__PURE__*/React.createElement("div", null,
+              /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 3 } }, p.name),
+              /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, display: "flex", alignItems: "center", gap: 4 } },
+                "📱 +" + p.whatsapp
+              ),
+              p.notes && /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, marginTop: 4, fontStyle: "italic" } }, p.notes)
+            ),
+            /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 4 } },
+              /*#__PURE__*/React.createElement("button", {
+                onClick: function() { openEdit(p); },
+                style: { background: "none", border: "none", cursor: "pointer", color: T.muted, padding: "2px 4px", borderRadius: 6 }
+              }, /*#__PURE__*/React.createElement(Edit2, { size: 14 })),
+              /*#__PURE__*/React.createElement("button", {
+                onClick: function() { delProvider(p.id); },
+                style: { background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: "2px 4px", borderRadius: 6 }
+              }, /*#__PURE__*/React.createElement(Trash2, { size: 14 }))
+            )
+          ),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function() { openOrder(p); },
+            style: { background: "#25D366", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }
+          }, "📋 Hacer Pedido por WhatsApp")
+        );
+      })
+    ),
+
+    modal === "form" && /*#__PURE__*/React.createElement(ModalWrap, {
+      title: editId ? "Editar Proveedor" : "Nuevo Proveedor",
+      onClose: function() { setModal(null); }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 } },
+        /*#__PURE__*/React.createElement(Field, { label: "Nombre del proveedor *", value: pForm.name, onChange: function(v) { setPForm(function(f) { return Object.assign({}, f, { name: v }); }); } }),
+        /*#__PURE__*/React.createElement(Field, { label: "WhatsApp (con código país, ej: 573001234567) *", value: pForm.whatsapp, onChange: function(v) { setPForm(function(f) { return Object.assign({}, f, { whatsapp: v }); }); }, type: "tel" }),
+        /*#__PURE__*/React.createElement(Field, { label: "Notas (opcional)", value: pForm.notes, onChange: function(v) { setPForm(function(f) { return Object.assign({}, f, { notes: v }); }); } }),
+        /*#__PURE__*/React.createElement(Btn, { icon: /*#__PURE__*/React.createElement(Check, { size: 14 }), onClick: saveProvider }, editId ? "Actualizar" : "Guardar Proveedor")
+      )
+    ),
+
+    modal && modal.mode === "order" && /*#__PURE__*/React.createElement(ModalWrap, {
+      title: "Pedido a " + modal.provider.name,
+      onClose: function() { setModal(null); }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 } },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, display: "flex", alignItems: "center", gap: 5 } },
+          "📱 WhatsApp: +" + modal.provider.whatsapp
+        ),
+        /*#__PURE__*/React.createElement("textarea", {
+          value: orderDrafts[modal.provider.id] || "",
+          onChange: function(e) { var pid = modal.provider.id; setOrderDrafts(function(d) { return Object.assign({}, d, { [pid]: e.target.value }); }); },
+          placeholder: "Escribe aquí los productos que necesitas pedir...\n\nEjemplo:\n- 2 pantallas iPhone 11 originales\n- 1 batería Samsung A32\n- 3 flex de carga tipo C",
+          style: {
+            width: "100%", minHeight: 200, padding: "12px 14px", background: T.bg,
+            border: "1px solid " + T.border, borderRadius: 10, color: T.text,
+            fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", outline: "none"
+          }
+        }),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: sendOrder,
+          style: {
+            background: "#25D366", color: "#fff", border: "none", borderRadius: 10,
+            padding: "12px 0", fontWeight: 700, fontSize: 14, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+          }
+        }, "📲 Enviar por WhatsApp")
+      )
+    )
+  );
+}
+
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var onLogout = _appProps && _appProps.onLogout ? _appProps.onLogout : function(){};
@@ -8127,6 +8266,12 @@ function App(_appProps) {
       size: 17
     })
   }, {
+    id: "proveedores",
+    label: "Proveedores",
+    icon: /*#__PURE__*/React.createElement(ShoppingCart, {
+      size: 17
+    })
+  }, {
     id: "settings",
     label: "Configuración",
     icon: /*#__PURE__*/React.createElement(CheckCircle, {
@@ -8317,7 +8462,8 @@ function App(_appProps) {
   view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
   view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
   view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
-  view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data })),
+  view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data }),
+  view === "proveedores" && /*#__PURE__*/React.createElement(ProveedoresView, { data: data, save: save, notify: notify })),
 
   isMobile && /*#__PURE__*/React.createElement("nav", {
     className: "trp-bottom-nav",
