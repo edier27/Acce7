@@ -7651,55 +7651,73 @@ function ReporteView(_props) {
 
 
 // ─── Proveedores View ────────────────────────────────────────────────────────
+var ACC_TYPES = ["Nequi","Daviplata","Bancolombia Ahorros","Bancolombia Corriente","Davivienda Ahorros","Banco de Bogotá","Banco Popular","AV Villas","Efecty","Otro"];
 function ProveedoresView(_pRef) {
   var data = _pRef.data, save = _pRef.save, notify = _pRef.notify;
   var _pm1 = useState(null), _pm1a = _slicedToArray(_pm1, 2), modal = _pm1a[0], setModal = _pm1a[1];
-  var _pf1 = useState({ name: "", whatsapp: "", notes: "" }), _pf1a = _slicedToArray(_pf1, 2), pForm = _pf1a[0], setPForm = _pf1a[1];
+  var _pf1 = useState({ name: "", whatsapp: "", notes: "", accounts: [] }), _pf1a = _slicedToArray(_pf1, 2), pForm = _pf1a[0], setPForm = _pf1a[1];
   var _po1 = useState({}), _po1a = _slicedToArray(_po1, 2), orderDrafts = _po1a[0], setOrderDrafts = _po1a[1];
   var _pe1 = useState(null), _pe1a = _slicedToArray(_pe1, 2), editId = _pe1a[0], setEditId = _pe1a[1];
+  var _pas = useState(false), _pasa = _slicedToArray(_pas, 2), showAddAcc = _pasa[0], setShowAddAcc = _pasa[1];
+  var _pac = useState({ type: "Nequi", number: "", holder: "" }), _paca = _slicedToArray(_pac, 2), newAcc = _pac[0], setNewAcc = _pac[1];
 
   var providers = data.providers || [];
 
   var openAdd = function() {
-    setPForm({ name: "", whatsapp: "", notes: "" });
-    setEditId(null);
+    setPForm({ name: "", whatsapp: "", notes: "", accounts: [] });
+    setEditId(null); setShowAddAcc(false);
+    setNewAcc({ type: "Nequi", number: "", holder: "" });
     setModal("form");
   };
   var openEdit = function(p) {
-    setPForm({ name: p.name, whatsapp: p.whatsapp, notes: p.notes || "" });
-    setEditId(p.id);
+    setPForm({ name: p.name, whatsapp: p.whatsapp, notes: p.notes || "", accounts: (p.accounts || []).slice() });
+    setEditId(p.id); setShowAddAcc(false);
+    setNewAcc({ type: "Nequi", number: "", holder: "" });
     setModal("form");
   };
   var saveProvider = function() {
     if (!pForm.name.trim() || !pForm.whatsapp.trim()) { notify("Completa nombre y WhatsApp"); return; }
     var waNum = pForm.whatsapp.replace(/[^0-9]/g, "");
+    var payload = { name: pForm.name.trim(), whatsapp: waNum, notes: pForm.notes.trim(), accounts: pForm.accounts || [] };
     if (!editId) {
-      var newP = { id: uid(), name: pForm.name.trim(), whatsapp: waNum, notes: pForm.notes.trim() };
-      save(Object.assign({}, data, { providers: providers.concat([newP]) }));
+      save(Object.assign({}, data, { providers: providers.concat([Object.assign({ id: uid() }, payload)]) }));
       notify("✅ Proveedor añadido");
     } else {
-      save(Object.assign({}, data, { providers: providers.map(function(p) { return p.id === editId ? Object.assign({}, p, { name: pForm.name.trim(), whatsapp: waNum, notes: pForm.notes.trim() }) : p; }) }));
+      save(Object.assign({}, data, { providers: providers.map(function(p) { return p.id === editId ? Object.assign({}, p, payload) : p; }) }));
       notify("✅ Proveedor actualizado");
     }
     setModal(null);
+  };
+  var confirmAddAcc = function() {
+    if (!newAcc.number.trim()) { notify("Escribe el número de cuenta"); return; }
+    var acc = { id: uid(), type: newAcc.type, number: newAcc.number.trim(), holder: newAcc.holder.trim() };
+    setPForm(function(f) { return Object.assign({}, f, { accounts: f.accounts.concat([acc]) }); });
+    setNewAcc({ type: "Nequi", number: "", holder: "" });
+    setShowAddAcc(false);
+  };
+  var removeAcc = function(accId) {
+    setPForm(function(f) { return Object.assign({}, f, { accounts: f.accounts.filter(function(a) { return a.id !== accId; }) }); });
   };
   var delProvider = function(id) {
     if (!confirm("¿Eliminar este proveedor?")) return;
     save(Object.assign({}, data, { providers: providers.filter(function(p) { return p.id !== id; }) }));
     notify("Proveedor eliminado");
   };
-  var openOrder = function(p) {
-    setModal({ mode: "order", provider: p });
-  };
+  var openOrder = function(p) { setModal({ mode: "order", provider: p }); };
   var sendOrder = function() {
     var prov = modal.provider;
     var draft = (orderDrafts[prov.id] || "").trim();
     if (!draft) { notify("Escribe lo que necesitas pedir"); return; }
-    var msg = "🛒 *PEDIDO - GLOBALACCE*\n\n" + draft + "\n\n_Enviado desde ACCE PRO_";
+    var accBlock = (prov.accounts || []).length > 0
+      ? "\n\n💳 *Cuentas para consignar:*\n" + prov.accounts.map(function(a) { return "• " + a.type + ": " + a.number + (a.holder ? " (" + a.holder + ")" : ""); }).join("\n")
+      : "";
+    var msg = "🛒 *PEDIDO - GLOBALACCE*\n\n" + draft + accBlock + "\n\n_Enviado desde ACCE PRO_";
     window.open("https://wa.me/" + prov.whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
     setOrderDrafts(function(d) { var nd = Object.assign({}, d); delete nd[prov.id]; return nd; });
     setModal(null);
   };
+
+  var inputStyle = { width: "100%", padding: "9px 12px", background: T.bg, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", outline: "none" };
 
   return /*#__PURE__*/React.createElement("div", null,
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 } },
@@ -7713,8 +7731,9 @@ function ProveedoresView(_pRef) {
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 600, marginBottom: 6 } }, "Sin proveedores aún"),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 13 } }, "Añade un proveedor para comenzar a enviarle pedidos por WhatsApp")
     ),
-    providers.length > 0 && /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 } },
+    providers.length > 0 && /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 14 } },
       providers.map(function(p) {
+        var accs = p.accounts || [];
         return /*#__PURE__*/React.createElement("div", {
           key: p.id,
           style: { background: T.surface, border: "1px solid " + T.border, borderRadius: 14, padding: "18px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }
@@ -7722,21 +7741,23 @@ function ProveedoresView(_pRef) {
           /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between" } },
             /*#__PURE__*/React.createElement("div", null,
               /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 3 } }, p.name),
-              /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, display: "flex", alignItems: "center", gap: 4 } },
-                "📱 +" + p.whatsapp
-              ),
+              /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, display: "flex", alignItems: "center", gap: 4 } }, "📱 +" + p.whatsapp),
               p.notes && /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, marginTop: 4, fontStyle: "italic" } }, p.notes)
             ),
             /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 4 } },
-              /*#__PURE__*/React.createElement("button", {
-                onClick: function() { openEdit(p); },
-                style: { background: "none", border: "none", cursor: "pointer", color: T.muted, padding: "2px 4px", borderRadius: 6 }
-              }, /*#__PURE__*/React.createElement(Edit2, { size: 14 })),
-              /*#__PURE__*/React.createElement("button", {
-                onClick: function() { delProvider(p.id); },
-                style: { background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: "2px 4px", borderRadius: 6 }
-              }, /*#__PURE__*/React.createElement(Trash2, { size: 14 }))
+              /*#__PURE__*/React.createElement("button", { onClick: function() { openEdit(p); }, style: { background: "none", border: "none", cursor: "pointer", color: T.muted, padding: "2px 4px", borderRadius: 6 } }, /*#__PURE__*/React.createElement(Edit2, { size: 14 })),
+              /*#__PURE__*/React.createElement("button", { onClick: function() { delProvider(p.id); }, style: { background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: "2px 4px", borderRadius: 6 } }, /*#__PURE__*/React.createElement(Trash2, { size: 14 }))
             )
+          ),
+          accs.length > 0 && /*#__PURE__*/React.createElement("div", { style: { borderTop: "1px solid " + T.border, paddingTop: 8 } },
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" } }, "💳 Cuentas"),
+            accs.map(function(a) {
+              return /*#__PURE__*/React.createElement("div", { key: a.id, style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 4 } },
+                /*#__PURE__*/React.createElement("span", { style: { background: T.bg, border: "1px solid " + T.border, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, color: T.text } }, a.type),
+                /*#__PURE__*/React.createElement("span", { style: { fontSize: 12, color: T.text, fontFamily: "monospace" } }, a.number),
+                a.holder && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: T.muted } }, "· " + a.holder)
+              );
+            })
           ),
           /*#__PURE__*/React.createElement("button", {
             onClick: function() { openOrder(p); },
@@ -7754,6 +7775,77 @@ function ProveedoresView(_pRef) {
         /*#__PURE__*/React.createElement(Field, { label: "Nombre del proveedor *", value: pForm.name, onChange: function(v) { setPForm(function(f) { return Object.assign({}, f, { name: v }); }); } }),
         /*#__PURE__*/React.createElement(Field, { label: "WhatsApp (con código país, ej: 573001234567) *", value: pForm.whatsapp, onChange: function(v) { setPForm(function(f) { return Object.assign({}, f, { whatsapp: v }); }); }, type: "tel" }),
         /*#__PURE__*/React.createElement(Field, { label: "Notas (opcional)", value: pForm.notes, onChange: function(v) { setPForm(function(f) { return Object.assign({}, f, { notes: v }); }); } }),
+
+        /*#__PURE__*/React.createElement("div", { style: { borderTop: "1px solid " + T.border, paddingTop: 12 } },
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: T.text } }, "💳 Cuentas para consignar"),
+            !showAddAcc && /*#__PURE__*/React.createElement("button", {
+              onClick: function() { setShowAddAcc(true); },
+              style: { background: T.accent || "#2563eb", color: "#fff", border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }
+            }, "+ Añadir cuenta")
+          ),
+
+          (pForm.accounts || []).length === 0 && !showAddAcc && /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, textAlign: "center", padding: "8px 0" } }, "Sin cuentas añadidas aún"),
+
+          (pForm.accounts || []).map(function(a) {
+            return /*#__PURE__*/React.createElement("div", {
+              key: a.id,
+              style: { display: "flex", alignItems: "center", gap: 8, background: T.bg, border: "1px solid " + T.border, borderRadius: 8, padding: "8px 10px", marginBottom: 6 }
+            },
+              /*#__PURE__*/React.createElement("span", { style: { background: "#2563eb22", color: "#2563eb", borderRadius: 5, padding: "2px 7px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" } }, a.type),
+              /*#__PURE__*/React.createElement("span", { style: { fontSize: 13, fontFamily: "monospace", color: T.text, flex: 1 } }, a.number),
+              a.holder && /*#__PURE__*/React.createElement("span", { style: { fontSize: 12, color: T.muted } }, a.holder),
+              /*#__PURE__*/React.createElement("button", {
+                onClick: function() { removeAcc(a.id); },
+                style: { background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: "0 2px", display: "flex" }
+              }, /*#__PURE__*/React.createElement(Trash2, { size: 13 }))
+            );
+          }),
+
+          showAddAcc && /*#__PURE__*/React.createElement("div", { style: { background: T.bg, border: "1px solid " + T.border, borderRadius: 10, padding: "12px" } },
+            /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 } },
+              /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" } }, "Tipo"),
+                /*#__PURE__*/React.createElement("select", {
+                  value: newAcc.type,
+                  onChange: function(e) { setNewAcc(function(a) { return Object.assign({}, a, { type: e.target.value }); }); },
+                  style: Object.assign({}, inputStyle, { cursor: "pointer" })
+                }, ACC_TYPES.map(function(t) { return /*#__PURE__*/React.createElement("option", { key: t, value: t }, t); }))
+              ),
+              /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" } }, "Número / Nequi"),
+                /*#__PURE__*/React.createElement("input", {
+                  type: "text",
+                  value: newAcc.number,
+                  onChange: function(e) { setNewAcc(function(a) { return Object.assign({}, a, { number: e.target.value }); }); },
+                  placeholder: "3001234567",
+                  style: inputStyle
+                })
+              )
+            ),
+            /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
+              /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" } }, "Titular (opcional)"),
+              /*#__PURE__*/React.createElement("input", {
+                type: "text",
+                value: newAcc.holder,
+                onChange: function(e) { setNewAcc(function(a) { return Object.assign({}, a, { holder: e.target.value }); }); },
+                placeholder: "Nombre del titular",
+                style: inputStyle
+              })
+            ),
+            /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8 } },
+              /*#__PURE__*/React.createElement("button", {
+                onClick: confirmAddAcc,
+                style: { flex: 1, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }
+              }, "✓ Confirmar cuenta"),
+              /*#__PURE__*/React.createElement("button", {
+                onClick: function() { setShowAddAcc(false); },
+                style: { background: T.surface, color: T.muted, border: "1px solid " + T.border, borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }
+              }, "Cancelar")
+            )
+          )
+        ),
+
         /*#__PURE__*/React.createElement(Btn, { icon: /*#__PURE__*/React.createElement(Check, { size: 14 }), onClick: saveProvider }, editId ? "Actualizar" : "Guardar Proveedor")
       )
     ),
@@ -7766,23 +7858,29 @@ function ProveedoresView(_pRef) {
         /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, display: "flex", alignItems: "center", gap: 5 } },
           "📱 WhatsApp: +" + modal.provider.whatsapp
         ),
+        (modal.provider.accounts || []).length > 0 && /*#__PURE__*/React.createElement("div", { style: { background: T.bg, border: "1px solid " + T.border, borderRadius: 8, padding: "10px 12px" } },
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, fontWeight: 700, marginBottom: 6, textTransform: "uppercase" } }, "💳 Cuentas del proveedor"),
+          (modal.provider.accounts || []).map(function(a) {
+            return /*#__PURE__*/React.createElement("div", { key: a.id, style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 3 } },
+              /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: "#2563eb" } }, a.type + ":"),
+              /*#__PURE__*/React.createElement("span", { style: { fontSize: 12, fontFamily: "monospace", color: T.text } }, a.number),
+              a.holder && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: T.muted } }, "(" + a.holder + ")")
+            );
+          })
+        ),
         /*#__PURE__*/React.createElement("textarea", {
           value: orderDrafts[modal.provider.id] || "",
           onChange: function(e) { var pid = modal.provider.id; setOrderDrafts(function(d) { return Object.assign({}, d, { [pid]: e.target.value }); }); },
           placeholder: "Escribe aquí los productos que necesitas pedir...\n\nEjemplo:\n- 2 pantallas iPhone 11 originales\n- 1 batería Samsung A32\n- 3 flex de carga tipo C",
           style: {
-            width: "100%", minHeight: 200, padding: "12px 14px", background: T.bg,
+            width: "100%", minHeight: 180, padding: "12px 14px", background: T.bg,
             border: "1px solid " + T.border, borderRadius: 10, color: T.text,
             fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", outline: "none"
           }
         }),
         /*#__PURE__*/React.createElement("button", {
           onClick: sendOrder,
-          style: {
-            background: "#25D366", color: "#fff", border: "none", borderRadius: 10,
-            padding: "12px 0", fontWeight: 700, fontSize: 14, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-          }
+          style: { background: "#25D366", color: "#fff", border: "none", borderRadius: 10, padding: "12px 0", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }
         }, "📲 Enviar por WhatsApp")
       )
     )
