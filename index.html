@@ -7656,10 +7656,12 @@ function ProveedoresView(_pRef) {
   var data = _pRef.data, save = _pRef.save, notify = _pRef.notify;
   var _pm1 = useState(null), _pm1a = _slicedToArray(_pm1, 2), modal = _pm1a[0], setModal = _pm1a[1];
   var _pf1 = useState({ name: "", whatsapp: "", notes: "", accounts: [] }), _pf1a = _slicedToArray(_pf1, 2), pForm = _pf1a[0], setPForm = _pf1a[1];
-  var _po1 = useState({}), _po1a = _slicedToArray(_po1, 2), orderDrafts = _po1a[0], setOrderDrafts = _po1a[1];
+  var _po1 = useState(function() { try { return JSON.parse(localStorage.getItem("acce_order_drafts") || "{}"); } catch(e) { return {}; } }), _po1a = _slicedToArray(_po1, 2), orderDrafts = _po1a[0], setOrderDrafts = _po1a[1];
   var _pe1 = useState(null), _pe1a = _slicedToArray(_pe1, 2), editId = _pe1a[0], setEditId = _pe1a[1];
   var _pas = useState(false), _pasa = _slicedToArray(_pas, 2), showAddAcc = _pasa[0], setShowAddAcc = _pasa[1];
   var _pac = useState({ type: "Nequi", number: "", holder: "" }), _paca = _slicedToArray(_pac, 2), newAcc = _pac[0], setNewAcc = _pac[1];
+
+  useEffect(function() { try { localStorage.setItem("acce_order_drafts", JSON.stringify(orderDrafts)); } catch(e) {} }, [orderDrafts]);
 
   var providers = data.providers || [];
 
