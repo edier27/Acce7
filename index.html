@@ -2464,6 +2464,37 @@ function RepairModal(_ref0) {
       setModal(null);
     }
   };
+  // ── Foto: comprimir y guardar ──
+  var _compressAndAddPhoto = function(file) {
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var img = new Image();
+      img.onload = function() {
+        var canvas = document.createElement("canvas");
+        var maxS = 900, w = img.width, h = img.height;
+        if (w > maxS || h > maxS) { if (w > h) { h = Math.round(h * maxS / w); w = maxS; } else { w = Math.round(w * maxS / h); h = maxS; } }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+        var newPhotos = (form.photos || []).concat([dataUrl]);
+        var updReps = (data.repairs || []).map(function(r) { return r.id === form.id ? Object.assign({}, r, { photos: newPhotos }) : r; });
+        save(Object.assign({}, data, { repairs: updReps }));
+        setForm(function(f) { return Object.assign({}, f, { photos: newPhotos }); });
+        notify("✅ Foto añadida");
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  var _removePhoto = function(idx) {
+    if (!confirm("¿Eliminar esta foto?")) return;
+    var newPhotos = (form.photos || []).filter(function(_, i) { return i !== idx; });
+    var updReps = (data.repairs || []).map(function(r) { return r.id === form.id ? Object.assign({}, r, { photos: newPhotos }) : r; });
+    save(Object.assign({}, data, { repairs: updReps }));
+    setForm(function(f) { return Object.assign({}, f, { photos: newPhotos }); });
+    notify("Foto eliminada");
+  };
+
   if (isView) {
     var idx = STATUSES.indexOf(form.status);
     return /*#__PURE__*/React.createElement(ModalWrap, {
@@ -2582,7 +2613,36 @@ function RepairModal(_ref0) {
         fontSize: 15,
         color: T.text
       }
-    }, form.notes)), /*#__PURE__*/React.createElement("div", {
+    }, form.notes)),
+    /*#__PURE__*/React.createElement("div", { style: { background: T.bg, borderRadius: 8, padding: "12px 13px" } },
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: (form.photos && form.photos.length > 0) ? 10 : 0 } },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, "📷 Fotos de reparaci\xF3n"),
+        /*#__PURE__*/React.createElement("label", {
+          style: { display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", background: T.accent, color: "#0D1B35", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }
+        },
+          "📷 A\xF1adir Foto",
+          /*#__PURE__*/React.createElement("input", {
+            type: "file", accept: "image/*", capture: "environment",
+            style: { display: "none" },
+            onChange: function(e) { var f = e.target.files && e.target.files[0]; if (f) _compressAndAddPhoto(f); e.target.value = ""; }
+          })
+        )
+      ),
+      (form.photos && form.photos.length > 0)
+        ? /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 } },
+            form.photos.map(function(src, i) {
+              return /*#__PURE__*/React.createElement("div", { key: i, style: { position: "relative", borderRadius: 7, overflow: "hidden", aspectRatio: "1" } },
+                /*#__PURE__*/React.createElement("img", { src: src, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }, onClick: function() { window.open(src); } }),
+                /*#__PURE__*/React.createElement("button", {
+                  onClick: function() { _removePhoto(i); },
+                  style: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(239,68,68,0.92)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1 }
+                }, "\xD7")
+              );
+            })
+          )
+        : /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, textAlign: "center", padding: "10px 0" } }, "Sin fotos \xB7 usa el bot\xF3n para agregar desde la c\xE1mara")
+    ),
+    /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         gap: 8,
@@ -9491,6 +9551,22 @@ function TrackingLoader(_ref) {
       },
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:10 } }, "📝 Notas del técnico"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, color:"#6B6478", lineHeight:1.6 } }, r.notes)
+      ),
+      (r.photos && r.photos.length > 0) && /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:14 } }, "📷 Fotos de tu reparaci\xF3n"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 } },
+          r.photos.map(function(src, i) {
+            return /*#__PURE__*/React.createElement("div", { key:i, style:{ borderRadius:10, overflow:"hidden", aspectRatio:"1" } },
+              /*#__PURE__*/React.createElement("img", {
+                src: src,
+                style:{ width:"100%", height:"100%", objectFit:"cover", display:"block", cursor:"pointer" },
+                onClick: function() { window.open(src); }
+              })
+            );
+          })
+        )
       ),
       // Footer
       /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", marginTop:24, padding:"0 12px" } },
