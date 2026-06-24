@@ -9623,6 +9623,7 @@ function ExpiredScreen(_ref) {
         }, { merge: true }).catch(function(){});
       }
     } catch(e){}
+    _finalizarRenovacion(result);
   };
   var _finalizarRenovacion = function(result) {
     var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + currentUser.username);
