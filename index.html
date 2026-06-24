@@ -664,11 +664,12 @@ async function _licVerify(code) {
     return { ok: false, type: "expired", label: stored.label };
   }
 
-  // Validar formato
-  var demoMatch  = c.match(/^DEMO-([A-Z0-9]{5})$/);
-  var proMatch   = c.match(/^PRO-([A-Z0-9]{5})$/);
-  var trialMatch = c.match(/^TRIAL-([A-Z0-9]{5})-(\d{1,3})$/);
-  if (!demoMatch && !proMatch && !trialMatch) return { ok: false, type: "invalid" };
+  // ── Validar con verificarCodigo (soporta todos los formatos generados por el admin) ──
+  var result = verificarCodigo(c);
+  if (!result.valid) {
+    if (result.expired) return { ok: false, type: "expired" };
+    return { ok: false, type: "invalid" };
+  }
 
   // ── Verificar en Firebase si el código ya fue usado en otro dispositivo ──
   if (window.__firebaseOK && typeof firebase !== "undefined") {
@@ -680,38 +681,34 @@ async function _licVerify(code) {
       if (doc.exists && doc.data() && doc.data().used) {
         return { ok: false, type: "already_used" };
       }
-      // Marcar como usado en Firebase antes de activar
+      var storedUser = "";
+      try { storedUser = localStorage.getItem("trp_current_user") || ""; } catch(e2) {}
       await docRef.set({
         used: true,
         code: c,
         activatedAt: Date.now(),
+        usedAt: new Date().toISOString(),
+        usedBy: storedUser,
         device: (navigator.userAgent || "").substring(0, 120)
-      });
+      }, { merge: true });
     } catch(fbErr) {
       console.warn("[TRP] Firebase license check falló, modo offline:", fbErr);
     }
   }
 
-  // ── Activar localmente ──
-  if (demoMatch) {
-    var expires = Date.now() + LICENSE_DEMO_DAYS * 86400000;
-    var lic = { code: c, type: "demo", label: "Demo " + LICENSE_DEMO_DAYS + " días", expires: expires, permanent: false };
-    try { localStorage.setItem("trp_lic_v1", JSON.stringify(lic)); } catch(e) {}
-    return { ok: true, type: "demo", label: lic.label, daysLeft: LICENSE_DEMO_DAYS };
-  }
-  if (proMatch) {
+  // ── Activar localmente según tipo ──
+  if (result.type === "pro") {
     var lic = { code: c, type: "pro", label: "Licencia Pro", permanent: true };
     try { localStorage.setItem("trp_lic_v1", JSON.stringify(lic)); } catch(e) {}
     return { ok: true, type: "pro", label: "Licencia Pro", permanent: true };
   }
-  if (trialMatch) {
-    var days = parseInt(trialMatch[2]);
-    var expires = Date.now() + days * 86400000;
-    var lic = { code: c, type: "trial", label: "Trial " + days + " días", expires: expires, permanent: false };
-    try { localStorage.setItem("trp_lic_v1", JSON.stringify(lic)); } catch(e) {}
-    return { ok: true, type: "trial", label: lic.label, daysLeft: days };
-  }
-  return { ok: false, type: "invalid" };
+  var cType = c.startsWith("ANUAL-") ? "anual" : c.startsWith("TRIAL-") ? "trial" : "demo";
+  var cDays = result.daysLeft || LICENSE_DEMO_DAYS;
+  var cLabel = cType === "anual" ? "Licencia Anual" : cType === "trial" ? "Trial " + cDays + " días" : "Demo " + cDays + " días";
+  var expires = Date.now() + cDays * 86400000;
+  var lic = { code: c, type: cType, label: cLabel, expires: expires, permanent: false };
+  try { localStorage.setItem("trp_lic_v1", JSON.stringify(lic)); } catch(e) {}
+  return { ok: true, type: cType, label: cLabel, daysLeft: cDays };
 }
 
 function _licCheck_OLD() {
@@ -802,7 +799,7 @@ function LicLoginScreen(_ref) {
       /*#__PURE__*/React.createElement("div", { style:{fontSize:22, fontWeight:700, color:"#1C1C1C", marginBottom:4} }, "ACCE PRO"),
       /*#__PURE__*/React.createElement("div", { style:{fontSize:13, color:"#606060", marginBottom:28} }, "Ingresa tu código de acceso para continuar"),
       /*#__PURE__*/React.createElement("input", {
-        type:"text", value:code, placeholder:"Ej: DEMO-AB12C",
+        type:"text", value:code, placeholder:"Ej: DEMO-20261231ABC-XXXXXXXX",
         onChange: function(e){ setCode(e.target.value.toUpperCase()); setError(""); },
         onKeyDown: function(e){ if(e.key==="Enter") handleActivate(); },
         style:{ width:"100%", padding:"12px 16px", border:"1px solid #E0E0E0", borderBottom:"2px solid #0067C0", borderRadius:4, fontSize:16, textAlign:"center", letterSpacing:"0.1em", fontFamily:"inherit", marginBottom:12, outline:"none", boxSizing:"border-box" }
@@ -8714,6 +8711,7 @@ function AdminPanel() {
   var _a9 = useState([]), _aa9 = _slicedToArray(_a9, 2), cuentas = _aa9[0], setCuentas = _aa9[1];
   var _a10 = useState(false), _aa10 = _slicedToArray(_a10, 2), loadingCuentas = _aa10[0], setLoadingCuentas = _aa10[1];
   var _a11 = useState(""), _aa11 = _slicedToArray(_a11, 2), buscarCuenta = _aa11[0], setBuscarCuenta = _aa11[1];
+  var _a12 = useState("todos"), _aa12 = _slicedToArray(_a12, 2), filtro = _aa12[0], setFiltro = _aa12[1];
 
   var getDb = function() {
     var db = window.__firebaseDB;
@@ -8962,6 +8960,38 @@ function AdminPanel() {
     return !buscarCuenta || u.username.toLowerCase().includes(buscarCuenta.toLowerCase());
   });
 
+  var codigosDisponibles = codigos.filter(function(x){ return !x.usado; }).length;
+  var codigosUsados = codigos.filter(function(x){ return x.usado; }).length;
+  var codigosFiltrados = filtro === "disponibles" ? codigos.filter(function(x){ return !x.usado; })
+    : filtro === "usados" ? codigos.filter(function(x){ return x.usado; }) : codigos;
+
+  var renovarCuenta = function(u) {
+    var db = getDb();
+    var code;
+    var now = new Date();
+    var days = 30;
+    var exp = new Date(now.getTime() + days * 86400000);
+    var dateStr = exp.getFullYear().toString() + String(exp.getMonth()+1).padStart(2,"0") + String(exp.getDate()).padStart(2,"0");
+    var ts36 = Date.now().toString(36).toUpperCase().slice(-3);
+    var rnd  = Math.random().toString(36).slice(2,5).toUpperCase();
+    var dateStrUniq = dateStr + ts36 + rnd;
+    var h = _hash(dateStrUniq + _LS);
+    code = "TRIAL-" + dateStrUniq + "-" + h;
+    if (db) {
+      var codeKey = "code_LIC_" + code.replace(/[^A-Z0-9]/g,"_");
+      db.collection("trp_users").doc(codeKey).set({ code:code, tipo:"trial", generadoEn:new Date().toISOString(), used:false, createdByAdmin:true }, { merge:true })
+        .catch(function(){});
+    }
+    var msg = "Hola " + u.username + ", aquí tienes tu código de renovación ACCE PRO (30 días):\n\n" + code + "\n\nIngresa el código en Configuración → Licencia para activarlo.";
+    setCodigos(function(prev){ var nu = [{ code:code, tipo:"trial", generadoEn:new Date().toISOString(), usado:false }].concat(prev); localStorage.setItem("acce_admin_codes", JSON.stringify(nu)); return nu; });
+    if (u.phone) {
+      window.open("https://wa.me/57" + u.phone.replace(/\D/g,"") + "?text=" + encodeURIComponent(msg), "_blank");
+    } else {
+      navigator.clipboard.writeText(code).catch(function(){});
+      alert("Código copiado: " + code + "\n\nEnvíaselo manualmente al cliente.");
+    }
+  };
+
   var cardStyle = { background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", marginBottom:16 };
   var lblStyle  = { fontSize:12, fontWeight:600, color:"#606060", marginBottom:6, display:"block" };
 
@@ -8989,6 +9019,22 @@ function AdminPanel() {
             /*#__PURE__*/React.createElement("span", { style:{ width:7, height:7, borderRadius:"50%", background: window.__firebaseDB ? "#10E08A" : "#EF4444", display:"inline-block" } }),
             /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color: window.__firebaseDB ? "#10E08A" : "#EF4444" } }, window.__firebaseDB ? "Firebase ✅" : "Firebase ❌ Sin conexión")
           )
+        )
+      ),
+
+      /* ── STATS ── */
+      /*#__PURE__*/React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:16 } },
+        /*#__PURE__*/React.createElement("div", { style:{ background:"#fff", borderRadius:10, padding:"12px 14px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", textAlign:"center" } },
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#0D1B35" } }, codigos.length),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:2 } }, "Códigos total")
+        ),
+        /*#__PURE__*/React.createElement("div", { style:{ background:"#F0FDF4", borderRadius:10, padding:"12px 14px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", textAlign:"center" } },
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#10B981" } }, codigosDisponibles),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:2 } }, "Disponibles")
+        ),
+        /*#__PURE__*/React.createElement("div", { style:{ background:"#FFF5F5", borderRadius:10, padding:"12px 14px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", textAlign:"center" } },
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#EF4444" } }, codigosUsados),
+          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:2 } }, "Activados")
         )
       ),
 
@@ -9042,8 +9088,17 @@ function AdminPanel() {
         ),
 
         /*#__PURE__*/React.createElement("div", { style: cardStyle },
+          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:6, marginBottom:10 } },
+            [["todos","Todos"],["disponibles","✔ Disponibles"],["usados","✖ Activados"]].map(function(f) {
+              return /*#__PURE__*/React.createElement("button", {
+                key:f[0], onClick:function(){ setFiltro(f[0]); },
+                style:{ flex:1, padding:"6px 0", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700,
+                  background: filtro===f[0] ? "#0D1B35" : "#F1F5F9", color: filtro===f[0] ? "#fff" : "#64748B" }
+              }, f[1]);
+            })
+          ),
           /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
-            /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "📋 Códigos generados ("+codigos.length+")"),
+            /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "📋 Códigos generados ("+codigosFiltrados.length+")"),
             /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, alignItems:"center" } },
               /*#__PURE__*/React.createElement("button", {
                 onClick: cargarCodigosFirebase,
@@ -9072,12 +9127,12 @@ function AdminPanel() {
           ),
           loadingCodes
             ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "⏳ Cargando códigos desde Firebase...")
-            : codigos.length === 0
-            ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "Aún no has generado ningún código")
+            : codigosFiltrados.length === 0
+            ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, codigos.length === 0 ? "Aún no has generado ningún código" : "No hay códigos con ese filtro")
             : /*#__PURE__*/React.createElement("div", { style:{ maxHeight:420, overflowY:"auto", paddingRight:4,
                 scrollbarWidth:"thin", scrollbarColor:"#CBD5E1 transparent" } },
               /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:8 } },
-                codigos.map(function(item, idx) {
+                codigosFiltrados.map(function(item, idx) {
                   var usado = item.usado;
                   return /*#__PURE__*/React.createElement("div", { key:idx,
                     style:{ background:usado?"#FFF5F5":"#F0FDF4", border:"1px solid "+(usado?"#FCA5A5":"#6EE7B7"), borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"flex-start", gap:10 }
@@ -9193,10 +9248,16 @@ function AdminPanel() {
                           !u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Sin actividad registrada")
                         )
                       ),
-                      /*#__PURE__*/React.createElement("button", { onClick:function(){ eliminarCuenta(u); },
-                        title:"Eliminar cuenta",
-                        style:{ padding:"6px 12px", background:"#FEE2E2", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#EF4444", fontFamily:"inherit", fontWeight:700, flexShrink:0 }
-                      }, "🗑️ Eliminar")
+                      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:6, flexShrink:0 } },
+                        /*#__PURE__*/React.createElement("button", { onClick:function(){ renovarCuenta(u); },
+                          title:"Generar código de renovación y enviar por WhatsApp",
+                          style:{ padding:"6px 10px", background:"#EFF6FF", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#3B82F6", fontFamily:"inherit", fontWeight:700 }
+                        }, "🔑 Renovar"),
+                        /*#__PURE__*/React.createElement("button", { onClick:function(){ eliminarCuenta(u); },
+                          title:"Eliminar cuenta",
+                          style:{ padding:"6px 10px", background:"#FEE2E2", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#EF4444", fontFamily:"inherit", fontWeight:700 }
+                        }, "🗑️")
+                      )
                     );
                   })
                 )
