@@ -706,7 +706,7 @@ async function _licVerify(code) {
   var cDays = result.daysLeft || LICENSE_DEMO_DAYS;
   var cLabel = cType === "anual" ? "Licencia Anual" : cType === "trial" ? "Trial " + cDays + " días" : "Demo " + cDays + " días";
   var expires = Date.now() + cDays * 86400000;
-  var lic = { code: c, type: cType, label: cLabel, expires: expires, permanent: false };
+  var lic = { code: c, type: cType, label: cLabel, expires: expires, permanent: false, activatedAt: Date.now(), totalDays: cDays };
   try { localStorage.setItem("trp_lic_v1", JSON.stringify(lic)); } catch(e) {}
   return { ok: true, type: cType, label: cLabel, daysLeft: cDays };
 }
@@ -7035,7 +7035,7 @@ function SettingsView(_ref20) {
           _saveUser(updated);
           // Guardar también en trp_lic_v1 para que el panel lo muestre correctamente
           try {
-            localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newLic.trim().toUpperCase(), type: result.type }));
+            localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newLic.trim().toUpperCase(), type: result.type, activatedAt: Date.now(), totalDays: result.daysLeft || 8 }));
           } catch(e) {}
           // Registrar uso del código en Firebase (panel admin lo verá en rojo)
           try {
@@ -7049,7 +7049,8 @@ function SettingsView(_ref20) {
               }, { merge: true });
             }
           } catch(e){}
-          setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Recarga para aplicar." : "✅ Demo activado — " + result.daysLeft + " días. Recarga para aplicar.");
+          setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Aplicando..." : "✅ Licencia activada — " + result.daysLeft + " días. Aplicando...");
+          setTimeout(function(){ window.location.reload(); }, 1500);
         } else {
           setLicErr("Error: no se encontró tu cuenta. Vuelve a iniciar sesión.");
         }
@@ -8680,14 +8681,31 @@ function verificarCodigo(raw) {
 
 // ─── DEMO BANNER ──────────────────────────────────────────
 function DemoBanner(_ref) {
-  var daysLeft = _ref.daysLeft, minsLeft = _ref.minsLeft;
-  var urgent = daysLeft <= 2 || minsLeft !== undefined;
-  var msg = minsLeft !== undefined
-    ? "⏱ Código de prueba: " + minsLeft + " minuto" + (minsLeft !== 1 ? "s" : "") + " restante" + (minsLeft !== 1 ? "s" : "")
-    : "⏱ Demo: " + daysLeft + " día" + (daysLeft !== 1 ? "s" : "") + " restante" + (daysLeft !== 1 ? "s" : "");
+  var daysLeft = _ref.daysLeft, minsLeft = _ref.minsLeft, totalDays = _ref.totalDays, licCode = _ref.licCode;
+  var isTest = minsLeft !== undefined;
+  var prefix = licCode ? licCode.split("-")[0] : "DEMO";
+  var estTotal = totalDays || (prefix === "ANUAL" ? 365 : prefix === "TRIAL" ? 30 : 8);
+  var pct = isTest
+    ? Math.max(2, Math.min(100, (minsLeft / 10) * 100))
+    : Math.max(2, Math.min(100, (daysLeft / estTotal) * 100));
+  var barColor = pct > 50 ? "#10E08A" : pct > 20 ? "#F59E0B" : pct > 10 ? "#FF6B35" : "#EF4444";
+  var typeLabel = isTest ? "TEST" : prefix === "ANUAL" ? "ANUAL" : prefix === "TRIAL" ? "TRIAL" : "DEMO";
+  var msg = isTest
+    ? minsLeft + " min restante" + (minsLeft !== 1 ? "s" : "")
+    : daysLeft + " día" + (daysLeft !== 1 ? "s" : "") + " restante" + (daysLeft !== 1 ? "s" : "");
   return /*#__PURE__*/React.createElement("div", {
-    style: { background: urgent ? T.red : T.accent, color: urgent ? "#fff" : "#0D1B35", padding:"6px 16px", fontSize:12, fontWeight:700, textAlign:"center", flexShrink:0, letterSpacing:"0.02em" }
-  }, msg, " — Para continuar contacta a GlobalAcce");
+    style: { background: T.card || "#1A1F2E", borderBottom: "1px solid " + barColor + "33", padding:"5px 16px", flexShrink:0, display:"flex", alignItems:"center", gap:10 }
+  },
+    /*#__PURE__*/React.createElement("span", {
+      style: { fontSize:10, fontWeight:800, color: T.bg || "#0D1B35", background: barColor, padding:"2px 8px", borderRadius:6, flexShrink:0, letterSpacing:"0.05em" }
+    }, typeLabel),
+    /*#__PURE__*/React.createElement("div", { style:{ flex:1, display:"flex", alignItems:"center", gap:8 } },
+      /*#__PURE__*/React.createElement("div", { style:{ flex:1, height:5, background:"rgba(255,255,255,0.1)", borderRadius:3, overflow:"hidden" } },
+        /*#__PURE__*/React.createElement("div", { style:{ width: pct+"%", height:"100%", background: barColor, borderRadius:3, transition:"width 0.8s ease" } })
+      ),
+      /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, fontWeight:700, color: barColor, flexShrink:0, minWidth:90, textAlign:"right" } }, msg)
+    )
+  );
 }
 
 // ─── ALIAS compatibilidad (funciones del sistema anterior) ─
@@ -9426,24 +9444,27 @@ function LoginScreen(_ref) {
     if (resetCode.trim().toUpperCase() !== _resetCode(norm)) { setErr("Código de recuperación incorrecto"); return; }
     if (newPwd.length < 4) { setErr("La nueva contraseña debe tener al menos 4 caracteres"); return; }
     if (newPwd !== newPwd2) { setErr("Las contraseñas no coinciden"); return; }
+    var _aplicarReset = function(base) {
+      var updated = Object.assign({}, base, { passwordHash: _hashPwd(newPwd, norm) });
+      _saveUser(updated);
+      var pwdGuardado = newPwd;
+      setNewPwd(""); setNewPwd2(""); setResetCode(""); setErr("");
+      setPwd(pwdGuardado);
+      setErr("✅ Contraseña restablecida. Iniciando sesión...");
+      setTimeout(function() { setResetMode(false); setErr(""); }, 1500);
+    };
     var localUser = _loadUserLocal(norm);
     if (!localUser) {
-      // Intentar desde Firebase
       var ref = _getUserRef(norm);
       if (ref) {
         ref.get().then(function(doc) {
-          if (doc.exists) {
-            var updated = Object.assign({}, doc.data(), { passwordHash: _hashPwd(newPwd, norm) });
-            _saveUser(updated);
-            setResetMode(false); setErr(""); setPwd(""); setNewPwd(""); setNewPwd2(""); setResetCode("");
-          } else { setErr("Usuario no encontrado"); }
+          if (doc.exists) { _aplicarReset(doc.data()); }
+          else { setErr("Usuario no encontrado"); }
         }).catch(function(){ setErr("Error de conexión"); });
       } else { setErr("Sin conexión"); }
       return;
     }
-    var updated = Object.assign({}, localUser, { passwordHash: _hashPwd(newPwd, norm) });
-    _saveUser(updated);
-    setResetMode(false); setErr(""); setPwd(""); setNewPwd(""); setNewPwd2(""); setResetCode("");
+    _aplicarReset(localUser);
   };
 
   if (resetMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
@@ -9637,6 +9658,7 @@ function ExpiredScreen(_ref) {
       clientId: permanentClientId
     });
     _saveUser(updated);
+    try { localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newCode.trim().toUpperCase(), type: result.type, activatedAt: Date.now(), totalDays: result.daysLeft || 30 })); } catch(e) {}
     localStorage.setItem("trp_session_" + currentUser.username, "active");
     setLoading(false);
     onRenewed(updated);
@@ -10209,8 +10231,10 @@ function Root() {
 
   // screen === "app"
   var licInfo = verificarCodigo(currentUser.licenseCode || "");
+  var _licSt = null;
+  try { _licSt = JSON.parse(localStorage.getItem("trp_lic_v1") || "null"); } catch(e2) {}
   return /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", height:"100dvh" } },
-    licInfo.type === "demo" && /*#__PURE__*/React.createElement(DemoBanner, { daysLeft: licInfo.daysLeft, minsLeft: licInfo.minsLeft }),
+    licInfo.type === "demo" && /*#__PURE__*/React.createElement(DemoBanner, { daysLeft: licInfo.daysLeft, minsLeft: licInfo.minsLeft, totalDays: _licSt && _licSt.totalDays ? _licSt.totalDays : null, licCode: currentUser.licenseCode || "" }),
     /*#__PURE__*/React.createElement(App, { clientId: currentUser.clientId, onLogout: onLogout }),
     /*#__PURE__*/React.createElement(UpdateBanner, null)
   );
