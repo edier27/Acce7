@@ -10273,9 +10273,11 @@ function Root() {
   }
 
   var _checkLicenseAndEnter = function(userData) {
-    // El admin (dueño del sistema) no necesita licencia
+    // El admin (dueño del sistema) no necesita licencia.
+    // Su taller real es la cuenta "globalacce" → clientId PRO_FWB732_00555HR8.
     if (_isAdminUid(userData.uid)) {
-      userData.clientId = userData.clientId || "globalacce";
+      userData.clientId = userData.clientId || "PRO_FWB732_00555HR8";
+      userData.licenseCode = userData.licenseCode || "PRO-7S8ASF-00NPXSIX";
       setCurrentUser(userData);
       setScreen("app");
       setChecking(false);
