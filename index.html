@@ -911,6 +911,12 @@ var fmt = function fmt(n) {
 var uid = function uid() {
   return "id_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
 };
+// Escapa HTML para insertar datos del usuario en innerHTML sin riesgo de XSS.
+function _escHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
 // ── Hora Colombia (UTC-5) — función central ──────────────────────────────────
 var colombiaDate = function() {
   var now = new Date();
@@ -2824,9 +2830,9 @@ function RepairModal(_ref0) {
               });
               if(inv.length===0){ dd.innerHTML="<div style='padding:10px;color:#888;font-size:12px'>Sin resultados</div>"; dd.style.display="block"; return; }
               dd.innerHTML = inv.slice(0,8).map(function(item){
-                return "<div data-id=\""+item.id+"\" data-nm=\""+encodeURIComponent(item.name)+"\" class=\"pdi\" style=\"padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid rgba(128,128,128,0.1)\">"+
-                  "<div style=\"font-weight:600\">"+item.name+"</div>"+
-                  "<div style=\"font-size:11px;color:#888\">"+item.category+" · Stock: "+item.qty+" · "+fmt(item.price)+"</div></div>";
+                return "<div data-id=\""+_escHtml(item.id)+"\" data-nm=\""+encodeURIComponent(item.name)+"\" class=\"pdi\" style=\"padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid rgba(128,128,128,0.1)\">"+
+                  "<div style=\"font-weight:600\">"+_escHtml(item.name)+"</div>"+
+                  "<div style=\"font-size:11px;color:#888\">"+_escHtml(item.category)+" · Stock: "+_escHtml(item.qty)+" · "+fmt(item.price)+"</div></div>";
               }).join("");
               dd.querySelectorAll(".pdi").forEach(function(el){
                 el.onmouseover=function(){ el.style.background="rgba(232,98,26,0.08)"; };
@@ -5465,7 +5471,7 @@ function showQRModal(clientId, r) {
   box.innerHTML =
     "<div style='font-size:13px;color:#8A8398;font-weight:600;letter-spacing:1px;text-transform:uppercase'>Seguimiento</div>"+
     "<div style='font-size:22px;font-weight:800;color:#15101D;margin:4px 0 4px'>Orden #"+rid+"</div>"+
-    "<div style='font-size:13px;color:#8A8398;margin-bottom:20px'>"+(r.customer||"")+" · "+(r.device||"")+"</div>"+
+    "<div style='font-size:13px;color:#8A8398;margin-bottom:20px'>"+_escHtml(r.customer||"")+" · "+_escHtml(r.device||"")+"</div>"+
     "<div id='_qrbox' style='display:flex;justify-content:center;padding:16px;background:#fff;border-radius:16px;border:1px solid #EEE'></div>"+
     "<div style='font-size:12px;color:#8A8398;margin-top:16px;line-height:1.5'>El cliente escanea este código para ver el estado de su reparación en tiempo real</div>"+
     "<div style='display:flex;gap:10px;margin-top:20px'>"+
@@ -5491,10 +5497,10 @@ function showQRModal(clientId, r) {
     else if (img) qrImg = img.src;
     var w = window.open("", "_blank", "width=400,height=560");
     if (w) {
-      w.document.write("<html><head><title>QR Orden #"+rid+"</title></head><body style='font-family:Arial;text-align:center;padding:30px'>"+
+      w.document.write("<html><head><title>QR Orden #"+_escHtml(rid)+"</title></head><body style='font-family:Arial;text-align:center;padding:30px'>"+
         "<h2 style='margin:0 0 4px'>Seguimiento de Reparación</h2>"+
-        "<p style='margin:0 0 4px;font-size:18px;font-weight:bold'>Orden #"+rid+"</p>"+
-        "<p style='margin:0 0 16px;color:#666;font-size:13px'>"+(r.customer||"")+" · "+(r.device||"")+"</p>"+
+        "<p style='margin:0 0 4px;font-size:18px;font-weight:bold'>Orden #"+_escHtml(rid)+"</p>"+
+        "<p style='margin:0 0 16px;color:#666;font-size:13px'>"+_escHtml(r.customer||"")+" · "+_escHtml(r.device||"")+"</p>"+
         "<img src='"+qrImg+"' style='width:240px;height:240px'/>"+
         "<p style='margin:16px 0 0;font-size:12px;color:#666'>Escanea para ver el estado de tu reparación</p>"+
         "<button onclick='window.print()' style='margin-top:20px;padding:10px 24px;background:#E8540F;color:#fff;border:none;border-radius:8px;cursor:pointer'>Imprimir</button>"+
@@ -5584,7 +5590,7 @@ function printRepair(r) {
       if(!value) return "";
       return "<div style=\"margin-bottom:7px\">"+
         "<div style=\"font-weight:900;font-size:11px;color:#000\">"+label+"</div>"+
-        "<div style=\"font-size:"+baseFont+";font-weight:bold;word-wrap:break-word\">"+value+"</div>"+
+        "<div style=\"font-size:"+baseFont+";font-weight:bold;word-wrap:break-word\">"+_escHtml(value)+"</div>"+
       "</div>";
     };
 
@@ -5605,8 +5611,8 @@ function printRepair(r) {
         "</div>"
       : "";
 
-    notesHtml = r.notes ? "<div style=\"margin-top:6px;font-size:10px\"><b>NOTAS:</b><br>"+r.notes+"</div>" : "";
-    advHtml = (r.advances && r.advances.length) ? "<div style=\"margin-top:6px;font-size:10px\"><b>ABONOS:</b><br>"+r.advances.map(function(a){return fmt(a.amount)+" - "+a.date}).join("<br>")+"</div>" : "";
+    notesHtml = r.notes ? "<div style=\"margin-top:6px;font-size:10px\"><b>NOTAS:</b><br>"+_escHtml(r.notes)+"</div>" : "";
+    advHtml = (r.advances && r.advances.length) ? "<div style=\"margin-top:6px;font-size:10px\"><b>ABONOS:</b><br>"+r.advances.map(function(a){return fmt(a.amount)+" - "+_escHtml(a.date)}).join("<br>")+"</div>" : "";
 
     _printHTML(
       "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+orderId+"</title>"+
@@ -5620,15 +5626,15 @@ function printRepair(r) {
       ".big{font-size:"+bigFont+";font-weight:900}"+
       ".tag{display:inline-block;border:2px solid #000;padding:1px 6px;font-weight:900;font-size:10px;margin:1px}"+
       "@media print{.no-print{display:none}}</style></head><body>"+
-      "<div class=\"c store\">"+storeName+"</div>"+
+      "<div class=\"c store\">"+_escHtml(storeName)+"</div>"+
       "<div class=\"c small\">GESTION DE TALLER</div>"+
       "<div class=\"dash\"></div>"+
-      "<div class=\"c\"><span class=\"big\">ORDEN #"+orderId+"</span><br><span class=\"small\">"+(r.date||"")+"</span></div>"+
+      "<div class=\"c\"><span class=\"big\">ORDEN #"+_escHtml(orderId)+"</span><br><span class=\"small\">"+_escHtml(r.date||"")+"</span></div>"+
       "<div class=\"dash\"></div>"+
       fields+
       "<div class=\"dash\"></div>"+
       "<div class=\"c\"><div class=\"small\">COSTO TOTAL</div><div class=\"big\">"+fmt(r.cost)+"</div></div>"+
-      "<div class=\"c\" style=\"margin-top:4px\"><span class=\"tag\">"+(r.status||"").toUpperCase()+"</span><span class=\"tag\">"+(r.paid?"PAGADO":"PENDIENTE")+"</span></div>"+
+      "<div class=\"c\" style=\"margin-top:4px\"><span class=\"tag\">"+_escHtml((r.status||"").toUpperCase())+"</span><span class=\"tag\">"+(r.paid?"PAGADO":"PENDIENTE")+"</span></div>"+
       notesHtml + advHtml + garantiaT +
       "<div class=\"dash\"></div>"+
       (qrDataUrl ? "<div class=\"c\" style=\"margin:10px 0\"><img src='"+qrDataUrl+"' style='width:110px;height:110px'/><div style=\"font-size:9px;margin-top:4px\">Escanea para ver tu estado</div></div>" : "")+
@@ -5642,9 +5648,9 @@ function printRepair(r) {
     // ── FORMATO CARTA (documento profesional) ──
     var rows = [["Cliente", r.customer||"—"], ["Teléfono", r.phone||"—"], ["Equipo", r.device||"—"], ["Categoría", r.category||"—"], ["Problema reportado", r.problem||"—"], ["Técnico asignado", r.technician||"—"], ["📅 Fecha de ingreso", r.date||"—"], ["📦 Fecha de retiro", r.deliveryDate||"Pendiente de entrega"]];
     if (lockText) rows.push(["🔒 Bloqueo", lockText]);
-    var rowsHtml = rows.map(function(x){ return "<tr><td class=\"lbl\">"+x[0]+"</td><td class=\"val\">"+x[1]+"</td></tr>"; }).join("");
-    notesHtml = r.notes ? "<div class=\"notes\"><div class=\"notes-title\">Diagnóstico / Notas</div><p>"+r.notes+"</p></div>" : "";
-    advHtml = r.advances && r.advances.length ? "<div class=\"notes\"><div class=\"notes-title\">Abonos registrados</div><p>"+r.advances.map(function(a){return fmt(a.amount)+" — "+a.date}).join("<br>")+"</p></div>" : "";
+    var rowsHtml = rows.map(function(x){ return "<tr><td class=\"lbl\">"+x[0]+"</td><td class=\"val\">"+_escHtml(x[1])+"</td></tr>"; }).join("");
+    notesHtml = r.notes ? "<div class=\"notes\"><div class=\"notes-title\">Diagnóstico / Notas</div><p>"+_escHtml(r.notes)+"</p></div>" : "";
+    advHtml = r.advances && r.advances.length ? "<div class=\"notes\"><div class=\"notes-title\">Abonos registrados</div><p>"+r.advances.map(function(a){return fmt(a.amount)+" — "+_escHtml(a.date)}).join("<br>")+"</p></div>" : "";
     var estadoColor = r.status==="Entregado" ? "#8B5CF6" : r.status==="Listo" ? "#10B981" : r.status==="En Reparación" ? "#0078FF" : "#6B7280";
     var pagoBadge = r.paid ? "<span style=\"background:#DCFCE7;color:#16A34A;padding:4px 14px;border-radius:20px;font-weight:700;font-size:13px\">✓ PAGADO</span>" : "<span style=\"background:#FEE2E2;color:#DC2626;padding:4px 14px;border-radius:20px;font-weight:700;font-size:13px\">⏳ PENDIENTE</span>";
 
@@ -5676,12 +5682,12 @@ function printRepair(r) {
       ".footer{text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #EEE;font-size:12px;color:#999}"+
       "@media print{button{display:none}}"+
       "</style></head><body>"+
-      "<div class=\"header\"><div class=\"brand\"><h1>"+storeName+"</h1><p>Gestión de Taller</p></div>"+
-      "<div class=\"order-box\"><div class=\"num\">Orden N°</div><div class=\"id\">#"+orderId+"</div><div class=\"date\">"+(r.date||"")+"</div></div></div>"+
+      "<div class=\"header\"><div class=\"brand\"><h1>"+_escHtml(storeName)+"</h1><p>Gestión de Taller</p></div>"+
+      "<div class=\"order-box\"><div class=\"num\">Orden N°</div><div class=\"id\">#"+_escHtml(orderId)+"</div><div class=\"date\">"+_escHtml(r.date||"")+"</div></div></div>"+
       "<div class=\"section-title\">Información de la reparación</div>"+
       "<table class=\"info\"><tbody>"+rowsHtml+"</tbody></table>"+
       "<div class=\"cost-box\"><span class=\"cost-label\">COSTO TOTAL</span><span class=\"cost-val\">"+fmt(r.cost)+"</span></div>"+
-      "<div class=\"status-row\"><span class=\"status-tag\" style=\"background:"+estadoColor+"\">"+(r.status||"")+"</span>"+pagoBadge+"</div>"+
+      "<div class=\"status-row\"><span class=\"status-tag\" style=\"background:"+estadoColor+"\">"+_escHtml(r.status||"")+"</span>"+pagoBadge+"</div>"+
       notesHtml+advHtml+
       (r.paid && r.status==="Entregado" ? "<div style=\"background:#F0FDF4;border:2px solid #16A34A;border-radius:12px;padding:16px 20px;margin:20px 0;display:flex;align-items:center;gap:14px\"><div style=\"font-size:32px\">🛡️</div><div><div style=\"font-weight:800;font-size:16px;color:#16A34A\">GARANTÍA DE 15 DÍAS</div><div style=\"font-size:13px;color:#555;margin-top:2px\">Este equipo cuenta con 15 días de garantía a partir de la fecha de entrega. Válida presentando este recibo. No cubre daños físicos, humedad o mal manejo.</div></div></div>" : "")+
       "<div class=\"sign-row\"><div class=\"sign-box\">Firma del técnico</div><div class=\"sign-box\">Firma del cliente</div></div>"+
@@ -5713,8 +5719,8 @@ function printReceipt(sale) {
 
     var items = sale.items.map(function(i){
       return "<div style=\"margin-bottom:5px;font-size:"+baseFont+"\">"+
-        "<div style=\"font-weight:bold\">"+i.name+"</div>"+
-        "<div style=\"display:flex;justify-content:space-between\"><span>"+i.qty+" x "+fmtCOP(i.unitPrice)+"</span><span style=\"font-weight:bold\">"+fmtCOP(i.total)+"</span></div>"+
+        "<div style=\"font-weight:bold\">"+_escHtml(i.name)+"</div>"+
+        "<div style=\"display:flex;justify-content:space-between\"><span>"+_escHtml(i.qty)+" x "+fmtCOP(i.unitPrice)+"</span><span style=\"font-weight:bold\">"+fmtCOP(i.total)+"</span></div>"+
       "</div>";
     }).join("");
 
@@ -5730,14 +5736,14 @@ function printReceipt(sale) {
       ".big{font-size:"+bigFont+";font-weight:900}"+
       ".total-row{display:flex;justify-content:space-between;font-weight:bold;font-size:"+bigFont+";border-top:1px solid #000;padding-top:5px;margin-top:5px}"+
       "@media print{.no-print{display:none}}</style></head><body>"+
-      "<div class=\"c store\">"+storeName+"</div>"+
+      "<div class=\"c store\">"+_escHtml(storeName)+"</div>"+
       "<div class=\"c small\">RECIBO DE VENTA</div>"+
       "<div class=\"dash\"></div>"+
-      "<div class=\"c\"><span class=\"big\">#"+recId+"</span><br><span class=\"small\">"+sale.date+" | "+sale.payment+"</span></div>"+
+      "<div class=\"c\"><span class=\"big\">#"+_escHtml(recId)+"</span><br><span class=\"small\">"+_escHtml(sale.date)+" | "+_escHtml(sale.payment)+"</span></div>"+
       "<div class=\"dash\"></div>"+
       items+
       "<div class=\"total-row\"><span>TOTAL</span><span>"+fmtCOP(sale.total)+"</span></div>"+
-      (sale.customer?"<div style=\"margin-top:6px;font-size:10px\"><b>Cliente:</b> "+sale.customer+"</div>":"")+
+      (sale.customer?"<div style=\"margin-top:6px;font-size:10px\"><b>Cliente:</b> "+_escHtml(sale.customer)+"</div>":"")+
       "<div class=\"dash\"></div>"+
       "<div class=\"c small\">Gracias por su compra</div>"+
       "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>"+
@@ -5748,8 +5754,8 @@ function printReceipt(sale) {
   } else {
     // ── FACTURA CARTA (documento profesional) ──
     var items = sale.items.map(function(i){
-      return "<tr><td class=\"it-name\">"+i.name+"</td>"+
-        "<td class=\"it-c\">"+i.qty+"</td>"+
+      return "<tr><td class=\"it-name\">"+_escHtml(i.name)+"</td>"+
+        "<td class=\"it-c\">"+_escHtml(i.qty)+"</td>"+
         "<td class=\"it-r\">"+fmtCOP(i.unitPrice)+"</td>"+
         "<td class=\"it-r\">"+fmtCOP(i.total)+"</td></tr>";
     }).join("");
@@ -5773,12 +5779,12 @@ function printReceipt(sale) {
       ".footer{text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #EEE;font-size:12px;color:#999}"+
       "@media print{button{display:none}}"+
       "</style></head><body>"+
-      "<div class=\"header\"><div class=\"brand\"><h1>"+storeName+"</h1><p>Recibo de Venta</p></div>"+
-      "<div class=\"rec-box\"><div class=\"lbl\">Recibo N°</div><div class=\"id\">#"+recId+"</div><div class=\"date\">"+sale.date+"</div></div></div>"+
-      "<div class=\"meta\"><div><span>Forma de pago</span><strong>"+sale.payment+"</strong></div>"+(sale.customer?"<div><span>Cliente</span><strong>"+sale.customer+"</strong></div>":"")+"</div>"+
+      "<div class=\"header\"><div class=\"brand\"><h1>"+_escHtml(storeName)+"</h1><p>Recibo de Venta</p></div>"+
+      "<div class=\"rec-box\"><div class=\"lbl\">Recibo N°</div><div class=\"id\">#"+_escHtml(recId)+"</div><div class=\"date\">"+_escHtml(sale.date)+"</div></div></div>"+
+      "<div class=\"meta\"><div><span>Forma de pago</span><strong>"+_escHtml(sale.payment)+"</strong></div>"+(sale.customer?"<div><span>Cliente</span><strong>"+_escHtml(sale.customer)+"</strong></div>":"")+"</div>"+
       "<table class=\"items\"><thead><tr><th>Producto</th><th>Cant</th><th>Precio</th><th>Total</th></tr></thead><tbody>"+items+"</tbody></table>"+
       "<div class=\"total-box\"><div class=\"total-inner\"><div class=\"row\"><span>TOTAL</span><span>"+fmtCOP(sale.total)+"</span></div></div></div>"+
-      (sale.notes?"<p style=\"font-size:13px;color:#666;margin-bottom:20px\"><strong>Nota:</strong> "+sale.notes+"</p>":"")+
+      (sale.notes?"<p style=\"font-size:13px;color:#666;margin-bottom:20px\"><strong>Nota:</strong> "+_escHtml(sale.notes)+"</p>":"")+
       "<div class=\"footer\">¡Gracias por su compra!</div>"+
       "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">🖨 Imprimir</button></div>"+
       "</body></html>", ptype);
@@ -5833,15 +5839,15 @@ function VentasView(_ref18) {
     var total = lista.reduce(function(s,v){ return s+(v.total||0); }, 0);
 
     var filas = lista.map(function(s, i){
-      var itemsStr = (s.items||[]).map(function(it){ return it.name+" x"+it.qty; }).join(", ");
+      var itemsStr = (s.items||[]).map(function(it){ return _escHtml(it.name)+" x"+_escHtml(it.qty); }).join(", ");
       var bg = i%2===0 ? "#fff" : "#f9fafb";
       var td = "padding:7px 10px;border-bottom:1px solid #eee;font-size:12px";
       return "<tr style='background:"+bg+"'>" +
         "<td style='"+td+"'>"+(i+1)+"</td>" +
-        "<td style='"+td+"'>"+s.date+"</td>" +
-        "<td style='"+td+"'>"+(s.customer||"-")+"</td>" +
+        "<td style='"+td+"'>"+_escHtml(s.date)+"</td>" +
+        "<td style='"+td+"'>"+_escHtml(s.customer||"-")+"</td>" +
         "<td style='"+td+";font-size:11px'>"+itemsStr+"</td>" +
-        "<td style='"+td+"'>"+(s.payment||"-")+"</td>" +
+        "<td style='"+td+"'>"+_escHtml(s.payment||"-")+"</td>" +
         "<td style='"+td+";font-weight:700;text-align:right'>"+fmtNum(s.total)+"</td>" +
         "</tr>";
     }).join("");
@@ -5849,7 +5855,7 @@ function VentasView(_ref18) {
         var html = [
       "<!DOCTYPE html><html><head>",
       "<meta charset='UTF-8'>",
-      "<title>"+titulo+" - "+storeName+"</title>",
+      "<title>"+titulo+" - "+_escHtml(storeName)+"</title>",
       "<style>",
       "*{margin:0;padding:0;box-sizing:border-box}",
       "body{font-family:Arial,sans-serif;padding:24px;color:#0D1B35}",
@@ -5866,7 +5872,7 @@ function VentasView(_ref18) {
       ".footer{text-align:center;margin-top:20px;color:#94A3B8;font-size:11px}",
       "@media print{.no-print{display:none}}",
       "</style></head><body>",
-      "<h1>"+storeName+"</h1>",
+      "<h1>"+_escHtml(storeName)+"</h1>",
       "<h2>"+titulo+"</h2>",
       "<p class='sub'>"+subtitulo+" | "+lista.length+" venta(s)</p>",
       "<table><thead><tr>",
@@ -7030,6 +7036,9 @@ function SettingsView(_ref20) {
         var result = verificarCodigo(newLic);
         if (!result.valid) { setLicErr(result.error || "Código inválido"); return; }
         var uid = _currentUid();
+        // Candado server-side: el código debe estar emitido por el admin y no quemado
+        _validarCodigoServidor(newLic, uid).then(function(chk) {
+        if (!chk.ok) { setLicErr(chk.error); return; }
         var lastUser = localStorage.getItem("trp_current_user");
         var userData = lastUser ? _loadUserLocal(lastUser) : null;
         if (!userData && uid) { try { userData = JSON.parse(localStorage.getItem("trp_profile_" + uid) || "null"); } catch(e) {} }
@@ -7066,6 +7075,7 @@ function SettingsView(_ref20) {
           setLicErr("Error: no se encontró tu cuenta. Vuelve a iniciar sesión.");
         }
         setNewLic("");
+        });
       };
       return /*#__PURE__*/React.createElement("div", null,
         // Estado actual
@@ -8710,6 +8720,30 @@ function verificarCodigo(raw) {
   return { valid: false, error: "Código inválido. Verifica e intenta de nuevo." };
 }
 
+// ─── VALIDACIÓN SERVIDOR DE CÓDIGO (anti-forja + burnable) ─
+// Un código solo es válido si EXISTE en Firestore, fue emitido por el admin
+// (createdByAdmin) y no está quemado por otra cuenta. Fail-closed: si no se
+// puede verificar, NO se activa. Devuelve Promise<{ok:boolean, error?:string}>.
+function _validarCodigoServidor(rawCode, uid) {
+  return new Promise(function(resolve) {
+    var db = window.__firebaseDB;
+    if (!db) { resolve({ ok:false, error:"Servicio no disponible. Verifica tu internet e intenta de nuevo." }); return; }
+    var codeKey = "code_LIC_" + (rawCode||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+    db.collection("trp_users").doc(codeKey).get().then(function(cdoc) {
+      var cd = cdoc.exists ? cdoc.data() : null;
+      if (!cd || cd.createdByAdmin !== true) {
+        resolve({ ok:false, error:"❌ Este código no fue emitido por GlobalAcce. Solicita uno válido." }); return;
+      }
+      if (cd.used === true && cd.usedBy && cd.usedBy !== uid) {
+        resolve({ ok:false, error:"❌ Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce." }); return;
+      }
+      resolve({ ok:true });
+    }).catch(function() {
+      resolve({ ok:false, error:"No se pudo verificar el código. Revisa tu conexión e intenta de nuevo." });
+    });
+  });
+}
+
 // ─── DEMO BANNER ──────────────────────────────────────────
 function DemoBanner(_ref) {
   var daysLeft = _ref.daysLeft, minsLeft = _ref.minsLeft, totalDays = _ref.totalDays, licCode = _ref.licCode;
@@ -8794,12 +8828,14 @@ function AdminPanel() {
           var codeVal = d.code || rawId.replace(/_/g,"-");
           if (!codeVal) return;
           fbCodes.push({
-            code:       codeVal,
-            tipo:       d.tipo || "demo",
-            generadoEn: d.generadoEn || "",
-            usado:      d.used || false,
-            usedBy:     d.usedBy || "",
-            activadoEn: d.usedAt || ""
+            code:        codeVal,
+            tipo:        d.tipo || "demo",
+            generadoEn:  d.generadoEn || "",
+            usado:       d.used || false,
+            usedBy:      d.usedBy || "",
+            usedByUser:  d.usedByUser || "",
+            usedClientId:d.usedClientId || "",
+            activadoEn:  d.usedAt || ""
           });
         });
         fbCodes.sort(function(a,b){ return (b.generadoEn||"").localeCompare(a.generadoEn||""); });
@@ -8912,7 +8948,7 @@ function AdminPanel() {
             setCodigos(function(latest) {
               var updated = latest.map(function(x, i) {
                 if (i !== idx) return x;
-                return _objectSpread(_objectSpread({}, x), {}, { usado: true, usedBy: doc.data().usedBy || "", activadoEn: doc.data().usedAt || "" });
+                return _objectSpread(_objectSpread({}, x), {}, { usado: true, usedBy: doc.data().usedBy || "", usedByUser: doc.data().usedByUser || "", usedClientId: doc.data().usedClientId || "", activadoEn: doc.data().usedAt || "" });
               });
               localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
               return updated;
@@ -9193,7 +9229,11 @@ function AdminPanel() {
                         /*#__PURE__*/React.createElement("span", null, (item.tipo||"").toUpperCase()),
                         item.generadoEn && /*#__PURE__*/React.createElement("span", null, "Generado: "+fmtDate(item.generadoEn)),
                         usado
-                          ? /*#__PURE__*/React.createElement("span", { style:{ color:"#EF4444", fontWeight:600 } }, "✖ Activado"+(item.usedBy?" por: "+item.usedBy:""))
+                          ? /*#__PURE__*/React.createElement("span", { style:{ color:"#EF4444", fontWeight:600 } },
+                              "✖ Activado"
+                              + (item.usedByUser ? " por: "+item.usedByUser : (item.usedBy ? " por uid: "+item.usedBy.slice(0,8)+"…" : ""))
+                              + (item.usedClientId ? " · taller: "+item.usedClientId : "")
+                              + (item.activadoEn ? " · "+fmtDate(item.activadoEn) : ""))
                           : /*#__PURE__*/React.createElement("span", { style:{ color:"#10B981", fontWeight:600 } }, "✔ Disponible — no usado")
                       )
                     ),
@@ -9699,24 +9739,44 @@ function CreateAccountScreen(_ref) {
         setLoading(false);
         onCreated(profile);
       };
-      // 2) Validar/registrar el código (ya autenticados → las reglas lo permiten)
+      // 2) Validar contra Firestore: el código debe EXISTIR, ser emitido por el
+      //    admin (anti-forja) y no estar quemado (burnable). Fuente de verdad = servidor.
       var db = window.__firebaseDB;
       if (db) {
         db.collection("trp_users").doc(codeKey).get().then(function(cdoc) {
-          if (cdoc.exists && cdoc.data() && cdoc.data().used) {
-            // Código ya activado por otra cuenta → revertir la creación
+          var cd = cdoc.exists ? cdoc.data() : null;
+          // a) No emitido por GlobalAcce → forjado / inexistente
+          if (!cd || cd.createdByAdmin !== true) {
+            setErr("❌ Este código no fue emitido por GlobalAcce. Solicita uno válido.");
+            setLoading(false);
+            try { cred.user.delete(); } catch(e){}
+            return;
+          }
+          // b) Ya quemado por OTRA cuenta → un solo uso
+          if (cd.used === true && cd.usedBy && cd.usedBy !== uid) {
             setErr("❌ Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce.");
             setLoading(false);
             try { cred.user.delete(); } catch(e){}
             return;
           }
+          // c) Quemar y registrar (log de auditoría: quién, cuándo, qué taller)
           db.collection("trp_users").doc(codeKey).set({
             used: true, usedBy: uid, usedByUser: norm, usedAt: new Date().toISOString(),
-            codeType: licResult.type, code: code.trim().toUpperCase()
+            usedClientId: permanentClientId, codeType: licResult.type, code: code.trim().toUpperCase()
           }, { merge: true }).catch(function(){});
           finish();
-        }).catch(function(){ finish(); });
-      } else { finish(); }
+        }).catch(function() {
+          // Fail-closed: si no se puede verificar el código, NO activar a ciegas
+          setErr("No se pudo verificar el código. Revisa tu conexión e intenta de nuevo.");
+          setLoading(false);
+          try { cred.user.delete(); } catch(e){}
+        });
+      } else {
+        // Sin Firestore no hay forma de validar el código de forma segura
+        setErr("Servicio no disponible. Verifica tu internet e intenta de nuevo.");
+        setLoading(false);
+        try { cred.user.delete(); } catch(e){}
+      }
     }).catch(function(e) {
       setLoading(false);
       setErr(_authErrMsg(e && e.code));
@@ -9761,18 +9821,22 @@ function ExpiredScreen(_ref) {
     if (!result.valid) { setErr(result.error || "Código inválido"); return; }
     setLoading(true);
     var uid = _currentUid();
-    // Registrar uso del código en Firebase (segundo plano)
-    try {
-      var fbDbR = window.__firebaseDB;
-      if (fbDbR && uid) {
-        var codeKeyR = "code_LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-        fbDbR.collection("trp_users").doc(codeKeyR).set({
-          used: true, usedBy: uid, usedByUser: currentUser.username || "", usedAt: new Date().toISOString(), codeType: result.type,
-          code: newCode.trim().toUpperCase()
-        }, { merge: true }).catch(function(){});
-      }
-    } catch(e){}
-    _finalizarRenovacion(result);
+    // Candado server-side: el código debe estar emitido por el admin y no quemado
+    _validarCodigoServidor(newCode.trim(), uid).then(function(chk) {
+      if (!chk.ok) { setErr(chk.error); setLoading(false); return; }
+      // Quemar y registrar (log de auditoría)
+      try {
+        var fbDbR = window.__firebaseDB;
+        if (fbDbR && uid) {
+          var codeKeyR = "code_LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+          fbDbR.collection("trp_users").doc(codeKeyR).set({
+            used: true, usedBy: uid, usedByUser: currentUser.username || "", usedAt: new Date().toISOString(), codeType: result.type,
+            code: newCode.trim().toUpperCase()
+          }, { merge: true }).catch(function(){});
+        }
+      } catch(e){}
+      _finalizarRenovacion(result);
+    });
   };
   var _finalizarRenovacion = function(result) {
     var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + (currentUser.username||""));
@@ -10781,20 +10845,20 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
       }
 
       var imgHtml = p.image
-        ? '<img src="' + p.image + '" alt="' + (p.name||"") + '" style="width:100%;height:160px;object-fit:cover;display:block;border-radius:10px 10px 0 0;" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">'
+        ? '<img src="' + _escHtml(p.image) + '" alt="' + _escHtml(p.name||"") + '" style="width:100%;height:160px;object-fit:cover;display:block;border-radius:10px 10px 0 0;" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">'
           + '<div style="display:none;height:160px;align-items:center;justify-content:center;font-size:48px;background:#F8FAFC;border-radius:10px 10px 0 0;">📦</div>'
         : '<div style="height:160px;display:flex;align-items:center;justify-content:center;font-size:48px;background:#F8FAFC;border-radius:10px 10px 0 0;">📦</div>';
 
       var featStar = p.featured ? '<span style="position:absolute;top:8px;left:8px;background:#FBBF24;color:#000;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">⭐ TOP</span>' : "";
 
-      var desc = p.description ? '<div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + p.description + '</div>' : "";
-      var sku  = p.sku ? '<div style="font-size:10px;color:#94A3B8;margin-top:3px;">SKU: ' + p.sku + '</div>' : "";
-      var brand = p.brand ? '<div style="font-size:10px;color:#94A3B8;">Marca: ' + p.brand + '</div>' : "";
+      var desc = p.description ? '<div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + _escHtml(p.description) + '</div>' : "";
+      var sku  = p.sku ? '<div style="font-size:10px;color:#94A3B8;margin-top:3px;">SKU: ' + _escHtml(p.sku) + '</div>' : "";
+      var brand = p.brand ? '<div style="font-size:10px;color:#94A3B8;">Marca: ' + _escHtml(p.brand) + '</div>' : "";
 
       return '<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;break-inside:avoid;position:relative;">'
         + '<div style="position:relative;">' + imgHtml + featStar + '</div>'
         + '<div style="padding:10px 12px 12px;">'
-        + '<div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:4px;line-height:1.3;">' + (p.name||"") + '</div>'
+        + '<div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:4px;line-height:1.3;">' + _escHtml(p.name||"") + '</div>'
         + brand + sku + desc
         + '<div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;">'
         + '<div style="font-size:18px;font-weight:800;color:#10B981;">' + fmt(p.price) + '</div>'
@@ -10808,7 +10872,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
       var cards = cats[cat].map(productCard).join("");
       catSections += '<div style="margin-bottom:32px;">'
         + '<div style="font-size:13px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px;padding-bottom:6px;border-bottom:2px solid #E2E8F0;">'
-        + cat + ' <span style="font-weight:400;color:#94A3B8;">(' + cats[cat].length + ')</span></div>'
+        + _escHtml(cat) + ' <span style="font-weight:400;color:#94A3B8;">(' + cats[cat].length + ')</span></div>'
         + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">' + cards + '</div>'
         + '</div>';
     });
@@ -10817,7 +10881,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
     var availableProducts = products.filter(function(p){ return (p.stock||0) > 0; }).length;
 
     var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
-      + '<title>Catálogo ' + businessName + '</title>'
+      + '<title>Catálogo ' + _escHtml(businessName) + '</title>'
       + '<style>'
       + '@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");'
       + '*{box-sizing:border-box;margin:0;padding:0}'
@@ -10835,7 +10899,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
       // Header
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:20px;border-bottom:3px solid #E2E8F0;">'
       + '<div>'
-      + '<div style="font-size:28px;font-weight:800;color:#0F172A;">' + businessName + '</div>'
+      + '<div style="font-size:28px;font-weight:800;color:#0F172A;">' + _escHtml(businessName) + '</div>'
       + '<div style="font-size:13px;color:#64748B;margin-top:3px;">Catálogo de Productos · ' + dateStr + '</div>'
       + '</div>'
       + '<div style="text-align:right;">'
@@ -11063,7 +11127,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   function addMessage(text, role, isTyping) {
     var div = document.createElement("div");
     div.className = "ai-msg " + (role === "user" ? "user" : "bot") + (isTyping ? " typing" : "");
-    div.innerHTML = text.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    // Escapar primero (neutraliza HTML en datos del taller) y luego aplicar el markdown ligero
+    div.innerHTML = _escHtml(text).replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return div;
