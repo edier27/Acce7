@@ -187,6 +187,7 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
     var __firebaseOK = false;
@@ -204,6 +205,8 @@
       var _fbApp = _existingApp || firebase.initializeApp(firebaseConfig);
       var __db = _fbApp.firestore();
       window.__firebaseDB = __db;
+      try { window.__auth = _fbApp.auth(); } catch(eAuth) { console.warn("Auth no disponible:", eAuth); }
+      window.__ADMIN_UID = "aQdG73vJs2V9gqSl2SKCrLSDott1";
       __dataRef = __db.collection("trp_data").doc("main");
       __firebaseOK = true;
     } catch(e) {
@@ -6657,20 +6660,25 @@ function SettingsView(_ref20) {
   var isBypass = false;
   try { isBypass = localStorage.getItem("trp_bypass_" + clientId) === "true"; } catch(e) {}
   var handleChangePwd = function() {
-    var lastUser = localStorage.getItem("trp_current_user");
-    if (!lastUser) { notify("❌ No hay sesión activa", "error"); return; }
-    var userData = _loadUserLocal(lastUser);
-    if (!userData) { notify("❌ Usuario no encontrado", "error"); return; }
-    if (!isBypass && _hashPwd(curPwd, userData.username) !== userData.passwordHash) {
-      notify("❌ Contraseña actual incorrecta", "error"); return;
-    }
-    if (newPwd.length < 4) { notify("❌ La nueva contraseña debe tener al menos 4 caracteres", "error"); return; }
+    var auth = _authInst();
+    var fbUser = auth && auth.currentUser;
+    if (!fbUser) { notify("❌ No hay sesión activa", "error"); return; }
+    if (newPwd.length < 6) { notify("❌ La nueva contraseña debe tener al menos 6 caracteres", "error"); return; }
     if (newPwd !== newPwd2) { notify("❌ Las contraseñas no coinciden", "error"); return; }
-    var updated = Object.assign({}, userData, { passwordHash: _hashPwd(newPwd, userData.username) });
-    _saveUser(updated);
-    try { localStorage.removeItem("trp_bypass_" + clientId); } catch(e) {}
-    setCurPwd(""); setNewPwd(""); setNewPwd2("");
-    notify("✅ Contraseña actualizada correctamente");
+    var doUpdate = function() {
+      fbUser.updatePassword(newPwd).then(function() {
+        try { localStorage.removeItem("trp_bypass_" + clientId); } catch(e) {}
+        setCurPwd(""); setNewPwd(""); setNewPwd2("");
+        notify("✅ Contraseña actualizada correctamente");
+      }).catch(function(e) { notify("❌ " + _authErrMsg(e && e.code), "error"); });
+    };
+    // Firebase exige reautenticación reciente para cambiar la contraseña
+    try {
+      var cred = firebase.auth.EmailAuthProvider.credential(fbUser.email, curPwd);
+      fbUser.reauthenticateWithCredential(cred).then(doUpdate).catch(function(e) {
+        notify("❌ " + _authErrMsg(e && e.code), "error");
+      });
+    } catch(e) { doUpdate(); }
   };
   var handleLogout = function() {
     var lastUser = localStorage.getItem("trp_current_user");
@@ -7021,18 +7029,21 @@ function SettingsView(_ref20) {
         setLicErr(""); setLicOk("");
         var result = verificarCodigo(newLic);
         if (!result.valid) { setLicErr(result.error || "Código inválido"); return; }
+        var uid = _currentUid();
         var lastUser = localStorage.getItem("trp_current_user");
         var userData = lastUser ? _loadUserLocal(lastUser) : null;
+        if (!userData && uid) { try { userData = JSON.parse(localStorage.getItem("trp_profile_" + uid) || "null"); } catch(e) {} }
         if (userData) {
           // clientId PERMANENTE — nunca cambia al renovar licencia
-          var permId = localStorage.getItem("trp_permanent_clientId_" + userData.username) || userData.clientId;
-          localStorage.setItem("trp_permanent_clientId_" + userData.username, permId);
+          var permId = localStorage.getItem("trp_permanent_clientId_" + (userData.username||"")) || userData.clientId;
+          try { localStorage.setItem("trp_permanent_clientId_" + (userData.username||""), permId); } catch(e) {}
           var updated = Object.assign({}, userData, {
+            uid: uid || userData.uid,
             licenseCode: newLic.trim().toUpperCase(),
             licenseType: result.type,
             clientId: permId
           });
-          _saveUser(updated);
+          _saveProfile(updated);
           // Guardar también en trp_lic_v1 para que el panel lo muestre correctamente
           try {
             localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newLic.trim().toUpperCase(), type: result.type, activatedAt: Date.now(), totalDays: result.daysLeft || 8 }));
@@ -7040,10 +7051,10 @@ function SettingsView(_ref20) {
           // Registrar uso del código en Firebase (panel admin lo verá en rojo)
           try {
             var fbDbS = window.__firebaseDB;
-            if (fbDbS) {
+            if (fbDbS && uid) {
               var codeKeyS = "code_LIC_" + newLic.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
               fbDbS.collection("trp_users").doc(codeKeyS).set({
-                used: true, usedBy: userData.username,
+                used: true, usedBy: uid, usedByUser: userData.username || "",
                 usedAt: new Date().toISOString(), codeType: result.type,
                 code: newLic.trim().toUpperCase()
               }, { merge: true });
@@ -8064,7 +8075,7 @@ function App(_appProps) {
         if (!doc.exists) {
           // Subir los datos locales a Firebase (primer dispositivo)
           var ts1 = Date.now();
-          var firstPayload = { appData: JSON.stringify(localData), updatedAt: new Date(ts1).toISOString(), savedBy: _trpSessionId };
+          var firstPayload = { appData: JSON.stringify(localData), updatedAt: new Date(ts1).toISOString(), savedBy: _trpSessionId, ownerUid: window.__uid || _currentUid() };
           var curSets = localStorage.getItem("trp_settings_v1");
           if (curSets) firstPayload.settingsData = curSets;
           clientDataRef.set(firstPayload).catch(function(){});
@@ -8105,7 +8116,8 @@ function App(_appProps) {
               clientDataRef.set({
                 appData: JSON.stringify(localData),
                 updatedAt: new Date(localTs || Date.now()).toISOString(),
-                savedBy: _trpSessionId
+                savedBy: _trpSessionId,
+                ownerUid: window.__uid || _currentUid()
               }).catch(function(){});
             }
           } else if (localTs > fbTs || localTs === 0) {
@@ -8114,7 +8126,8 @@ function App(_appProps) {
             clientDataRef.set({
               appData: JSON.stringify(localData),
               updatedAt: new Date(ts2).toISOString(),
-              savedBy: _trpSessionId
+              savedBy: _trpSessionId,
+              ownerUid: window.__uid || _currentUid()
             }).catch(function(){});
             try { localStorage.setItem(KEY + "_ts", ts2.toString()); } catch(e) {}
           }
@@ -8157,6 +8170,19 @@ function App(_appProps) {
 
   }, [clientId]);
 
+  // ─── PUBLICAR ESPEJO PÚBLICO (una vez al cargar) ─────────────────────────────
+  // Garantiza que el catálogo/seguimiento públicos existan tras la migración,
+  // aun si el dueño todavía no ha guardado ningún cambio.
+  var _mirrorDoneRef = React.useRef(false);
+  useEffect(function() {
+    if (!_mirrorDoneRef.current && data && clientId) {
+      _mirrorDoneRef.current = true;
+      var _sset = null;
+      try { _sset = JSON.parse(localStorage.getItem("trp_settings_v1") || "null"); } catch(e) {}
+      _writePublicMirror(clientId, data, _sset);
+    }
+  }, [data, clientId]);
+
   // ─── GUARDAR ─────────────────────────────────────────────────────────────────
   // Guarda en localStorage PRIMERO (nunca falla), luego sube a Firebase
   var save = function save(d) {
@@ -8171,9 +8197,13 @@ function App(_appProps) {
     var payload = {
       appData: JSON.stringify(d),
       updatedAt: new Date(ts).toISOString(),
-      savedBy: _trpSessionId
+      savedBy: _trpSessionId,
+      ownerUid: window.__uid || _currentUid()
     };
     if (settingsSnap) payload.settingsData = JSON.stringify(settingsSnap);
+
+    // Publicar subconjunto seguro para catálogo/seguimiento públicos
+    _writePublicMirror(clientId, d, settingsSnap);
 
     if (clientDataRef && navigator.onLine) {
       // CON INTERNET: Firebase primero, localStorage se libera
@@ -8203,11 +8233,9 @@ function App(_appProps) {
       } catch(e) {}
       console.warn("[TRP] Sin internet — guardado local temporal");
     }
-    // 3. Actualizar lastSeen + estado online del usuario
+    // 3. Actualizar lastSeen + estado online del usuario (perfil por uid)
     try {
-      var _curUser = null;
-      try { _curUser = localStorage.getItem("trp_current_user"); } catch(e2) {}
-      var _uRefOnline = _getUserRef ? _getUserRef(_curUser || clientId) : null;
+      var _uRefOnline = _profileRef(window.__uid || _currentUid());
       if (_uRefOnline) _uRefOnline.set({ lastSeen: new Date().toISOString(), online: true, software: "ACCE PRO" }, { merge: true }).catch(function(){});
     } catch(e) {}
   };
@@ -8219,10 +8247,12 @@ function App(_appProps) {
     try { localStorage.setItem("trp_settings_v1", JSON.stringify(s)); } catch(e) {}
     // Subir a Firebase con merge (no toca appData, solo actualiza settingsData)
     if (clientDataRef) {
-      clientDataRef.set({ settingsData: JSON.stringify(s), settingsUpdatedAt: new Date().toISOString() }, { merge: true })
+      clientDataRef.set({ settingsData: JSON.stringify(s), settingsUpdatedAt: new Date().toISOString(), ownerUid: window.__uid || _currentUid() }, { merge: true })
         .then(function(){ console.log("[TRP] ✅ Configuración guardada en Firebase"); })
         .catch(function(e){ console.warn("[TRP] Settings no subieron a Firebase:", e); });
     }
+    // Actualizar también el espejo público (nombre/logo/tema del catálogo)
+    try { _writePublicMirror(clientId, data, s); } catch(e) {}
   };
 
   // ─── AUTO-SYNC cuando vuelve el internet ──────────────────────────────────────
@@ -8239,7 +8269,8 @@ function App(_appProps) {
         clientDataRef.set({
           appData: JSON.stringify(d),
           updatedAt: new Date(parseInt(ts) || Date.now()).toISOString(),
-          savedBy: _trpSessionId
+          savedBy: _trpSessionId,
+          ownerUid: window.__uid || _currentUid()
         }).then(function() {
           localStorage.removeItem("trp_pending_sync_" + clientId);
           console.log("[TRP] ✅ Datos sincronizados automáticamente");
@@ -9353,6 +9384,89 @@ function _loadUserLocal(username) {
   try { return JSON.parse(localStorage.getItem("trp_user_" + username.toLowerCase().trim()) || "null"); } catch(e) { return null; }
 }
 
+// ─── FIREBASE AUTH — login real por taller (aislamiento por uid) ──────────
+function _authInst() {
+  if (window.__auth) return window.__auth;
+  try { if (typeof firebase !== "undefined" && firebase.auth) return firebase.auth(); } catch(e) {}
+  return null;
+}
+function _currentUid() {
+  try {
+    var a = _authInst();
+    if (a && a.currentUser) return a.currentUser.uid;
+  } catch(e) {}
+  return window.__uid || null;
+}
+function _isAdminUid(uid) { return !!uid && uid === window.__ADMIN_UID; }
+// Referencia al perfil del usuario por uid (trp_users/{uid})
+function _profileRef(uid) {
+  try {
+    var db = window.__firebaseDB;
+    if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0) db = firebase.apps[0].firestore();
+    if (db && uid) return db.collection("trp_users").doc(uid);
+  } catch(e) {}
+  return null;
+}
+// Guardar perfil (uid-keyed) en Firebase + localStorage. NO contiene contraseña:
+// Firebase Auth gestiona las credenciales de forma segura (scrypt server-side).
+function _saveProfile(profile) {
+  var uid = profile.uid || _currentUid();
+  if (!uid) return;
+  profile.uid = uid;
+  if (profile.passwordHash) delete profile.passwordHash; // ya no guardamos hashes
+  var ref = _profileRef(uid);
+  if (ref) ref.set(profile, { merge: true }).catch(function(e){ console.warn("[TRP] perfil no subió:", e); });
+  try {
+    localStorage.setItem("trp_profile_" + uid, JSON.stringify(profile));
+    if (profile.username) localStorage.setItem("trp_user_" + profile.username, JSON.stringify(profile));
+    localStorage.setItem("trp_current_user", profile.username || uid);
+    window.__uid = uid;
+  } catch(e) {}
+}
+// Cargar perfil por uid (localStorage → Firebase)
+function _loadProfile(uid) {
+  try { var p = localStorage.getItem("trp_profile_" + uid); if (p) return Promise.resolve(JSON.parse(p)); } catch(e) {}
+  var ref = _profileRef(uid);
+  if (ref) return ref.get().then(function(doc){ return doc.exists ? doc.data() : null; }).catch(function(){ return null; });
+  return Promise.resolve(null);
+}
+// Mensajes de error de Firebase Auth en español
+function _authErrMsg(code) {
+  var m = {
+    "auth/invalid-email": "El correo no es válido.",
+    "auth/user-not-found": "No existe una cuenta con ese correo.",
+    "auth/wrong-password": "Contraseña incorrecta.",
+    "auth/invalid-credential": "Correo o contraseña incorrectos.",
+    "auth/email-already-in-use": "Ya existe una cuenta con ese correo.",
+    "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
+    "auth/too-many-requests": "Demasiados intentos. Espera un momento.",
+    "auth/network-request-failed": "Sin conexión. Verifica tu internet."
+  };
+  return m[code] || "No se pudo completar la operación. Intenta de nuevo.";
+}
+
+// ─── ESPEJO PÚBLICO (catálogo + seguimiento) ───────────────────────────────
+// El catálogo y el seguimiento de reparaciones son páginas PÚBLICAS (sin login).
+// Para no exponer toda la base del taller (ventas, caja, clientes, inventario),
+// publicamos solo un subconjunto seguro en catalogos_publicos/{clientId}.
+function _writePublicMirror(clientId, appDataObj, settingsObj) {
+  try {
+    var db = window.__firebaseDB;
+    if (!db || !clientId) return;
+    var pub = {
+      products: (appDataObj && appDataObj.products) || [],
+      repairs:  (appDataObj && appDataObj.repairs)  || []
+    };
+    var payload = {
+      appData: JSON.stringify(pub),
+      updatedAt: new Date().toISOString(),
+      ownerUid: window.__uid || _currentUid()
+    };
+    if (settingsObj) payload.settingsData = JSON.stringify(settingsObj);
+    db.collection("catalogos_publicos").doc(clientId).set(payload, { merge: true }).catch(function(){});
+  } catch(e) {}
+}
+
 // ─── PANTALLA: INICIO DE SESIÓN ────────────────────────────
 function _buildVisualPanel(headline1, headlineEm) {
   return /*#__PURE__*/React.createElement("div", { style: _AS.visual, className:"auth-visual" },
@@ -9400,71 +9514,78 @@ function LoginScreen(_ref) {
   var _l6 = useState(""), _la6 = _slicedToArray(_l6, 2), resetCode = _la6[0], setResetCode = _la6[1];
   var _l7 = useState(""), _la7 = _slicedToArray(_l7, 2), newPwd = _la7[0], setNewPwd = _la7[1];
   var _l8 = useState(""), _la8 = _slicedToArray(_l8, 2), newPwd2 = _la8[0], setNewPwd2 = _la8[1];
+  var _l9 = useState(""), _la9 = _slicedToArray(_l9, 2), email = _la9[0], setEmail = _la9[1];
+  var _l10 = useState(false), _la10 = _slicedToArray(_l10, 2), migrateMode = _la10[0], setMigrateMode = _la10[1];
 
-  // Buscar y verificar usuario (localStorage → Firebase)
+  // ── LOGIN con Firebase Auth (email + contraseña) ──
   var doLogin = function() {
-    if (!user.trim()) { setErr("Ingresa tu usuario"); return; }
+    var em = email.trim().toLowerCase();
+    if (!em) { setErr("Ingresa tu correo"); return; }
     if (!pwd) { setErr("Ingresa tu contraseña"); return; }
+    var auth = _authInst();
+    if (!auth) { setErr("Servicio no disponible. Verifica tu internet."); return; }
     setLoading(true); setErr("");
-    var localUser = _loadUserLocal(user.trim());
-    if (localUser) {
-      _finishLogin(localUser);
-    } else {
-      var ref = _getUserRef(user.trim());
-      if (ref) {
-        ref.get().then(function(doc) {
-          if (doc.exists) {
-            var u = doc.data();
-            try { localStorage.setItem("trp_user_" + u.username, JSON.stringify(u)); } catch(e) {}
-            _finishLogin(u);
-          } else {
-            setErr("Usuario no encontrado. ¿Tienes cuenta? Crea una nueva.");
-            setLoading(false);
-          }
-        }).catch(function(){ setErr("Error de conexión. Verifica tu internet."); setLoading(false); });
-      } else {
-        setErr("Sin conexión. Verifica tu internet e intenta de nuevo.");
+    auth.signInWithEmailAndPassword(em, pwd).then(function(cred) {
+      var uid = cred.user.uid;
+      window.__uid = uid;
+      _loadProfile(uid).then(function(prof) {
+        if (!prof) { prof = { uid: uid, email: em, username: em.split("@")[0] }; }
+        prof.uid = uid; prof.email = em;
+        try { localStorage.setItem("trp_profile_" + uid, JSON.stringify(prof)); } catch(e) {}
+        if (prof.username) { try { localStorage.setItem("trp_user_" + prof.username, JSON.stringify(prof)); localStorage.setItem("trp_current_user", prof.username); } catch(e){} }
         setLoading(false);
-      }
-    }
+        onLogin(prof);
+      });
+    }).catch(function(e) {
+      setLoading(false);
+      setErr(_authErrMsg(e && e.code));
+    });
   };
 
-  var _finishLogin = function(u) {
-    if (_hashPwd(pwd, u.username) !== u.passwordHash) {
-      setErr("Contraseña incorrecta"); setLoading(false); return;
-    }
-    setLoading(false);
-    onLogin(u);
-  };
-
-  // Restablecer contraseña con código de recuperación
-  var doReset = function() {
-    if (!user.trim()) { setErr("Ingresa tu usuario primero"); return; }
+  // ── MIGRACIÓN de cuenta antigua (usuario+contraseña → email+Firebase Auth) ──
+  var doMigrate = function() {
     var norm = user.trim().toLowerCase();
-    if (resetCode.trim().toUpperCase() !== _resetCode(norm)) { setErr("Código de recuperación incorrecto"); return; }
-    if (newPwd.length < 4) { setErr("La nueva contraseña debe tener al menos 4 caracteres"); return; }
-    if (newPwd !== newPwd2) { setErr("Las contraseñas no coinciden"); return; }
-    var _aplicarReset = function(base) {
-      var updated = Object.assign({}, base, { passwordHash: _hashPwd(newPwd, norm) });
-      _saveUser(updated);
-      var pwdGuardado = newPwd;
-      setNewPwd(""); setNewPwd2(""); setResetCode(""); setErr("");
-      setPwd(pwdGuardado);
-      setErr("✅ Contraseña restablecida. Iniciando sesión...");
-      setTimeout(function() { setResetMode(false); setErr(""); }, 1500);
-    };
-    var localUser = _loadUserLocal(norm);
-    if (!localUser) {
-      var ref = _getUserRef(norm);
-      if (ref) {
-        ref.get().then(function(doc) {
-          if (doc.exists) { _aplicarReset(doc.data()); }
-          else { setErr("Usuario no encontrado"); }
-        }).catch(function(){ setErr("Error de conexión"); });
-      } else { setErr("Sin conexión"); }
-      return;
-    }
-    _aplicarReset(localUser);
+    var em = email.trim().toLowerCase();
+    if (!norm) { setErr("Ingresa tu usuario antiguo"); return; }
+    if (!em) { setErr("Ingresa un correo para tu cuenta"); return; }
+    if (!pwd) { setErr("Ingresa tu contraseña actual"); return; }
+    var legacy = _loadUserLocal(norm);
+    if (!legacy) { setErr("No encontramos tu cuenta en este dispositivo. Hazlo en el equipo donde la usabas o contacta a soporte."); return; }
+    if (_hashPwd(pwd, norm) !== legacy.passwordHash) { setErr("Tu contraseña actual es incorrecta."); return; }
+    if (newPwd.length < 6) { setErr("La nueva contraseña debe tener al menos 6 caracteres."); return; }
+    if (newPwd !== newPwd2) { setErr("Las contraseñas nuevas no coinciden."); return; }
+    var auth = _authInst();
+    if (!auth) { setErr("Servicio no disponible. Verifica tu internet."); return; }
+    setLoading(true); setErr("");
+    auth.createUserWithEmailAndPassword(em, newPwd).then(function(cred) {
+      var uid = cred.user.uid;
+      window.__uid = uid;
+      var prof = Object.assign({}, legacy, { uid: uid, email: em });
+      delete prof.passwordHash;
+      _saveProfile(prof);
+      setLoading(false);
+      onLogin(prof);
+    }).catch(function(e) {
+      setLoading(false);
+      if (e && e.code === "auth/email-already-in-use") { setErr("Ese correo ya tiene cuenta. Inicia sesión normalmente con tu correo."); }
+      else { setErr(_authErrMsg(e && e.code)); }
+    });
+  };
+
+  // ── RESET de contraseña vía correo nativo de Firebase ──
+  var doReset = function() {
+    var em = email.trim().toLowerCase();
+    if (!em) { setErr("Ingresa tu correo"); return; }
+    var auth = _authInst();
+    if (!auth) { setErr("Servicio no disponible. Verifica tu internet."); return; }
+    setLoading(true); setErr("");
+    auth.sendPasswordResetEmail(em).then(function() {
+      setLoading(false);
+      setErr("✅ Te enviamos un correo para restablecer tu contraseña. Revisa tu bandeja de entrada y spam.");
+    }).catch(function(e) {
+      setLoading(false);
+      setErr(_authErrMsg(e && e.code));
+    });
   };
 
   if (resetMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
@@ -9473,18 +9594,31 @@ function LoginScreen(_ref) {
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
       /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Restablecer contraseña"),
-      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Solicita el código de recuperación a GlobalAcce"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Te enviaremos un enlace seguro a tu correo"),
       err && /*#__PURE__*/React.createElement("div", { style: err.startsWith("✅") ? _AS.ok : _AS.err }, err),
-      /*#__PURE__*/React.createElement("a", {
-        href:"https://wa.me/"+WHATSAPP+"?text=Necesito%20restablecer%20contrase%C3%B1a.%20Usuario%3A%20"+encodeURIComponent(user),
-        target:"_blank", style:{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#25D366", color:"#fff", padding:"12px", borderRadius:14, fontWeight:700, fontSize:14, textDecoration:"none", marginBottom:14 }
-      }, "📱 Solicitar código por WhatsApp"),
-      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Usuario", value:user, onChange:function(e){setUser(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Código de recuperación (6 caracteres)", value:resetCode, onChange:function(e){setResetCode(e.target.value.toUpperCase());setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Nueva contraseña", value:newPwd, onChange:function(e){setNewPwd(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Confirmar nueva contraseña", value:newPwd2, onChange:function(e){setNewPwd2(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("button", { onClick:doReset, style:_AS.btn }, "Restablecer contraseña"),
+      /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Tu correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doReset();}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("button", { onClick:doReset, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) }, loading ? "Enviando..." : "Enviar enlace de recuperación"),
       /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(false);setErr("");}, style:_AS.btnGhost }, "← Volver")
+    )
+    )
+  );
+
+  // ── PANTALLA: MIGRAR CUENTA ANTIGUA (usuario → correo) ──
+  if (migrateMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
+    _buildVisualPanel("Vincula tu cuenta", "a un correo"),
+    /*#__PURE__*/React.createElement("div", { style: _AS.formSide },
+    /*#__PURE__*/React.createElement("div", { style: _AS.card },
+      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Migrar cuenta antigua"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Vincula tu usuario actual a un correo para proteger tus datos. Tus datos NO se pierden."),
+      err && /*#__PURE__*/React.createElement("div", { style: err.startsWith("✅") ? _AS.ok : _AS.err }, err),
+      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Tu usuario actual", value:user, onChange:function(e){setUser(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Tu contraseña actual", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Tu correo electrónico (nuevo acceso)", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Nueva contraseña (mín. 6 caracteres)", value:newPwd, onChange:function(e){setNewPwd(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Confirmar nueva contraseña", value:newPwd2, onChange:function(e){setNewPwd2(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("button", { onClick:doMigrate, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) }, loading ? "Vinculando..." : "Vincular y entrar"),
+      /*#__PURE__*/React.createElement("button", { onClick:function(){setMigrateMode(false);setErr("");}, style:_AS.btnGhost }, "← Volver al login")
     )
     )
   );
@@ -9499,7 +9633,7 @@ function LoginScreen(_ref) {
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "ACCE PRO"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Bienvenido de nuevo · Inicia sesión"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
-      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Usuario", value:user, onChange:function(e){setUser(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();}, style:_AS.input }),
       /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();}, style:_AS.input }),
       /*#__PURE__*/React.createElement("button", { onClick:doLogin, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
         loading ? "Verificando..." : "Iniciar sesión"
@@ -9507,6 +9641,9 @@ function LoginScreen(_ref) {
       /*#__PURE__*/React.createElement("button", { onClick:onCreateNew, style:_AS.btnGhost }, "➕ Crear cuenta nueva"),
       /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:4} },
         /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(true);setErr("");}, style:_AS.link }, "¿Olvidaste tu contraseña?")
+      ),
+      /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:8,borderTop:"1px solid rgba(128,128,150,0.2)",paddingTop:10} },
+        /*#__PURE__*/React.createElement("button", { onClick:function(){setMigrateMode(true);setErr("");}, style:_AS.link }, "¿Cuenta antigua sin correo? Vincúlala aquí")
       )
     )
     )
@@ -9522,79 +9659,68 @@ function CreateAccountScreen(_ref) {
   var _c4 = useState(""), _ca4 = _slicedToArray(_c4, 2), code = _ca4[0], setCode = _ca4[1];
   var _c5 = useState(""), _ca5 = _slicedToArray(_c5, 2), err = _ca5[0], setErr = _ca5[1];
   var _c6 = useState(false), _ca6 = _slicedToArray(_c6, 2), loading = _ca6[0], setLoading = _ca6[1];
+  var _c7 = useState(""), _ca7 = _slicedToArray(_c7, 2), email = _ca7[0], setEmail = _ca7[1];
 
   var crear = function() {
     if (!user.trim()) { setErr("Ingresa un nombre de usuario"); return; }
     if (user.trim().length < 3) { setErr("El usuario debe tener al menos 3 caracteres"); return; }
-    if (pwd.length < 4) { setErr("La contraseña debe tener al menos 4 caracteres"); return; }
+    if (!email.trim()) { setErr("Ingresa tu correo electrónico"); return; }
+    if (pwd.length < 6) { setErr("La contraseña debe tener al menos 6 caracteres"); return; }
     if (pwd !== pwd2) { setErr("Las contraseñas no coinciden"); return; }
     var licResult = verificarCodigo(code.trim());
     if (!licResult.valid) { setErr(licResult.error || "Código de activación inválido"); return; }
+    var auth = _authInst();
+    if (!auth) { setErr("Servicio no disponible. Verifica tu internet."); return; }
     setLoading(true); setErr("");
     var norm = user.trim().toLowerCase();
-    // Verificar que el usuario no exista ya
-    var ref = _getUserRef(norm);
-    var finalizarCreacion = function() {
+    var em = email.trim().toLowerCase();
+    var codeKey = "code_LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+
+    // 1) Crear la identidad en Firebase Auth (gestiona la contraseña de forma segura)
+    auth.createUserWithEmailAndPassword(em, pwd).then(function(cred) {
+      var uid = cred.user.uid;
+      window.__uid = uid;
       // clientId PERMANENTE — se guarda una vez y nunca cambia
-      // aunque la licencia venza o se renueve con otro código
-      var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + norm);
-      if (!permanentClientId) {
-        permanentClientId = licResult.clientId;
-        localStorage.setItem("trp_permanent_clientId_" + norm, permanentClientId);
-      }
-      var userData = {
+      var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + norm) || licResult.clientId;
+      try { localStorage.setItem("trp_permanent_clientId_" + norm, permanentClientId); } catch(e){}
+      var profile = {
+        uid: uid,
         username: norm,
-        passwordHash: _hashPwd(pwd, norm),
+        email: em,
         clientId: permanentClientId,
+        ownerUid: uid,
         licenseCode: code.trim().toUpperCase(),
         licenseType: licResult.type,
         createdAt: new Date().toISOString()
       };
-      // Registrar código usado en Firebase ANTES de crear cuenta
-      try {
-        var fbDb2 = window.__firebaseDB;
-        if (fbDb2) {
-          var codeKey2 = "code_LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-          fbDb2.collection("trp_users").doc(codeKey2).set({
-            used: true, usedBy: norm, usedAt: new Date().toISOString(), codeType: licResult.type,
-            code: code.trim().toUpperCase()
-          }, { merge: true });
-        }
-      } catch(e){}
-      _saveUser(userData);
-      localStorage.setItem("trp_session_" + norm, "active");
+      var finish = function() {
+        _saveProfile(profile);
+        try { localStorage.setItem("trp_session_" + norm, "active"); } catch(e){}
+        setLoading(false);
+        onCreated(profile);
+      };
+      // 2) Validar/registrar el código (ya autenticados → las reglas lo permiten)
+      var db = window.__firebaseDB;
+      if (db) {
+        db.collection("trp_users").doc(codeKey).get().then(function(cdoc) {
+          if (cdoc.exists && cdoc.data() && cdoc.data().used) {
+            // Código ya activado por otra cuenta → revertir la creación
+            setErr("❌ Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce.");
+            setLoading(false);
+            try { cred.user.delete(); } catch(e){}
+            return;
+          }
+          db.collection("trp_users").doc(codeKey).set({
+            used: true, usedBy: uid, usedByUser: norm, usedAt: new Date().toISOString(),
+            codeType: licResult.type, code: code.trim().toUpperCase()
+          }, { merge: true }).catch(function(){});
+          finish();
+        }).catch(function(){ finish(); });
+      } else { finish(); }
+    }).catch(function(e) {
       setLoading(false);
-      onCreated(userData);
-    };
-    // ── Verificar si el código ya fue usado por OTRA cuenta ──
-    var _checkAndCreate = function() {
-      if (ref) {
-        ref.get().then(function(doc) {
-          if (doc.exists) {
-            setErr("Este usuario ya existe. Inicia sesión o usa otro nombre."); setLoading(false);
-          } else {
-            finalizarCreacion();
-          }
-        }).catch(function(){ finalizarCreacion(); });
-      } else {
-        finalizarCreacion();
-      }
-    };
-    try {
-      var fbChk = window.__firebaseDB;
-      if (fbChk) {
-        var chkKey = "code_LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-        fbChk.collection("trp_users").doc(chkKey).get().then(function(chkDoc) {
-          if (chkDoc.exists && chkDoc.data().usedBy && chkDoc.data().usedBy !== norm) {
-            setErr("❌ Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce."); setLoading(false);
-          } else {
-            _checkAndCreate();
-          }
-        }).catch(function(){ _checkAndCreate(); });
-      } else {
-        _checkAndCreate();
-      }
-    } catch(e){ _checkAndCreate(); }
+      setErr(_authErrMsg(e && e.code));
+    });
   };
 
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
@@ -9606,7 +9732,8 @@ function CreateAccountScreen(_ref) {
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Necesitas un código de activación para registrarte"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
       /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Nombre de usuario", value:user, onChange:function(e){setUser(e.target.value.toLowerCase());setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña (mín. 4 caracteres)", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, style:_AS.input }),
+      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña (mín. 6 caracteres)", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, style:_AS.input }),
       /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Confirmar contraseña", value:pwd2, onChange:function(e){setPwd2(e.target.value);setErr("");}, style:_AS.input }),
       /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Código de activación (ej: DEMO-20260527-XXXX)", value:code, onChange:function(e){setCode(e.target.value.toUpperCase());setErr("");}, onKeyDown:function(e){if(e.key==="Enter")crear();}, style:Object.assign({},_AS.input,{letterSpacing:"0.05em"}) }),
       /*#__PURE__*/React.createElement("button", { onClick:crear, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
@@ -9633,13 +9760,14 @@ function ExpiredScreen(_ref) {
     var result = verificarCodigo(newCode.trim());
     if (!result.valid) { setErr(result.error || "Código inválido"); return; }
     setLoading(true);
+    var uid = _currentUid();
     // Registrar uso del código en Firebase (segundo plano)
     try {
       var fbDbR = window.__firebaseDB;
-      if (fbDbR) {
+      if (fbDbR && uid) {
         var codeKeyR = "code_LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
         fbDbR.collection("trp_users").doc(codeKeyR).set({
-          used: true, usedBy: currentUser.username, usedAt: new Date().toISOString(), codeType: result.type,
+          used: true, usedBy: uid, usedByUser: currentUser.username || "", usedAt: new Date().toISOString(), codeType: result.type,
           code: newCode.trim().toUpperCase()
         }, { merge: true }).catch(function(){});
       }
@@ -9647,19 +9775,19 @@ function ExpiredScreen(_ref) {
     _finalizarRenovacion(result);
   };
   var _finalizarRenovacion = function(result) {
-    var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + currentUser.username);
+    var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + (currentUser.username||""));
     if (!permanentClientId) {
       permanentClientId = currentUser.clientId;
-      localStorage.setItem("trp_permanent_clientId_" + currentUser.username, permanentClientId);
+      try { localStorage.setItem("trp_permanent_clientId_" + (currentUser.username||""), permanentClientId); } catch(e){}
     }
     var updated = Object.assign({}, currentUser, {
+      uid: _currentUid() || currentUser.uid,
       licenseCode: newCode.trim().toUpperCase(),
       licenseType: result.type,
       clientId: permanentClientId
     });
-    _saveUser(updated);
+    _saveProfile(updated);
     try { localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newCode.trim().toUpperCase(), type: result.type, activatedAt: Date.now(), totalDays: result.daysLeft || 30 })); } catch(e) {}
-    localStorage.setItem("trp_session_" + currentUser.username, "active");
     setLoading(false);
     onRenewed(updated);
   };
@@ -9719,7 +9847,7 @@ function TrackingLoader(_ref) {
       if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
         db = firebase.apps[0].firestore();
       if (!db) { setLoading(false); setErrorMsg("Sin conexión al servidor."); return; }
-      db.collection("clientes").doc(clientId).get().then(function(doc) {
+      db.collection("catalogos_publicos").doc(clientId).get().then(function(doc) {
         if (doc.exists && doc.data().appData) {
           try {
             var d = JSON.parse(doc.data().appData);
@@ -9941,7 +10069,7 @@ function PublicCatalogLoader(_ref) {
       if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
         db = firebase.apps[0].firestore();
       if (!db) { setLoading(false); setErrorMsg("Sin conexión a Firebase."); return; }
-      db.collection("clientes").doc(clientId).get().then(function(doc) {
+      db.collection("catalogos_publicos").doc(clientId).get().then(function(doc) {
         if (doc.exists && doc.data().appData) {
           try {
             var d = JSON.parse(doc.data().appData);
@@ -10079,6 +10207,44 @@ function UpdateBanner() {
   );
 }
 
+// ─── GATE DE ADMINISTRADOR ─────────────────────────────────
+// El panel admin solo se muestra si hay sesión iniciada con la cuenta
+// admin (uid fijo). Reemplaza el viejo gate por URL (?admin=globalacce).
+function AdminGate() {
+  var _g1 = useState(null), _ga1 = _slicedToArray(_g1, 2), uid = _ga1[0], setUid = _ga1[1];
+  var _g2 = useState(true), _ga2 = _slicedToArray(_g2, 2), loading = _ga2[0], setLoading = _ga2[1];
+  var _g3 = useState(""), _ga3 = _slicedToArray(_g3, 2), email = _ga3[0], setEmail = _ga3[1];
+  var _g4 = useState(""), _ga4 = _slicedToArray(_g4, 2), pwd = _ga4[0], setPwd = _ga4[1];
+  var _g5 = useState(""), _ga5 = _slicedToArray(_g5, 2), err = _ga5[0], setErr = _ga5[1];
+  var _g6 = useState(false), _ga6 = _slicedToArray(_g6, 2), busy = _ga6[0], setBusy = _ga6[1];
+  useEffect(function() {
+    var auth = _authInst();
+    if (!auth) { setLoading(false); return; }
+    var unsub = auth.onAuthStateChanged(function(u) { setUid(u ? u.uid : null); setLoading(false); });
+    return function() { if (unsub) unsub(); };
+  }, []);
+  var entrar = function() {
+    var auth = _authInst();
+    if (!auth) { setErr("Servicio no disponible"); return; }
+    setBusy(true); setErr("");
+    auth.signInWithEmailAndPassword(email.trim().toLowerCase(), pwd)
+      .then(function(c){ setBusy(false); if (!_isAdminUid(c.user.uid)) setErr("Esta cuenta no es administrador."); })
+      .catch(function(e){ setBusy(false); setErr(_authErrMsg(e && e.code)); });
+  };
+  var box = { maxWidth:380, margin:"60px auto", background:"#13131A", border:"1px solid #2A2A35", borderRadius:18, padding:28, fontFamily:"'Inter',system-ui,sans-serif", color:"#E8E8F0" };
+  var inp = { width:"100%", padding:"12px 14px", marginBottom:12, borderRadius:12, border:"1px solid #2A2A35", background:"#0C0C12", color:"#fff", fontSize:15 };
+  if (loading) return /*#__PURE__*/React.createElement("div", { style:{padding:60,textAlign:"center",color:"#888",fontFamily:"system-ui"} }, "Cargando...");
+  if (uid && _isAdminUid(uid)) return /*#__PURE__*/React.createElement(AdminPanel, null);
+  return /*#__PURE__*/React.createElement("div", { style: box },
+    /*#__PURE__*/React.createElement("div", { style:{fontSize:20,fontWeight:800,marginBottom:6} }, "🔒 Panel de administración"),
+    /*#__PURE__*/React.createElement("div", { style:{fontSize:13,color:"#9A9AB0",marginBottom:18} }, "Inicia sesión con la cuenta de administrador."),
+    err && /*#__PURE__*/React.createElement("div", { style:{background:"#3A1518",color:"#FF8A8A",padding:"10px 12px",borderRadius:10,fontSize:13,marginBottom:12} }, err),
+    /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Correo admin", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, style:inp }),
+    /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")entrar();}, style:inp }),
+    /*#__PURE__*/React.createElement("button", { onClick:entrar, disabled:busy, style:{width:"100%",padding:"12px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#E8621A,#F97316)",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"} }, busy ? "Entrando..." : "Entrar")
+  );
+}
+
 function Root() {
   var _r1 = useState(null), _ra1 = _slicedToArray(_r1, 2), currentUser = _ra1[0], setCurrentUser = _ra1[1];
   var _r2 = useState(true), _ra2 = _slicedToArray(_r2, 2), checking = _ra2[0], setChecking = _ra2[1];
@@ -10106,26 +10272,15 @@ function Root() {
     } catch(e){}
   }
 
-  useEffect(function() {
-    // Admin y catálogo no necesitan auth
-    if (isAdmin || isCatalog) { setChecking(false); return; }
-    // Intentar auto-login desde sesión guardada
-    var lastUser = localStorage.getItem("trp_current_user");
-    if (lastUser) {
-      var session = localStorage.getItem("trp_session_" + lastUser);
-      if (session === "active") {
-        var userData = _loadUserLocal(lastUser);
-        if (userData) {
-          _checkLicenseAndEnter(userData);
-          return;
-        }
-      }
-    }
-    setChecking(false);
-    setScreen("login");
-  }, []);
-
   var _checkLicenseAndEnter = function(userData) {
+    // El admin (dueño del sistema) no necesita licencia
+    if (_isAdminUid(userData.uid)) {
+      userData.clientId = userData.clientId || "globalacce";
+      setCurrentUser(userData);
+      setScreen("app");
+      setChecking(false);
+      return;
+    }
     var licCheck = verificarCodigo(userData.licenseCode || "");
     if (!licCheck.valid) {
       setCurrentUser(userData);
@@ -10138,36 +10293,57 @@ function Root() {
     setChecking(false);
   };
 
-  var _updateLastSeen = function(username) {
+  var _updateLastSeen = function() {
     try {
-      var db = window.__firebaseDB;
-      if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
-        db = firebase.apps[0].firestore();
-      if (db && username) {
-        db.collection("trp_users").doc(username.toLowerCase().trim())
-          .set({ lastSeen: new Date().toISOString(), software: "ACCE PRO", online: true }, { merge: true })
-          .catch(function(){});
-      }
+      var uid = _currentUid();
+      var ref = _profileRef(uid);
+      if (ref) ref.set({ lastSeen: new Date().toISOString(), software: "ACCE PRO", online: true }, { merge: true }).catch(function(){});
     } catch(e) {}
   };
 
   var _heartbeatInterval = null;
+  var _startSession = function(prof) {
+    try { localStorage.setItem("trp_current_user", prof.username || prof.uid); } catch(e) {}
+    _updateLastSeen();
+    if (_heartbeatInterval) clearInterval(_heartbeatInterval);
+    _heartbeatInterval = setInterval(function() { _updateLastSeen(); }, 2 * 60 * 1000);
+  };
+
+  // Auto-login: la sesión la gestiona Firebase Auth (persistente entre recargas)
+  useEffect(function() {
+    if (isAdmin || isCatalog || isTracking) { setChecking(false); return; }
+    var auth = _authInst();
+    if (!auth) { setChecking(false); setScreen("login"); return; }
+    var unsub = auth.onAuthStateChanged(function(fbUser) {
+      if (fbUser) {
+        window.__uid = fbUser.uid;
+        _loadProfile(fbUser.uid).then(function(prof) {
+          if (!prof) { prof = { uid: fbUser.uid, email: fbUser.email || "", username: (fbUser.email || "").split("@")[0] }; }
+          prof.uid = fbUser.uid;
+          try { localStorage.setItem("trp_profile_" + fbUser.uid, JSON.stringify(prof)); } catch(e) {}
+          _startSession(prof);
+          _checkLicenseAndEnter(prof);
+        });
+      } else {
+        if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
+        window.__uid = null;
+        setCurrentUser(null);
+        setChecking(false);
+        setScreen("login");
+      }
+    });
+    return function() { if (unsub) unsub(); };
+  }, []);
 
   var onLogin = function(userData) {
-    localStorage.setItem("trp_session_" + userData.username, "active");
-    localStorage.setItem("trp_current_user", userData.username);
-    try { localStorage.setItem("trp_user_" + userData.username, JSON.stringify(userData)); } catch(e) {}
-    // Actualizar lastSeen al iniciar sesión
-    _updateLastSeen(userData.username);
-    // Heartbeat cada 2 minutos para mantener estado online
-    if (_heartbeatInterval) clearInterval(_heartbeatInterval);
-    _heartbeatInterval = setInterval(function() {
-      _updateLastSeen(userData.username);
-    }, 2 * 60 * 1000);
+    window.__uid = userData.uid || window.__uid;
+    _startSession(userData);
     _checkLicenseAndEnter(userData);
   };
 
   var onCreated = function(userData) {
+    window.__uid = userData.uid || window.__uid;
+    _startSession(userData);
     _checkLicenseAndEnter(userData);
   };
 
@@ -10177,27 +10353,21 @@ function Root() {
   };
 
   var onLogout = function() {
-    if (currentUser) {
-      localStorage.removeItem("trp_session_" + currentUser.username);
-      // Marcar como offline al cerrar sesión
-      try {
-        var db = window.__firebaseDB;
-        if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
-          db = firebase.apps[0].firestore();
-        if (db) {
-          db.collection("trp_users").doc(currentUser.username.toLowerCase().trim())
-            .set({ online: false, lastSeen: new Date().toISOString() }, { merge: true })
-            .catch(function(){});
-        }
-      } catch(e) {}
-    }
+    try {
+      var ref = _profileRef(_currentUid());
+      if (ref) ref.set({ online: false, lastSeen: new Date().toISOString() }, { merge: true }).catch(function(){});
+    } catch(e) {}
     if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
+    try { localStorage.removeItem("trp_current_user"); } catch(e) {}
+    var auth = _authInst();
+    if (auth) auth.signOut().catch(function(){});
+    window.__uid = null;
     setCurrentUser(null);
     setScreen("login");
   };
 
   // ─── Retornos especiales (admin y catálogo público) ──────
-  if (isAdmin) return /*#__PURE__*/React.createElement(AdminPanel, null);
+  if (isAdmin) return /*#__PURE__*/React.createElement(AdminGate, null);
   if (isCatalog) {
     var _urlP = new URLSearchParams(window.location.search);
     return /*#__PURE__*/React.createElement(PublicCatalogLoader, { clientId: _urlP.get("client") });
