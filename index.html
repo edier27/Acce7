@@ -1669,8 +1669,8 @@ function DashboardView(_ref8) {
         return /*#__PURE__*/React.createElement("div", { style: { overflowX: "auto" } },
           /*#__PURE__*/React.createElement("svg", {
             viewBox: "0 0 " + _W + " " + _H,
-            width: "100%", height: "auto",
-            style: { display: "block", minWidth: 220 }
+            width: "100%",
+            style: { display: "block", minWidth: 220, height: "auto" }
           },
             // Grid lines
             [0.25, 0.5, 0.75, 1].map(function(frac) {
@@ -7045,8 +7045,11 @@ function SettingsView(_ref20) {
         var userData = lastUser ? _loadUserLocal(lastUser) : null;
         if (!userData && uid) { try { userData = JSON.parse(localStorage.getItem("trp_profile_" + uid) || "null"); } catch(e) {} }
         if (userData) {
-          // clientId PERMANENTE — nunca cambia al renovar licencia
+          // clientId PERMANENTE — nunca cambia al renovar licencia.
           var permId = localStorage.getItem("trp_permanent_clientId_" + (userData.username||"")) || userData.clientId;
+          // SEGURIDAD ANTI-PÉRDIDA: si no hay un clientId existente, NO renovar a uno
+          // vacío (eso borraría la vista de datos). Abortar y avisar.
+          if (!permId) { setLicErr("No pudimos identificar tu taller en este equipo. Cierra sesión y vuelve a entrar; si persiste, contacta a soporte."); return; }
           try { localStorage.setItem("trp_permanent_clientId_" + (userData.username||""), permId); } catch(e) {}
           var updated = Object.assign({}, userData, {
             uid: uid || userData.uid,
@@ -9841,11 +9844,15 @@ function ExpiredScreen(_ref) {
     });
   };
   var _finalizarRenovacion = function(result) {
-    var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + (currentUser.username||""));
+    var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + (currentUser.username||"")) || currentUser.clientId;
+    // SEGURIDAD ANTI-PÉRDIDA: la renovación NUNCA debe cambiar el taller. Si no
+    // hay un clientId existente, abortar (no renovar a un taller vacío).
     if (!permanentClientId) {
-      permanentClientId = currentUser.clientId;
-      try { localStorage.setItem("trp_permanent_clientId_" + (currentUser.username||""), permanentClientId); } catch(e){}
+      setErr("No pudimos identificar tu taller. Cierra sesión y vuelve a entrar; si persiste, contacta a soporte.");
+      setLoading(false);
+      return;
     }
+    try { localStorage.setItem("trp_permanent_clientId_" + (currentUser.username||""), permanentClientId); } catch(e){}
     var updated = Object.assign({}, currentUser, {
       uid: _currentUid() || currentUser.uid,
       licenseCode: newCode.trim().toUpperCase(),
@@ -10359,11 +10366,16 @@ function Root() {
       return;
     }
     var licCheck = verificarCodigo(userData.licenseCode || "");
+    // clientId FIJO al taller del usuario: preferir el permanente y el guardado
+    // en el perfil ANTES que el derivado del código. Así, al renovar con un
+    // código nuevo, el clientId (y por tanto los datos) NUNCA cambia.
+    var pinnedCid = localStorage.getItem("trp_permanent_clientId_" + (userData.username||"")) || userData.clientId || licCheck.clientId;
+    userData.clientId = pinnedCid;
+    if (pinnedCid) { try { localStorage.setItem("trp_permanent_clientId_" + (userData.username||""), pinnedCid); } catch(e) {} }
     if (!licCheck.valid) {
       setCurrentUser(userData);
       setScreen("expired");
     } else {
-      userData.clientId = userData.clientId || licCheck.clientId;
       setCurrentUser(userData);
       setScreen("app");
     }
