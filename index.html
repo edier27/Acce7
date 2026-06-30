@@ -7033,6 +7033,8 @@ function SettingsView(_ref20) {
       var curStatus = savedLic ? verificarCodigo(savedLic.code || "") : null;
       var handleActivar = function() {
         setLicErr(""); setLicOk("");
+        // El admin no usa licencia: bloquear para no desviar su clientId/datos.
+        if (_isAdminUid(_currentUid())) { setLicErr("Eres administrador: tu cuenta no necesita licencia."); return; }
         var result = verificarCodigo(newLic);
         if (!result.valid) { setLicErr(result.error || "Código inválido"); return; }
         var uid = _currentUid();
@@ -10340,8 +10342,17 @@ function Root() {
     // El admin (dueño del sistema) no necesita licencia.
     // Su taller real es la cuenta "globalacce" → clientId PRO_FWB732_00555HR8.
     if (_isAdminUid(userData.uid)) {
-      userData.clientId = userData.clientId || "PRO_FWB732_00555HR8";
-      userData.licenseCode = userData.licenseCode || "PRO-7S8ASF-00NPXSIX";
+      // FORZADO (no "||"): el admin SIEMPRE usa su taller real. Así un perfil
+      // corrupto (p.ej. tras activar un código por error) no puede desviarlo
+      // a un clientId vacío/demo y "perder" los datos. Repara y persiste.
+      userData.clientId = "PRO_FWB732_00555HR8";
+      userData.licenseCode = "PRO-7S8ASF-00NPXSIX";
+      userData.licenseType = "pro";
+      try {
+        localStorage.setItem("trp_permanent_clientId_" + (userData.username||""), "PRO_FWB732_00555HR8");
+        localStorage.removeItem("trp_lic_v1");
+      } catch(e) {}
+      try { _saveProfile(userData); } catch(e) {}
       setCurrentUser(userData);
       setScreen("app");
       setChecking(false);
