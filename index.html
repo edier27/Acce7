@@ -189,6 +189,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
     var __firebaseOK = false;
     var __dataRef = null;
@@ -585,7 +586,12 @@ var _LucideReact = LucideReact,
   TrendingUp = _LucideReact.TrendingUp,
   TrendingDown = _LucideReact.TrendingDown,
   ArrowUpCircle = _LucideReact.ArrowUpCircle,
-  ArrowDownCircle = _LucideReact.ArrowDownCircle;
+  ArrowDownCircle = _LucideReact.ArrowDownCircle,
+  Wallet = _LucideReact.Wallet,
+  Inbox = _LucideReact.Inbox,
+  CreditCard = _LucideReact.CreditCard,
+  BarChart3 = _LucideReact.BarChart3,
+  Share2 = _LucideReact.Share2;
 
 // ─── Theme System — Windows 11 Fluent Design ──────────────
 var DARK = {
@@ -839,12 +845,13 @@ var DEFAULT_SETTINGS = {
 };
 var ACCENT_PRESETS = ["#10E08A", "#0078FF", "#FF6B35", "#8B5CF6", "#EF4444", "#F59E0B", "#06B6D4", "#EC4899", "#10B981", "#6366F1"];
 var STATUSES = ["Recibido", "Diagnóstico", "En Reparación", "Listo", "Entregado", "Cancelado"];
-function buildWAMessage(customer, device, status, paid, cost) {
+function buildWAMessage(customer, device, status, paid, cost, warrantyDays) {
   var nombre = customer ? customer.split(" ")[0] : "cliente";
   var equipo = device || "su equipo";
   var tienda = "ACCE PRO";
   var pagado = paid ? "PAGADO" : "PENDIENTE DE PAGO";
   var costoInfo = (cost && Number(cost) > 0) ? ("\nValor de la reparacion: *$" + Number(cost).toLocaleString("es-CO") + "*") : "";
+  var wDays = (warrantyDays === 0 || warrantyDays) ? Number(warrantyDays) : 15;
   var msg = "";
   if (status === "Recibido") {
     msg = "Hola " + nombre + ", le confirmamos que hemos recibido su equipo *" + equipo + "* en *" + tienda + "*."
@@ -865,9 +872,12 @@ function buildWAMessage(customer, device, status, paid, cost) {
         + "\n\nPuede pasar a recogerlo en nuestro horario de atencion. Le esperamos."
         + "\n\nGracias por confiar en *" + tienda + "*.";
   } else if (status === "Entregado") {
+    var garantiaMsg = wDays > 0
+      ? ("\n\n*Garantia de " + wDays + " dia" + (wDays === 1 ? "" : "s") + "* a partir de la fecha de entrega. Si presenta algun inconveniente con la reparacion realizada, traigalo y con gusto lo revisamos sin costo adicional."
+        + "\n\nImportante: *la garantia aplica unicamente para fallas de fabrica* relacionadas con la reparacion realizada. No cubre danos por golpes, humedad, presiones fuertes en pantalla ni mal uso del equipo.")
+      : "\n\n*Este servicio no cuenta con garantia.*";
     msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* ha sido *entregado* exitosamente en *" + tienda + "*."
-        + "\n\n*Garantia de 15 dias* a partir de la fecha de entrega. Si presenta algun inconveniente con la reparacion realizada, traigalo y con gusto lo revisamos sin costo adicional."
-        + "\n\nImportante: *la garantia aplica unicamente para fallas de fabrica* relacionadas con la reparacion realizada. No cubre danos por golpes, humedad, presiones fuertes en pantalla ni mal uso del equipo."
+        + garantiaMsg
         + "\n\nGracias por confiar en *" + tienda + "*. Fue un placer atenderle.";
   } else if (status === "Cancelado") {
     msg = "Hola " + nombre + ", le informamos que el servicio de su equipo *" + equipo + "* en *" + tienda + "* ha sido *cancelado*."
@@ -1402,11 +1412,11 @@ function ResumenDia(_props) {
   var totalEnCaja   = cajaVentas + cajaReps + cajaIngresos - cajaEgresos;
 
   var movimientos = [
-    ventasHoy.map(function(s){ return { tipo:"venta", icon:"🛒", label:"Venta"+(s.customer?" — "+s.customer:""), valor:s.total, positivo:true }; }),
-    repsHoy.map(function(r){ return { tipo:"rep", icon:"🔧", label:"Reparación — "+(r.customer||r.device||""), valor:r.cost, positivo:true }; }),
-    _abonosHoyItems.map(function(x){ return { tipo:"abono", icon:"💳", label:"Abono — "+(x.repair.customer||x.repair.device||"")+(x.adv.note?" ("+x.adv.note+")":""), valor:x.adv.amount, positivo:true }; }),
-    ingresosHoy.map(function(e){ return { tipo:"ingreso", icon:"⬆", label:(e.description||"Ingreso")+" ("+( e.category||"")+") ", valor:e.amount, positivo:true }; }),
-    egresosHoy.map(function(e){ return { tipo:"egreso", icon:"⬇", label:(e.description||"Egreso")+" ("+( e.category||"")+") ", valor:e.amount, positivo:false }; })
+    ventasHoy.map(function(s){ return { tipo:"venta", icon:ShoppingCart, color:T.green, label:"Venta"+(s.customer?" — "+s.customer:""), valor:s.total, positivo:true }; }),
+    repsHoy.map(function(r){ return { tipo:"rep", icon:Wrench, color:"#8B5CF6", label:"Reparación — "+(r.customer||r.device||""), valor:r.cost, positivo:true }; }),
+    _abonosHoyItems.map(function(x){ return { tipo:"abono", icon:CreditCard, color:"#4F8EFF", label:"Abono — "+(x.repair.customer||x.repair.device||"")+(x.adv.note?" ("+x.adv.note+")":""), valor:x.adv.amount, positivo:true }; }),
+    ingresosHoy.map(function(e){ return { tipo:"ingreso", icon:TrendingUp, color:T.green, label:(e.description||"Ingreso")+" ("+( e.category||"")+") ", valor:e.amount, positivo:true }; }),
+    egresosHoy.map(function(e){ return { tipo:"egreso", icon:TrendingDown, color:T.red, label:(e.description||"Egreso")+" ("+( e.category||"")+") ", valor:e.amount, positivo:false }; })
   ].reduce(function(a,b){ return a.concat(b); },[]);
 
   var sinMovimientos = movimientos.length === 0;
@@ -1416,14 +1426,14 @@ function ResumenDia(_props) {
     /*#__PURE__*/React.createElement("div", {
       style:{ background:"linear-gradient(135deg,#0EA968 0%,#0B8F57 100%)", borderRadius:16, padding:"22px 24px", marginBottom:16, position:"relative", overflow:"hidden", boxShadow:"0 8px 24px rgba(14,169,104,0.25)" }
     },
-      /*#__PURE__*/React.createElement("div", { style:{ position:"absolute", right:-20, top:-20, fontSize:120, opacity:0.12 } }, "💰"),
-      /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,0.85)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:6 } }, "💰 Debes tener en caja"),
+      /*#__PURE__*/React.createElement("div", { style:{ position:"absolute", right:-14, top:-14, opacity:0.14 } }, /*#__PURE__*/React.createElement(Wallet, { size:120, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,0.85)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:6 } }, "Debes tener en caja"),
       /*#__PURE__*/React.createElement("div", { style:{ fontSize:38, fontWeight:900, color:"#fff", lineHeight:1, marginBottom:14, fontFamily:"inherit" } }, fmtD(totalEnCaja)),
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:16, flexWrap:"wrap", fontSize:12, color:"rgba(255,255,255,0.9)" } },
-        /*#__PURE__*/React.createElement("span", null, "🛒 Ventas: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaVentas))),
-        /*#__PURE__*/React.createElement("span", null, "🔧 Reparaciones: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaReps))),
-        /*#__PURE__*/React.createElement("span", null, "⬆ Ingresos: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaIngresos))),
-        /*#__PURE__*/React.createElement("span", null, "⬇ Egresos: ", /*#__PURE__*/React.createElement("strong", null, "-"+fmtD(cajaEgresos)))
+        /*#__PURE__*/React.createElement("span", { style:{ display:"inline-flex", alignItems:"center", gap:5 } }, /*#__PURE__*/React.createElement(ShoppingCart, { size:13 }), "Ventas: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaVentas))),
+        /*#__PURE__*/React.createElement("span", { style:{ display:"inline-flex", alignItems:"center", gap:5 } }, /*#__PURE__*/React.createElement(Wrench, { size:13 }), "Reparaciones: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaReps))),
+        /*#__PURE__*/React.createElement("span", { style:{ display:"inline-flex", alignItems:"center", gap:5 } }, /*#__PURE__*/React.createElement(TrendingUp, { size:13 }), "Ingresos: ", /*#__PURE__*/React.createElement("strong", null, fmtD(cajaIngresos))),
+        /*#__PURE__*/React.createElement("span", { style:{ display:"inline-flex", alignItems:"center", gap:5 } }, /*#__PURE__*/React.createElement(TrendingDown, { size:13 }), "Egresos: ", /*#__PURE__*/React.createElement("strong", null, "-"+fmtD(cajaEgresos)))
       )
     ),
     // ══ RESUMEN DEL DÍA (original) ══
@@ -1436,7 +1446,7 @@ function ResumenDia(_props) {
     // Header
     /*#__PURE__*/React.createElement("div",{ style:{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8 } },
       /*#__PURE__*/React.createElement("div",null,
-        /*#__PURE__*/React.createElement("div",{ style:{ fontSize:16,fontWeight:800,color:T.text,marginBottom:2 } },"📊 Resumen del Día"),
+        /*#__PURE__*/React.createElement("div",{ style:{ display:"flex",alignItems:"center",gap:7,fontSize:16,fontWeight:800,color:T.text,marginBottom:2 } }, /*#__PURE__*/React.createElement(BarChart3,{ size:17,color:T.muted }), "Resumen del Día"),
         /*#__PURE__*/React.createElement("div",{ style:{ fontSize:12,color:T.muted,textTransform:"capitalize" } }, diaSemana)
       ),
       /*#__PURE__*/React.createElement("div",{ style:{ textAlign:"right" } },
@@ -1448,28 +1458,34 @@ function ResumenDia(_props) {
     ),
 
     // 4 tarjetas de totales
-    /*#__PURE__*/React.createElement("div",{ style:{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16 } },
+    /*#__PURE__*/React.createElement("div",{ style:{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 } },
       [
-        { label:"Ventas",       valor:totalVentas,   color:T.green,  icon:"🛒", n:ventasHoy.length,   view:"sales" },
-        { label:"Reparaciones", valor:totalReps,     color:"#8B5CF6",icon:"🔧", n:repsHoy.length,     view:"repairs" },
-        { label:"Ingresos",     valor:totalIngresos, color:"#4F8EFF",icon:"⬆", n:ingresosHoy.length, view:"caja" },
-        { label:"Egresos",      valor:totalEgresos,  color:T.red,    icon:"⬇", n:egresosHoy.length,  view:"caja" }
+        { label:"Ventas",       valor:totalVentas,   color:T.green,  icon:ShoppingCart,  n:ventasHoy.length,   view:"sales" },
+        { label:"Reparaciones", valor:totalReps,     color:"#8B5CF6",icon:Wrench,        n:repsHoy.length,     view:"repairs" },
+        { label:"Ingresos",     valor:totalIngresos, color:"#4F8EFF",icon:TrendingUp,    n:ingresosHoy.length, view:"caja" },
+        { label:"Egresos",      valor:totalEgresos,  color:T.red,    icon:TrendingDown,  n:egresosHoy.length,  view:"caja" }
       ].map(function(x){
         return /*#__PURE__*/React.createElement("div",{ key:x.label,
           onClick:function(){ setView(x.view); },
-          style:{ background:T.surface,border:"1px solid "+T.border,borderRadius:12,padding:"10px 12px",cursor:"pointer",transition:"all 0.15s" }
+          onMouseEnter:function(e){ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 16px rgba(0,0,0,0.10)"; e.currentTarget.style.borderColor=x.color; },
+          onMouseLeave:function(e){ e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.05)"; e.currentTarget.style.borderColor=T.border; },
+          style:{ background:T.card,border:"1px solid "+T.border,borderRadius:14,padding:"14px",cursor:"pointer",transition:"all 0.15s ease",boxShadow:"0 1px 3px rgba(0,0,0,0.05)",display:"flex",flexDirection:"column",gap:8 }
         },
-          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:11,color:T.muted,fontWeight:700,textTransform:"uppercase",marginBottom:4 } }, x.icon+" "+x.label),
-          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:16,fontWeight:800,color:x.color } }, fmtD(x.valor)),
-          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:11,color:T.muted,marginTop:2 } }, x.n+" mov.")
+          /*#__PURE__*/React.createElement("div",{ style:{ display:"inline-flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:9,background:x.color+"1A" } },
+            /*#__PURE__*/React.createElement(x.icon,{ size:15,color:x.color })
+          ),
+          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:11,color:T.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.04em" } }, x.label),
+          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:18,fontWeight:800,color:x.color,lineHeight:1.1 } }, fmtD(x.valor)),
+          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:11,color:T.muted } }, x.n+" mov.")
         );
       })
     ),
 
     // Lista de movimientos
     sinMovimientos
-      ? /*#__PURE__*/React.createElement("div",{ style:{ textAlign:"center",padding:"20px 0",color:T.muted,fontSize:13 } },
-          "📭 Sin movimientos hoy — registra una venta, reparación o gasto"
+      ? /*#__PURE__*/React.createElement("div",{ style:{ display:"flex",flexDirection:"column",alignItems:"center",gap:8,padding:"22px 0",color:T.muted,fontSize:13 } },
+          /*#__PURE__*/React.createElement(Inbox,{ size:26,color:T.dim }),
+          /*#__PURE__*/React.createElement("span",null,"Sin movimientos hoy — registra una venta, reparación o gasto")
         )
       : /*#__PURE__*/React.createElement("div",{ style:{ display:"flex",flexDirection:"column",gap:6,maxHeight:200,overflowY:"auto" } },
           movimientos.map(function(m,i){
@@ -1477,7 +1493,7 @@ function ResumenDia(_props) {
               style:{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:T.surface,borderRadius:10,borderLeft:"3px solid "+(m.positivo?T.green:T.red) }
             },
               /*#__PURE__*/React.createElement("div",{ style:{ display:"flex",alignItems:"center",gap:10 } },
-                /*#__PURE__*/React.createElement("span",{ style:{ fontSize:16 } }, m.icon),
+                /*#__PURE__*/React.createElement("span",{ style:{ display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:7,background:(m.color||T.muted)+"1A",flexShrink:0 } }, /*#__PURE__*/React.createElement(m.icon,{ size:15,color:m.color||T.muted })),
                 /*#__PURE__*/React.createElement("span",{ style:{ fontSize:13,color:T.text,fontWeight:500 } }, m.label)
               ),
               /*#__PURE__*/React.createElement("span",{ style:{ fontSize:14,fontWeight:800,color:m.positivo?T.green:T.red,whiteSpace:"nowrap" } },
@@ -1940,7 +1956,8 @@ function RepairsView(_ref9) {
     paid: false,
     date: today(),
     notes: "",
-    technician: "Técnico Principal"
+    technician: "Técnico Principal",
+    warrantyDays: 15
   };
   var filtered = (data.repairs || []).filter(function (r) {
     var q = search.toLowerCase();
@@ -2222,7 +2239,7 @@ function RepairsView(_ref9) {
     }, /*#__PURE__*/React.createElement(Edit2, {
       size: 14
     })), r.phone && /*#__PURE__*/React.createElement("a", {
-      href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=" + encodeURIComponent(buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost)),
+      href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=" + encodeURIComponent(buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays)),
       target: "_blank",
       onClick: function(e){ e.stopPropagation(); },
       title: "Contactar por WhatsApp",
@@ -2267,6 +2284,20 @@ function RepairsView(_ref9) {
       size: 14
     })), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
+        shareRepairReceipt(r, (data.settings && data.settings.storeName) || "ACCE PRO", clientId, notify);
+      },
+      title: "Compartir recibo por WhatsApp",
+      style: {
+        background: "none",
+        border: "none",
+        color: "#25D366",
+        cursor: "pointer",
+        padding: 5
+      }
+    }, /*#__PURE__*/React.createElement(Share2, {
+      size: 14
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
         return del(r.id);
       },
       style: {
@@ -2291,7 +2322,8 @@ function RepairsView(_ref9) {
     setModal: setModal,
     data: data,
     save: save,
-    notify: notify
+    notify: notify,
+    clientId: clientId
   }));
 }
 function PatternLock(_ref) {
@@ -2366,8 +2398,9 @@ function RepairModal(_ref0) {
     setModal = _ref0.setModal,
     data = _ref0.data,
     save = _ref0.save,
-    notify = _ref0.notify;
-  var _useState7 = useState(modal.repair ? Object.assign({ advances: [] }, modal.repair) : { advances: [] }),
+    notify = _ref0.notify,
+    clientId = _ref0.clientId;
+  var _useState7 = useState(modal.repair ? Object.assign({ advances: [], warrantyDays: 15 }, modal.repair) : { advances: [], warrantyDays: 15 }),
     _useState8 = _slicedToArray(_useState7, 2),
     form = _useState8[0],
     setForm = _useState8[1];
@@ -2574,7 +2607,7 @@ function RepairModal(_ref0) {
         gridTemplateColumns: "1fr 1fr",
         gap: 10
       }
-    }, [["Cliente", form.customer], ["Teléfono", form.phone], ["Equipo", form.device], ["Categoría", form.category], ["Problema", form.problem], ["Costo", fmt(form.cost)], ["📅 Fecha ingreso", form.date], ["📦 Fecha entrega", form.deliveryDate || (form.paid ? "—" : "Pendiente")], ["Técnico", form.technician], ["Pago", form.paid ? "✓ Pagado" : "⏳ Pendiente"], ["🔒 Bloqueo", form.lockType==="pin" && form.lockValue ? "🔢 Clave: "+form.lockValue : form.lockType==="pattern" && form.lockPattern && form.lockPattern.length ? "⠿ Patrón: "+form.lockPattern.map(function(n){return n+1;}).join(" → ") : "🔓 Sin bloqueo"]].map(function (_ref1) {
+    }, [["Cliente", form.customer], ["Teléfono", form.phone], ["Equipo", form.device], ["Categoría", form.category], ["Problema", form.problem], ["Costo", fmt(form.cost)], ["📅 Fecha ingreso", form.date], ["📦 Fecha entrega", form.deliveryDate || (form.paid ? "—" : "Pendiente")], ["Técnico", form.technician], ["Pago", form.paid ? "✓ Pagado" : "⏳ Pendiente"], ["🛡️ Garantía", (form.warrantyDays || 0) > 0 ? (form.warrantyDays + " día" + (form.warrantyDays===1?"":"s")) : "Sin garantía"], ["🔒 Bloqueo", form.lockType==="pin" && form.lockValue ? "🔢 Clave: "+form.lockValue : form.lockType==="pattern" && form.lockPattern && form.lockPattern.length ? "⠿ Patrón: "+form.lockPattern.map(function(n){return n+1;}).join(" → ") : "🔓 Sin bloqueo"]].map(function (_ref1) {
       var _ref10 = _slicedToArray(_ref1, 2),
         l = _ref10[0],
         v = _ref10[1];
@@ -2720,11 +2753,18 @@ function RepairModal(_ref0) {
         }, "+"),
         // Botón WhatsApp si hay teléfono
         form.phone && /*#__PURE__*/React.createElement("a", {
-          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text="+encodeURIComponent(buildWAMessage(form.customer, form.device, form.status, form.paid, form.cost)),
+          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text="+encodeURIComponent(buildWAMessage(form.customer, form.device, form.status, form.paid, form.cost, form.warrantyDays)),
           target:"_blank",
           title:"Contactar por WhatsApp",
           style:{ width:42, height:42, background:"#25D366", color:"#fff", border:"none", borderRadius:12, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }
-        }, "📱")
+        }, "📱"),
+        // Botón compartir recibo (imagen + texto) por WhatsApp
+        form.phone && /*#__PURE__*/React.createElement("button", {
+          type: "button",
+          onClick: function(){ shareRepairReceipt(form, (data.settings && data.settings.storeName) || "ACCE PRO", clientId, notify); },
+          title:"Compartir recibo por WhatsApp",
+          style:{ width:42, height:42, background:T.surface, color:"#25D366", border:"2px solid #25D366", borderRadius:12, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }
+        }, /*#__PURE__*/React.createElement(Share2, { size: 18 }))
       ),
 
       // Mini formulario nuevo cliente
@@ -2753,6 +2793,7 @@ function RepairModal(_ref0) {
       /*#__PURE__*/React.createElement(Field, { label:"Problema *", value:form.problem, onChange:function(v){return set("problem",v);}, placeholder:"Descripción del problema", required:true }),
       /*#__PURE__*/React.createElement(Field, { label:"Estado", value:form.status, onChange:function(v){return set("status",v);}, options:STATUSES }),
       /*#__PURE__*/React.createElement(Field, { label:"Costo total (COP)", value:form.cost, onChange:function(v){return set("cost",Number(v));}, type:"number", placeholder:"150000" }),
+      /*#__PURE__*/React.createElement(Field, { label:"Días de garantía (0 = sin garantía)", value:form.warrantyDays, onChange:function(v){return set("warrantyDays", Math.max(0, Number(v)||0));}, type:"number", placeholder:"15" }),
       /*#__PURE__*/React.createElement(Field, { label:"Fecha", value:form.date, onChange:function(v){return set("date",v);}, type:"date" }),
       /*#__PURE__*/React.createElement(Field, { label:"Técnico", value:form.technician, onChange:function(v){return set("technician",v);}, placeholder:"Nombre del técnico" }),
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:5 } },
@@ -5553,6 +5594,7 @@ function printRepair(r) {
   var clientId = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : (localStorage.getItem("trp_permanent_clientId_" + (localStorage.getItem("trp_current_user")||"")) || "");
   var forceType = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : null;
   var forceTw   = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : null;
+  var returnHTML = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : false;
   var fmt = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
   var ptype = forceType || _getPrinterType();
   var orderId = (r.id||"").slice(-6).toUpperCase();
@@ -5604,17 +5646,22 @@ function printRepair(r) {
                  (r.deliveryDate ? field("FECHA RETIRO", r.deliveryDate) : "") +
                  (lockText ? field("BLOQUEO", lockText) : "");
 
+    var wDaysT = (r.warrantyDays === 0 || r.warrantyDays) ? Number(r.warrantyDays) : 15;
     var garantiaT = (r.paid && r.status==="Entregado")
-      ? "<div style=\"margin-top:8px;border:1px solid #000;padding:6px;text-align:center\">"+
-        "<div style=\"font-weight:bold;font-size:"+baseFont+"\">GARANTIA 15 DIAS</div>"+
-        "<div style=\"font-size:9px;margin-top:3px;line-height:1.3\">Valida presentando este recibo. No cubre golpes, humedad ni mal manejo.</div>"+
-        "</div>"
+      ? (wDaysT > 0
+        ? "<div style=\"margin-top:8px;border:1px solid #000;padding:6px;text-align:center\">"+
+          "<div style=\"font-weight:bold;font-size:"+baseFont+"\">GARANTIA "+wDaysT+" DIA"+(wDaysT===1?"":"S")+"</div>"+
+          "<div style=\"font-size:9px;margin-top:3px;line-height:1.3\">Valida presentando este recibo. No cubre golpes, humedad ni mal manejo.</div>"+
+          "</div>"
+        : "<div style=\"margin-top:8px;border:1px solid #000;padding:6px;text-align:center\">"+
+          "<div style=\"font-weight:bold;font-size:"+baseFont+"\">SIN GARANTIA</div>"+
+          "</div>")
       : "";
 
     notesHtml = r.notes ? "<div style=\"margin-top:6px;font-size:10px\"><b>NOTAS:</b><br>"+_escHtml(r.notes)+"</div>" : "";
     advHtml = (r.advances && r.advances.length) ? "<div style=\"margin-top:6px;font-size:10px\"><b>ABONOS:</b><br>"+r.advances.map(function(a){return fmt(a.amount)+" - "+_escHtml(a.date)}).join("<br>")+"</div>" : "";
 
-    _printHTML(
+    var htmlOutT =
       "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden #"+orderId+"</title>"+
       "<style>*{margin:0;padding:0;box-sizing:border-box}"+
       "body{font-family:'Arial',sans-serif;font-size:"+baseFont+";line-height:1.4;color:#000;padding:2px;width:100%;font-weight:bold;-webkit-font-smoothing:none}"+
@@ -5640,9 +5687,9 @@ function printRepair(r) {
       (qrDataUrl ? "<div class=\"c\" style=\"margin:10px 0\"><img src='"+qrDataUrl+"' style='width:110px;height:110px'/><div style=\"font-size:9px;margin-top:4px\">Escanea para ver tu estado</div></div>" : "")+
       "<div class=\"c small\">Gracias por confiar<br>en nosotros</div>"+
       "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>"+
-      "</body></html>",
-      ptype
-    );
+      "</body></html>";
+    if (returnHTML) return htmlOutT;
+    _printHTML(htmlOutT, ptype);
 
   } else {
     // ── FORMATO CARTA (documento profesional) ──
@@ -5653,8 +5700,9 @@ function printRepair(r) {
     advHtml = r.advances && r.advances.length ? "<div class=\"notes\"><div class=\"notes-title\">Abonos registrados</div><p>"+r.advances.map(function(a){return fmt(a.amount)+" — "+_escHtml(a.date)}).join("<br>")+"</p></div>" : "";
     var estadoColor = r.status==="Entregado" ? "#8B5CF6" : r.status==="Listo" ? "#10B981" : r.status==="En Reparación" ? "#0078FF" : "#6B7280";
     var pagoBadge = r.paid ? "<span style=\"background:#DCFCE7;color:#16A34A;padding:4px 14px;border-radius:20px;font-weight:700;font-size:13px\">✓ PAGADO</span>" : "<span style=\"background:#FEE2E2;color:#DC2626;padding:4px 14px;border-radius:20px;font-weight:700;font-size:13px\">⏳ PENDIENTE</span>";
+    var wDaysC = (r.warrantyDays === 0 || r.warrantyDays) ? Number(r.warrantyDays) : 15;
 
-    _printHTML("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden de Reparación #"+orderId+"</title><style>"+
+    var htmlOutC = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Orden de Reparación #"+orderId+"</title><style>"+
       "*{margin:0;padding:0;box-sizing:border-box}"+
       "body{font-family:'Segoe UI',Arial,sans-serif;color:#1A1A1A;padding:40px 48px;line-height:1.5}"+
       ".header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #E8621A;padding-bottom:20px;margin-bottom:28px}"+
@@ -5689,13 +5737,66 @@ function printRepair(r) {
       "<div class=\"cost-box\"><span class=\"cost-label\">COSTO TOTAL</span><span class=\"cost-val\">"+fmt(r.cost)+"</span></div>"+
       "<div class=\"status-row\"><span class=\"status-tag\" style=\"background:"+estadoColor+"\">"+_escHtml(r.status||"")+"</span>"+pagoBadge+"</div>"+
       notesHtml+advHtml+
-      (r.paid && r.status==="Entregado" ? "<div style=\"background:#F0FDF4;border:2px solid #16A34A;border-radius:12px;padding:16px 20px;margin:20px 0;display:flex;align-items:center;gap:14px\"><div style=\"font-size:32px\">🛡️</div><div><div style=\"font-weight:800;font-size:16px;color:#16A34A\">GARANTÍA DE 15 DÍAS</div><div style=\"font-size:13px;color:#555;margin-top:2px\">Este equipo cuenta con 15 días de garantía a partir de la fecha de entrega. Válida presentando este recibo. No cubre daños físicos, humedad o mal manejo.</div></div></div>" : "")+
+      (r.paid && r.status==="Entregado" ? (
+        wDaysC > 0
+          ? "<div style=\"background:#F0FDF4;border:2px solid #16A34A;border-radius:12px;padding:16px 20px;margin:20px 0;display:flex;align-items:center;gap:14px\"><div style=\"font-size:32px\">🛡️</div><div><div style=\"font-weight:800;font-size:16px;color:#16A34A\">GARANTÍA DE "+wDaysC+" DÍA"+(wDaysC===1?"":"S")+"</div><div style=\"font-size:13px;color:#555;margin-top:2px\">Este equipo cuenta con "+wDaysC+" día"+(wDaysC===1?"":"s")+" de garantía a partir de la fecha de entrega. Válida presentando este recibo. No cubre daños físicos, humedad o mal manejo.</div></div></div>"
+          : "<div style=\"background:#FEF2F2;border:2px solid #DC2626;border-radius:12px;padding:16px 20px;margin:20px 0;display:flex;align-items:center;gap:14px\"><div style=\"font-size:32px\">⚠️</div><div><div style=\"font-weight:800;font-size:16px;color:#DC2626\">SIN GARANTÍA</div><div style=\"font-size:13px;color:#555;margin-top:2px\">Este servicio se entrega sin garantía.</div></div></div>"
+      ) : "")+
       "<div class=\"sign-row\"><div class=\"sign-box\">Firma del técnico</div><div class=\"sign-box\">Firma del cliente</div></div>"+
       (qrDataUrl ? "<div style=\"text-align:center;margin:24px 0 8px;padding:18px;background:#FAFAFC;border-radius:12px;border:1px solid #EEE\"><img src='"+qrDataUrl+"' style='width:120px;height:120px'/><div style=\"font-size:12px;color:#666;margin-top:8px;font-weight:600\">📱 Escanea para ver el estado de tu reparación</div></div>" : "")+
       "<div class=\"footer\">¡Gracias por confiar en nosotros!<br>Conserve este documento para reclamar su equipo</div>"+
       "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">🖨 Imprimir</button></div>"+
-      "</body></html>", ptype);
+      "</body></html>";
+    if (returnHTML) return htmlOutC;
+    _printHTML(htmlOutC, ptype);
   }
+}
+
+// ── COMPARTIR RECIBO POR WHATSAPP (imagen + texto) ─────────────────────────
+function shareRepairReceipt(r, storeName, clientId, notify) {
+  var orderId = (r.id || "").slice(-6).toUpperCase();
+  var caption = buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays);
+  var waNum = (r.phone || "").replace(/\D/g, "");
+  var openWA = function () {
+    window.open("https://wa.me/" + (waNum ? "57" + waNum : "") + "?text=" + encodeURIComponent(caption), "_blank");
+  };
+  if (typeof html2canvas === "undefined") {
+    // Sin librería de captura disponible: al menos abrir el mensaje de texto con la garantía
+    openWA();
+    return;
+  }
+  var html = printRepair(r, storeName, clientId, "normal", null, true);
+  var iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:650px;height:1px;border:0;opacity:0";
+  document.body.appendChild(iframe);
+  var cleanup = function () { if (iframe.parentNode) iframe.remove(); };
+  var doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  setTimeout(function () {
+    try {
+      html2canvas(doc.body, { backgroundColor: "#ffffff", scale: 2, windowWidth: 650 }).then(function (canvas) {
+        canvas.toBlob(function (blob) {
+          cleanup();
+          if (!blob) { openWA(); return; }
+          var file = new File([blob], "recibo-" + orderId + ".png", { type: "image/png" });
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: "Recibo #" + orderId, text: caption }).catch(function () {});
+          } else {
+            // Sin soporte para compartir archivos (ej. escritorio): descarga la imagen y abre el chat de WhatsApp con el texto
+            var link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "recibo-" + orderId + ".png";
+            link.click();
+            setTimeout(function () { URL.revokeObjectURL(link.href); }, 4000);
+            openWA();
+            notify && notify("Recibo descargado. Adjúntalo como imagen en el chat de WhatsApp");
+          }
+        }, "image/png");
+      }).catch(function () { cleanup(); openWA(); });
+    } catch (e) { cleanup(); openWA(); }
+  }, 400);
 }
 
 // ── RECEIPT PRINT HELPER ─────────────────────────
@@ -8783,590 +8884,11 @@ function _getAuthRef(clientId) { return null; } // reemplazado por _getUserRef
 function _saveAuth(clientId, data) {} // reemplazado por _saveUser
 function _loadAuthLocal(username) { return _loadUserLocal(username); } // alias
 
-// ─── PANEL DE ADMINISTRACIÓN ──────────────────────────────
-function AdminPanel() {
-  var _a1 = useState("demo"), _aa1 = _slicedToArray(_a1, 2), tipo = _aa1[0], setTipo = _aa1[1];
-  var _a2 = useState(null), _aa2 = _slicedToArray(_a2, 2), codigoGen = _aa2[0], setCodigoGen = _aa2[1];
-  var _a3 = useState(""), _aa3 = _slicedToArray(_a3, 2), rcUser = _aa3[0], setRcUser = _aa3[1];
-  var _a4 = useState(""), _aa4 = _slicedToArray(_a4, 2), rcOut = _aa4[0], setRcOut = _aa4[1];
-  var _a5 = useState(false), _aa5 = _slicedToArray(_a5, 2), copied = _aa5[0], setCopied = _aa5[1];
-  // Códigos siempre desde Firebase — localStorage solo como caché visual inicial
-  var _a6 = useState([]);
-  var _aa6 = _slicedToArray(_a6, 2), codigos = _aa6[0], setCodigos = _aa6[1];
-  var _a6b = useState(true), _aa6b = _slicedToArray(_a6b, 2), loadingCodes = _aa6b[0], setLoadingCodes = _aa6b[1];
-  var _a7 = useState(false), _aa7 = _slicedToArray(_a7, 2), refreshing = _aa7[0], setRefreshing = _aa7[1];
-  var _a8 = useState("codigos"), _aa8 = _slicedToArray(_a8, 2), tab = _aa8[0], setTab = _aa8[1];
-  var _a9 = useState([]), _aa9 = _slicedToArray(_a9, 2), cuentas = _aa9[0], setCuentas = _aa9[1];
-  var _a10 = useState(false), _aa10 = _slicedToArray(_a10, 2), loadingCuentas = _aa10[0], setLoadingCuentas = _aa10[1];
-  var _a11 = useState(""), _aa11 = _slicedToArray(_a11, 2), buscarCuenta = _aa11[0], setBuscarCuenta = _aa11[1];
-  var _a12 = useState("todos"), _aa12 = _slicedToArray(_a12, 2), filtro = _aa12[0], setFiltro = _aa12[1];
-
-  var getDb = function() {
-    var db = window.__firebaseDB;
-    if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0)
-      db = firebase.apps[0].firestore();
-    return db;
-  };
-
-  // ── Cargar códigos desde Firebase al iniciar ──────────────────────────────
-  var cargarCodigosFirebase = function() {
-    setLoadingCodes(true);
-    // Intentar hasta 3 veces si Firebase no está listo
-    var intentos = 0;
-    var intentar = function() {
-      var db = getDb();
-      if (!db) {
-        intentos++;
-        if (intentos < 3) { setTimeout(intentar, 1500); }
-        else { setLoadingCodes(false); }
-        return;
-      }
-      db.collection("trp_users").get().then(function(snap) {
-        var fbCodes = [];
-        snap.forEach(function(doc) {
-          if (!doc.id.startsWith("code_LIC_")) return;
-          var d = doc.data();
-          // Derivar código del ID si no tiene campo code (documentos activados sin merge)
-          // Si tiene campo code, usarlo. Si no, reconstruir del ID
-          // ID formato: code_LIC_PRO_UBUE19_0139PSNI → PRO-UBUE19-0139PSNI
-          var rawId = doc.id.replace("code_LIC_","");
-          var codeVal = d.code || rawId.replace(/_/g,"-");
-          if (!codeVal) return;
-          fbCodes.push({
-            code:        codeVal,
-            tipo:        d.tipo || "demo",
-            generadoEn:  d.generadoEn || "",
-            usado:       d.used || false,
-            usedBy:      d.usedBy || "",
-            usedByUser:  d.usedByUser || "",
-            usedClientId:d.usedClientId || "",
-            activadoEn:  d.usedAt || ""
-          });
-        });
-        fbCodes.sort(function(a,b){ return (b.generadoEn||"").localeCompare(a.generadoEn||""); });
-        setCodigos(fbCodes);
-        // Guardar en localStorage como caché
-        try { localStorage.setItem("acce_admin_codes", JSON.stringify(fbCodes)); } catch(e) {}
-        setLoadingCodes(false);
-        console.log("[Admin] ✅ Códigos cargados desde Firebase:", fbCodes.length);
-      }).catch(function(e) {
-        console.warn("[Admin] Error cargando códigos:", e);
-        intentos++;
-        if (intentos < 3) { setTimeout(intentar, 2000); }
-        else { setLoadingCodes(false); }
-      });
-    };
-    intentar();
-  };
-
-  // Cargar desde Firebase al abrir el panel
-  useEffect(function(){
-    cargarCodigosFirebase();
-  }, []);
-
-  // ── Cargar cuentas desde Firebase ──
-  var cargarCuentas = function() {
-    var db = getDb();
-    if (!db) return;
-    setLoadingCuentas(true);
-    db.collection("trp_users").get().then(function(snap) {
-      var lista = [];
-      snap.forEach(function(doc) {
-        var d = doc.data();
-        // Excluir documentos de códigos (code_LIC_...)
-        if (doc.id.startsWith("code_LIC_")) return;
-        if (!d.username) return;
-        lista.push({
-          id:          doc.id,
-          username:    d.username || doc.id,
-          licenseCode: d.licenseCode || "",
-          licenseType: d.licenseType || "",
-          createdAt:   d.createdAt || "",
-          lastSeen:    d.lastSeen || "",
-          software:    d.software || "ACCE PRO",
-          online:      d.online || false,
-        });
-      });
-      // Enriquecer con info de lastSeen desde clientes collection
-      if (lista.length === 0) { setCuentas(lista); setLoadingCuentas(false); return; }
-      var pending = lista.length;
-      lista.forEach(function(u, i) {
-        var clientId = u.username.replace(/-/g,"_");
-        db.collection("clientes").doc(clientId).get().then(function(cDoc) {
-          if (cDoc.exists && cDoc.data().updatedAt) {
-            lista[i].lastSeen = cDoc.data().updatedAt;
-          }
-          pending--;
-          if (pending === 0) {
-            lista.sort(function(a,b){ return (b.createdAt||"").localeCompare(a.createdAt||""); });
-            setCuentas(lista);
-            setLoadingCuentas(false);
-          }
-        }).catch(function(){
-          pending--;
-          if (pending === 0) { setCuentas(lista); setLoadingCuentas(false); }
-        });
-      });
-    }).catch(function(e){
-      console.warn("Error cargando cuentas:", e);
-      setLoadingCuentas(false);
-    });
-  };
-
-  useEffect(function() {
-    if (tab === "cuentas") {
-      cargarCuentas();
-      // Auto-refresh cada 30s para ver quién está en línea
-      if (window._cuentasInterval) clearInterval(window._cuentasInterval);
-      window._cuentasInterval = setInterval(function(){
-        if (document.getElementById && document.visibilityState !== "hidden") cargarCuentas();
-      }, 30000);
-    } else {
-      if (window._cuentasInterval) { clearInterval(window._cuentasInterval); window._cuentasInterval = null; }
-    }
-  }, [tab]);
-
-  // ── Eliminar cuenta ──
-  var eliminarCuenta = function(cuenta) {
-    if (!confirm("¿Eliminar la cuenta \"" + cuenta.username + "\"?\n\nEsto eliminará su acceso pero NO borrará sus datos del taller.")) return;
-    var db = getDb();
-    if (db) {
-      db.collection("trp_users").doc(cuenta.id).delete().then(function() {
-        setCuentas(function(prev){ return prev.filter(function(x){ return x.id !== cuenta.id; }); });
-      }).catch(function(e){ alert("Error al eliminar: " + e.message); });
-    }
-  };
-
-  // ── Verificar estados de códigos ──
-  var verificarEstados = function() {
-    if (!codigos.length) return;
-    setRefreshing(true);
-    var db = getDb();
-    if (!db) { setRefreshing(false); return; }
-    var pending = codigos.length;
-    setCodigos(function(prev) {
-      var newArr = prev.map(function(x){ return _objectSpread({}, x); });
-      prev.forEach(function(item, idx) {
-        var codeKey = "code_LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
-        db.collection("trp_users").doc(codeKey).onSnapshot(function(doc) {
-          if (doc.exists && (doc.data().usedBy || doc.data().used)) {
-            setCodigos(function(latest) {
-              var updated = latest.map(function(x, i) {
-                if (i !== idx) return x;
-                return _objectSpread(_objectSpread({}, x), {}, { usado: true, usedBy: doc.data().usedBy || "", usedByUser: doc.data().usedByUser || "", usedClientId: doc.data().usedClientId || "", activadoEn: doc.data().usedAt || "" });
-              });
-              localStorage.setItem("acce_admin_codes", JSON.stringify(updated));
-              return updated;
-            });
-          }
-          pending--;
-          if (pending === 0) setRefreshing(false);
-        }, function(err){ pending--; if (pending === 0) setRefreshing(false); });
-      });
-      return newArr;
-    });
-  };
-
-  useEffect(function() { verificarEstados(); }, [codigos.length]);
-
-  var generar = function() {
-    var code; var now = new Date();
-    if (tipo === "test") {
-      var expMin = Math.floor((Date.now() + 10*60*1000)/60000).toString();
-      var hT = _hash(expMin+"TEST"+_LS);
-      code = "TEST-"+expMin+"-"+hT;
-    } else if (tipo === "pro") {
-      var id = Math.random().toString(36).slice(2,8).toUpperCase();
-      var h2 = _hash(id+"PRO"+_LS);
-      code = "PRO-"+id+"-"+h2;
-    } else {
-      var days = tipo==="trial"?30:tipo==="anual"?365:DIAS_DEMO;
-      var exp = new Date(now.getTime()+days*86400000);
-      var dateStr = exp.getFullYear().toString()+String(exp.getMonth()+1).padStart(2,"0")+String(exp.getDate()).padStart(2,"0");
-      var prefix = tipo==="trial"?"TRIAL":tipo==="anual"?"ANUAL":"DEMO";
-      // Componente único: timestamp en base36 + random para garantizar unicidad absoluta
-      var ts36 = Date.now().toString(36).toUpperCase().slice(-3);
-      var rnd  = Math.random().toString(36).slice(2,5).toUpperCase();
-      var dateStrUniq = dateStr + ts36 + rnd; // ej: 20261231A2BXY7
-      var h = _hash(dateStrUniq+_LS);
-      code = prefix+"-"+dateStrUniq+"-"+h;
-    }
-    setCodigoGen(code); setCopied(false);
-    var nuevo = { code:code, tipo:tipo, generadoEn:new Date().toISOString(), usado:false };
-    setCodigos(function(prev){ var u=[nuevo].concat(prev); localStorage.setItem("acce_admin_codes",JSON.stringify(u)); return u; });
-    // Guardar en Firebase — fuente de verdad
-    var db = getDb();
-    if (db) {
-      var codeKey = "code_LIC_" + code.replace(/[^A-Z0-9]/g,"_");
-      var codeData = { code: code, tipo: tipo, generadoEn: new Date().toISOString(), used: false, createdByAdmin: true };
-      db.collection("trp_users").doc(codeKey).set(codeData, { merge: true })
-        .then(function(){ console.log("[Admin] ✅ Código guardado en Firebase:", code); })
-        .catch(function(e){
-          console.warn("[Admin] ❌ Error guardando en Firebase:", e);
-          alert("⚠️ No se pudo guardar en Firebase. Verifique la conexión.");
-        });
-    } else {
-      alert("⚠️ Firebase no disponible. El código se guardó localmente pero puede perderse.");
-    }
-  };
-
-  var copiar = function(cod) {
-    navigator.clipboard.writeText(cod||codigoGen).then(function(){ setCopied(true); setTimeout(function(){ setCopied(false); },2000); });
-  };
-
-  var eliminarCodigo = function(idx) {
-    var codeToDelete = codigos[idx] ? codigos[idx].code : null;
-    setCodigos(function(prev){ var u=prev.filter(function(_,i){ return i!==idx; }); localStorage.setItem("acce_admin_codes",JSON.stringify(u)); return u; });
-    // Eliminar también de Firebase
-    if (codeToDelete) {
-      var db = getDb();
-      if (db) {
-        var codeKey = "code_LIC_" + codeToDelete.replace(/[^A-Z0-9]/g,"_");
-        db.collection("trp_users").doc(codeKey).delete().catch(function(){});
-      }
-    }
-  };
-
-  var licLabel = function(u) {
-    if (!u.licenseCode) return { txt:"Sin licencia", color:"#94A3B8" };
-    var r = verificarCodigo(u.licenseCode);
-    if (!r.valid) return { txt:"Vencida", color:"#EF4444" };
-    if (r.type==="pro") return { txt:"PRO — Permanente", color:"#10B981" };
-    // Si daysLeft es mayor a 1100 días (3 años), probablemente el reloj del sistema está mal
-    if (r.daysLeft > 1100) return { txt:"⚠️ Reloj incorrecto", color:"#F59E0B" };
-    // Si daysLeft es negativo (expirado)
-    if (r.daysLeft <= 0) return { txt:"Vencida", color:"#EF4444" };
-    // Colores por urgencia
-    var color = r.daysLeft <= 3 ? "#EF4444" : r.daysLeft <= 7 ? "#F59E0B" : "#3B82F6";
-    return { txt:"Activa — "+r.daysLeft+" días", color:color };
-  };
-
-  var fmtDate = function(iso) {
-    if (!iso) return "—";
-    try { return new Date(iso).toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"}); } catch(e){ return iso.slice(0,10); }
-  };
-
-  var cuentasFiltradas = cuentas.filter(function(u){
-    return !buscarCuenta || u.username.toLowerCase().includes(buscarCuenta.toLowerCase());
-  });
-
-  var codigosDisponibles = codigos.filter(function(x){ return !x.usado; }).length;
-  var codigosUsados = codigos.filter(function(x){ return x.usado; }).length;
-  var codigosFiltrados = filtro === "disponibles" ? codigos.filter(function(x){ return !x.usado; })
-    : filtro === "usados" ? codigos.filter(function(x){ return x.usado; }) : codigos;
-
-  var renovarCuenta = function(u) {
-    var db = getDb();
-    var code;
-    var now = new Date();
-    var days = 30;
-    var exp = new Date(now.getTime() + days * 86400000);
-    var dateStr = exp.getFullYear().toString() + String(exp.getMonth()+1).padStart(2,"0") + String(exp.getDate()).padStart(2,"0");
-    var ts36 = Date.now().toString(36).toUpperCase().slice(-3);
-    var rnd  = Math.random().toString(36).slice(2,5).toUpperCase();
-    var dateStrUniq = dateStr + ts36 + rnd;
-    var h = _hash(dateStrUniq + _LS);
-    code = "TRIAL-" + dateStrUniq + "-" + h;
-    if (db) {
-      var codeKey = "code_LIC_" + code.replace(/[^A-Z0-9]/g,"_");
-      db.collection("trp_users").doc(codeKey).set({ code:code, tipo:"trial", generadoEn:new Date().toISOString(), used:false, createdByAdmin:true }, { merge:true })
-        .catch(function(){});
-    }
-    var msg = "Hola " + u.username + ", aquí tienes tu código de renovación ACCE PRO (30 días):\n\n" + code + "\n\nIngresa el código en Configuración → Licencia para activarlo.";
-    setCodigos(function(prev){ var nu = [{ code:code, tipo:"trial", generadoEn:new Date().toISOString(), usado:false }].concat(prev); localStorage.setItem("acce_admin_codes", JSON.stringify(nu)); return nu; });
-    if (u.phone) {
-      window.open("https://wa.me/57" + u.phone.replace(/\D/g,"") + "?text=" + encodeURIComponent(msg), "_blank");
-    } else {
-      navigator.clipboard.writeText(code).catch(function(){});
-      alert("Código copiado: " + code + "\n\nEnvíaselo manualmente al cliente.");
-    }
-  };
-
-  var cardStyle = { background:"#fff", borderRadius:12, padding:20, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", marginBottom:16 };
-  var lblStyle  = { fontSize:12, fontWeight:600, color:"#606060", marginBottom:6, display:"block" };
-
-  // Detectar reloj del sistema incorrecto
-  var ahora = new Date();
-  var anioActual = ahora.getFullYear();
-  var relojMal = anioActual < 2025 || anioActual > 2035;
-
-  return /*#__PURE__*/React.createElement("div", { style:{ minHeight:"100dvh", background:"#F0F2F5", fontFamily:"'DM Sans',system-ui,sans-serif", padding:20 } },
-    /*#__PURE__*/React.createElement("div", { style:{ maxWidth:600, margin:"0 auto" } },
-    relojMal && /*#__PURE__*/React.createElement("div", {
-      style:{ background:"#FEF3C7", border:"2px solid #F59E0B", borderRadius:12, padding:"12px 16px",
-              marginBottom:16, fontSize:13, fontWeight:700, color:"#92400E" }
-    }, "⚠️ ADVERTENCIA: El reloj del sistema está incorrecto (" + ahora.toLocaleDateString("es-CO") + "). " +
-       "Los días de licencia no se mostrarán correctamente. Corrija la fecha del sistema."),
-
-      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:12, marginBottom:20 } },
-        /*#__PURE__*/React.createElement("div", { style:{ width:40, height:40, background:"linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" } },
-          /*#__PURE__*/React.createElement(Smartphone, { size:20, color:"#fff" })
-        ),
-        /*#__PURE__*/React.createElement("div", null,
-          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:800, fontSize:18, color:"#0D1B35", letterSpacing:"-0.03em" } }, "Panel Admin"),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B" } }, "ACCE PRO — GlobalAcce"),
-          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:5, marginTop:3 } },
-            /*#__PURE__*/React.createElement("span", { style:{ width:7, height:7, borderRadius:"50%", background: window.__firebaseDB ? "#10E08A" : "#EF4444", display:"inline-block" } }),
-            /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color: window.__firebaseDB ? "#10E08A" : "#EF4444" } }, window.__firebaseDB ? "Firebase ✅" : "Firebase ❌ Sin conexión")
-          )
-        )
-      ),
-
-      /* ── STATS ── */
-      /*#__PURE__*/React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:16 } },
-        /*#__PURE__*/React.createElement("div", { style:{ background:"#fff", borderRadius:10, padding:"12px 14px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", textAlign:"center" } },
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#0D1B35" } }, codigos.length),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:2 } }, "Códigos total")
-        ),
-        /*#__PURE__*/React.createElement("div", { style:{ background:"#F0FDF4", borderRadius:10, padding:"12px 14px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", textAlign:"center" } },
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#10B981" } }, codigosDisponibles),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:2 } }, "Disponibles")
-        ),
-        /*#__PURE__*/React.createElement("div", { style:{ background:"#FFF5F5", borderRadius:10, padding:"12px 14px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", textAlign:"center" } },
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#EF4444" } }, codigosUsados),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:2 } }, "Activados")
-        )
-      ),
-
-      /* ── TABS ── */
-      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, marginBottom:16 } },
-        ["codigos","cuentas"].map(function(t) {
-          var labels = { codigos:"🔑 Códigos", cuentas:"👥 Cuentas" };
-          return /*#__PURE__*/React.createElement("button", {
-            key:t, onClick:function(){ setTab(t); },
-            style:{ flex:1, padding:"10px", borderRadius:10, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:14, fontWeight:700,
-              background: tab===t ? "#0D1B35" : "#fff",
-              color: tab===t ? "#fff" : "#64748B",
-              boxShadow: tab===t ? "none" : "0 1px 4px rgba(0,0,0,0.08)"
-            }
-          }, labels[t]);
-        })
-      ),
-
-      /* ══════════════ TAB CÓDIGOS ══════════════ */
-      tab === "codigos" && /*#__PURE__*/React.createElement(React.Fragment, null,
-        /*#__PURE__*/React.createElement("div", { style: cardStyle },
-          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:14, color:"#0D1B35" } }, "🔑 Generar código de activación"),
-          /*#__PURE__*/React.createElement("label", { style: lblStyle }, "Tipo de licencia"),
-          /*#__PURE__*/React.createElement("select", {
-            value:tipo, onChange:function(e){ setTipo(e.target.value); setCodigoGen(null); },
-            style:{ width:"100%", padding:"10px 12px", border:"1px solid #E2E8F4", borderRadius:10, fontSize:14, marginBottom:12, fontFamily:"inherit", background:"#fff" }
-          },
-            /*#__PURE__*/React.createElement("option", { value:"demo" }, "DEMO — "+DIAS_DEMO+" días"),
-            /*#__PURE__*/React.createElement("option", { value:"trial" }, "TRIAL — 30 días"),
-            /*#__PURE__*/React.createElement("option", { value:"anual" }, "ANUAL — 1 año"),
-            /*#__PURE__*/React.createElement("option", { value:"pro" }, "PRO — Permanente"),
-            /*#__PURE__*/React.createElement("option", { value:"test" }, "🧪 TEST — 10 minutos")
-          ),
-          /*#__PURE__*/React.createElement("button", {
-            onClick:generar,
-            style:{ width:"100%", padding:"12px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:10, fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }
-          }, "Generar código"),
-          codigoGen && /*#__PURE__*/React.createElement("div", { style:{ marginTop:12, padding:"14px", background:"#F0FDF4", border:"1px solid #10E08A40", borderRadius:10 } },
-            /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:6 } }, "Compártelo con tu cliente:"),
-            /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:16, fontWeight:700, color:"#0D1B35", letterSpacing:"0.08em", wordBreak:"break-all", marginBottom:10 } }, codigoGen),
-            /*#__PURE__*/React.createElement("button", {
-              onClick:function(){ copiar(codigoGen); },
-              style:{ padding:"8px 16px", background:copied?"#10E08A":"#0D1B35", color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginRight:8 }
-            }, copied?"✅ Copiado":"Copiar"),
-            /*#__PURE__*/React.createElement("a", {
-              href:"https://wa.me/?text="+encodeURIComponent("Tu código de activación ACCE PRO:\n\n"+codigoGen+"\n\nPrecio: "+PRECIO),
-              target:"_blank",
-              style:{ display:"inline-flex", alignItems:"center", gap:6, padding:"8px 14px", background:"#25D366", color:"#fff", borderRadius:8, fontSize:13, fontWeight:600, textDecoration:"none" }
-            }, "📱 WhatsApp")
-          )
-        ),
-
-        /*#__PURE__*/React.createElement("div", { style: cardStyle },
-          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:6, marginBottom:10 } },
-            [["todos","Todos"],["disponibles","✔ Disponibles"],["usados","✖ Activados"]].map(function(f) {
-              return /*#__PURE__*/React.createElement("button", {
-                key:f[0], onClick:function(){ setFiltro(f[0]); },
-                style:{ flex:1, padding:"6px 0", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700,
-                  background: filtro===f[0] ? "#0D1B35" : "#F1F5F9", color: filtro===f[0] ? "#fff" : "#64748B" }
-              }, f[1]);
-            })
-          ),
-          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
-            /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "📋 Códigos generados ("+codigosFiltrados.length+")"),
-            /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, alignItems:"center" } },
-              /*#__PURE__*/React.createElement("button", {
-                onClick: cargarCodigosFirebase,
-                style:{ fontSize:12, color:"#fff", background:loadingCodes?"#94A3B8":"#10E08A", border:"none", borderRadius:6, padding:"4px 10px", cursor:loadingCodes?"default":"pointer", fontFamily:"inherit", fontWeight:600 }
-              }, loadingCodes?"⏳ Cargando...":"☁ Firebase"),
-              codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
-                onClick:function(){ verificarEstados(); }, disabled:refreshing,
-                style:{ fontSize:12, color:"#fff", background:refreshing?"#94A3B8":"#4F8EFF", border:"none", borderRadius:6, padding:"4px 10px", cursor:refreshing?"default":"pointer", fontFamily:"inherit", fontWeight:600 }
-              }, refreshing?"⏳ Verificando...":"🔄 Estados"),
-              codigos.length > 0 && /*#__PURE__*/React.createElement("button", {
-                onClick:function(){
-                  if(confirm("¿Limpiar historial? Esto eliminará los códigos de Firebase también.")){
-                    setCodigos([]); localStorage.removeItem("acce_admin_codes");
-                    var db = getDb();
-                    if (db) {
-                      codigos.forEach(function(item){
-                        var ck = "code_LIC_" + item.code.replace(/[^A-Z0-9]/g,"_");
-                        db.collection("trp_users").doc(ck).delete().catch(function(){});
-                      });
-                    }
-                  }
-                },
-                style:{ fontSize:11, color:"#94A3B8", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }
-              }, "Limpiar todo")
-            )
-          ),
-          loadingCodes
-            ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, "⏳ Cargando códigos desde Firebase...")
-            : codigosFiltrados.length === 0
-            ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", fontSize:13, padding:"20px 0" } }, codigos.length === 0 ? "Aún no has generado ningún código" : "No hay códigos con ese filtro")
-            : /*#__PURE__*/React.createElement("div", { style:{ maxHeight:420, overflowY:"auto", paddingRight:4,
-                scrollbarWidth:"thin", scrollbarColor:"#CBD5E1 transparent" } },
-              /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:8 } },
-                codigosFiltrados.map(function(item, idx) {
-                  var usado = item.usado;
-                  return /*#__PURE__*/React.createElement("div", { key:idx,
-                    style:{ background:usado?"#FFF5F5":"#F0FDF4", border:"1px solid "+(usado?"#FCA5A5":"#6EE7B7"), borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"flex-start", gap:10 }
-                  },
-                    /*#__PURE__*/React.createElement("div", { style:{ width:10, height:10, borderRadius:"50%", background:usado?"#EF4444":"#10B981", flexShrink:0, marginTop:4 } }),
-                    /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:0 } },
-                      /*#__PURE__*/React.createElement("div", { style:{ fontFamily:"monospace", fontSize:13, fontWeight:700, color:"#0D1B35", wordBreak:"break-all" } }, item.code),
-                      /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginTop:3, display:"flex", gap:10, flexWrap:"wrap" } },
-                        /*#__PURE__*/React.createElement("span", null, (item.tipo||"").toUpperCase()),
-                        item.generadoEn && /*#__PURE__*/React.createElement("span", null, "Generado: "+fmtDate(item.generadoEn)),
-                        usado
-                          ? /*#__PURE__*/React.createElement("span", { style:{ color:"#EF4444", fontWeight:600 } },
-                              "✖ Activado"
-                              + (item.usedByUser ? " por: "+item.usedByUser : (item.usedBy ? " por uid: "+item.usedBy.slice(0,8)+"…" : ""))
-                              + (item.usedClientId ? " · taller: "+item.usedClientId : "")
-                              + (item.activadoEn ? " · "+fmtDate(item.activadoEn) : ""))
-                          : /*#__PURE__*/React.createElement("span", { style:{ color:"#10B981", fontWeight:600 } }, "✔ Disponible — no usado")
-                      )
-                    ),
-                    /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:6, flexShrink:0 } },
-                      /*#__PURE__*/React.createElement("button", { onClick:function(){ navigator.clipboard.writeText(item.code); },
-                        style:{ padding:"4px 8px", background:"#E2E8F0", border:"none", borderRadius:6, fontSize:11, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }
-                      }, "Copiar"),
-                      /*#__PURE__*/React.createElement("button", { onClick:function(){ eliminarCodigo(idx); },
-                        style:{ padding:"4px 8px", background:"#FEE2E2", border:"none", borderRadius:6, fontSize:11, cursor:"pointer", color:"#EF4444", fontFamily:"inherit", fontWeight:600 }
-                      }, "✕")
-                    )
-                  );
-                })
-              )
-            )
-        ),
-
-        /*#__PURE__*/React.createElement("div", { style: cardStyle },
-          /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, marginBottom:6, color:"#0D1B35" } }, "🔐 Código de recuperación"),
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#64748B", marginBottom:12 } }, "Ingresa el nombre de usuario del cliente:"),
-          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
-            /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Usuario del cliente", value:rcUser, onChange:function(e){ setRcUser(e.target.value.toLowerCase()); setRcOut(""); },
-              style:{ flex:1, padding:"10px 12px", border:"1px solid #E2E8F4", borderRadius:10, fontSize:14, fontFamily:"inherit" }
-            }),
-            /*#__PURE__*/React.createElement("button", { onClick:function(){ if(rcUser.trim()) setRcOut(_resetCode(rcUser.trim())); },
-              style:{ padding:"10px 16px", background:"#0D1B35", color:"#fff", border:"none", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:700, fontFamily:"inherit" }
-            }, "Obtener")
-          ),
-          rcOut && /*#__PURE__*/React.createElement("div", { style:{ marginTop:10, padding:"12px 16px", background:"#F0FDF4", border:"1px solid #10E08A40", borderRadius:10, textAlign:"center" } },
-            /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#64748B", marginBottom:4 } }, "Código para "+rcUser+":"),
-            /*#__PURE__*/React.createElement("div", { style:{ fontSize:24, fontWeight:800, letterSpacing:"0.2em", color:"#10E08A" } }, rcOut)
-          )
-        )
-      ),
-
-      /* ══════════════ TAB CUENTAS ══════════════ */
-      tab === "cuentas" && /*#__PURE__*/React.createElement(React.Fragment, null,
-        /*#__PURE__*/React.createElement("div", { style: cardStyle },
-          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
-            /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:15, color:"#0D1B35" } }, "👥 Cuentas registradas ("+cuentas.length+")"),
-            /*#__PURE__*/React.createElement("button", { onClick:cargarCuentas, disabled:loadingCuentas,
-              style:{ fontSize:12, color:"#fff", background:loadingCuentas?"#94A3B8":"#4F8EFF", border:"none", borderRadius:6, padding:"6px 12px", cursor:loadingCuentas?"default":"pointer", fontFamily:"inherit", fontWeight:600 }
-            }, loadingCuentas?"⏳ Cargando...":"🔄 Actualizar")
-          ),
-          /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"🔍 Buscar por usuario...", value:buscarCuenta, onChange:function(e){ setBuscarCuenta(e.target.value); },
-            style:{ width:"100%", padding:"9px 12px", border:"1px solid #E2E8F4", borderRadius:8, fontSize:14, fontFamily:"inherit", marginBottom:12, boxSizing:"border-box" }
-          }),
-          loadingCuentas
-            ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", padding:"30px 0", fontSize:14 } }, "⏳ Cargando cuentas...")
-            : cuentasFiltradas.length === 0
-              ? /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", color:"#94A3B8", padding:"30px 0", fontSize:14 } }, "No se encontraron cuentas")
-              : /*#__PURE__*/React.createElement("div", { style:{ maxHeight:500, overflowY:"auto", paddingRight:4,
-                  scrollbarWidth:"thin", scrollbarColor:"#CBD5E1 transparent" } },
-                /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:10 } },
-                  cuentasFiltradas.map(function(u) {
-                    var lic = licLabel(u);
-                    var isVencida = lic.txt === "Vencida" || lic.txt === "Sin licencia";
-                    var dias30 = u.lastSeen ? ((Date.now()-new Date(u.lastSeen).getTime())/(1000*60*60*24)) > 30 : true;
-                    return /*#__PURE__*/React.createElement("div", { key:u.id,
-                      style:{ background:"#F8FAFF", border:"1px solid #E2E8F4", borderRadius:10, padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }
-                    },
-                      /*#__PURE__*/React.createElement("div", { style:{ width:38, height:38, borderRadius:"50%", background:"linear-gradient(135deg,#4F8EFF,#10E08A)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 } },
-                        /*#__PURE__*/React.createElement("span", { style:{ color:"#fff", fontWeight:800, fontSize:16 } }, u.username[0].toUpperCase())
-                      ),
-                      /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:0 } },
-                        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:8 } },
-                          /*#__PURE__*/React.createElement("span", { style:{ fontWeight:700, fontSize:14, color:"#0D1B35" } }, u.username),
-                          // Indicador online (activo en últimos 5 minutos)
-                          (function(){
-                            var msAgo = u.lastSeen ? Date.now() - new Date(u.lastSeen).getTime() : Infinity;
-                            // Verde: online=true Y activo en últimos 5 min, O activo en último 1 min
-                            var isOnline = (u.online === true && msAgo < 5*60*1000) || msAgo < 60*1000;
-                            var isRecent = msAgo < 30*60*1000;
-                            var color = isOnline ? "#10E08A" : isRecent ? "#F59E0B" : "#CBD5E1";
-                            var label = isOnline ? "En línea ahora" : isRecent ? "Activo hace "+(Math.floor(msAgo/60000))+"min" : "Desconectado";
-                            return /*#__PURE__*/React.createElement("span", {
-                              title: label,
-                              style:{ width:9, height:9, borderRadius:"50%", background: color,
-                                display:"inline-block", flexShrink:0,
-                                boxShadow: isOnline ? "0 0 0 3px rgba(16,224,138,0.25)" : "none"
-                              }
-                            });
-                          })(),
-                          // Software badge
-                          /*#__PURE__*/React.createElement("span", { style:{ fontSize:10, fontWeight:700, color:"#fff", background: u.software==="FerneyMotos" ? "#8B5CF6" : "#4F8EFF", padding:"1px 7px", borderRadius:10 } },
-                            u.software || "ACCE PRO"
-                          )
-                        ),
-                        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 } },
-                          /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, fontWeight:600, color:lic.color, background:lic.color+"18", padding:"2px 8px", borderRadius:20 } }, lic.txt),
-                          u.createdAt && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Creada: "+fmtDate(u.createdAt)),
-                          u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color: dias30 ? "#F59E0B" : "#10B981" } },
-                            (function(){
-                              var msAgo = Date.now() - new Date(u.lastSeen).getTime();
-                              if (msAgo < 5*60*1000)   return "🟢 En línea ahora";
-                              if (msAgo < 60*60*1000)  return "🟡 Activo hace "+(Math.floor(msAgo/60000))+"min";
-                              if (msAgo < 24*60*60*1000) return "✅ Hoy: "+fmtDate(u.lastSeen);
-                              return (dias30?"⚠️ ":"✅ ")+"Última vez: "+fmtDate(u.lastSeen);
-                            })()
-                          ),
-                          !u.lastSeen && /*#__PURE__*/React.createElement("span", { style:{ fontSize:11, color:"#94A3B8" } }, "Sin actividad registrada")
-                        )
-                      ),
-                      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:6, flexShrink:0 } },
-                        /*#__PURE__*/React.createElement("button", { onClick:function(){ renovarCuenta(u); },
-                          title:"Generar código de renovación y enviar por WhatsApp",
-                          style:{ padding:"6px 10px", background:"#EFF6FF", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#3B82F6", fontFamily:"inherit", fontWeight:700 }
-                        }, "🔑 Renovar"),
-                        /*#__PURE__*/React.createElement("button", { onClick:function(){ eliminarCuenta(u); },
-                          title:"Eliminar cuenta",
-                          style:{ padding:"6px 10px", background:"#FEE2E2", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", color:"#EF4444", fontFamily:"inherit", fontWeight:700 }
-                        }, "🗑️")
-                      )
-                    );
-                  })
-                )
-              )
-        )
-      )
-    )
-  );
-}
-
 
 var _AS = {
   page: { minHeight:"100dvh", background:"#F7F6FA", display:"flex", fontFamily:"'DM Sans',system-ui,sans-serif", position:"relative" },
   // Panel visual izquierdo
-  visual: { flex:"1.1", position:"relative", background:"linear-gradient(155deg,#15101D 0%,#23140E 55%,#3A1E0C 150%)", display:"flex", flexDirection:"column", justifyContent:"space-between", padding:"56px 52px", overflow:"hidden" },
+  visual: { flex:"1.1", position:"relative", background:"linear-gradient(162deg,#17141A 0%,#1D1814 52%,#241A12 115%)", display:"flex", flexDirection:"column", justifyContent:"space-between", padding:"56px 52px", overflow:"hidden" },
   visualPhoto: { position:"absolute", inset:0, zIndex:1, backgroundImage:"linear-gradient(155deg,rgba(21,16,29,0.88) 0%,rgba(35,20,14,0.74) 50%,rgba(232,84,15,0.42) 150%), url('https://images.unsplash.com/premium_photo-1663047430590-f2947119c3f0?fm=jpg&q=85&w=3000&auto=format&fit=crop')", backgroundSize:"cover", backgroundPosition:"center" },
   visualIllustration: { position:"absolute", inset:0, zIndex:0, backgroundImage:"url(\"data:image/svg+xml;charset=utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20600%20800%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22pg%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%231a1320%22/%3E%3Cstop%20offset%3D%220.5%22%20stop-color%3D%22%232a1a12%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233a1e0c%22/%3E%3C/linearGradient%3E%3CradialGradient%20id%3D%22rg%22%20cx%3D%220.7%22%20cy%3D%220.35%22%20r%3D%220.8%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ff6a2b%22%20stop-opacity%3D%220.35%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ff6a2b%22%20stop-opacity%3D%220%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect%20width%3D%22600%22%20height%3D%22800%22%20fill%3D%22url%28%23pg%29%22/%3E%3Crect%20width%3D%22600%22%20height%3D%22800%22%20fill%3D%22url%28%23rg%29%22/%3E%3Cg%20opacity%3D%220.08%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%221%22%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22240%22%20fill%3D%22none%22/%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22180%22%20fill%3D%22none%22/%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22120%22%20fill%3D%22none%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28300%20360%29%20rotate%28-18%29%22%3E%3Crect%20x%3D%22-90%22%20y%3D%22-160%22%20width%3D%22180%22%20height%3D%22320%22%20rx%3D%2226%22%20fill%3D%22%230d0a12%22%20stroke%3D%22%23ff6a2b%22%20stroke-width%3D%222.5%22%20opacity%3D%220.9%22/%3E%3Crect%20x%3D%22-78%22%20y%3D%22-145%22%20width%3D%22156%22%20height%3D%22278%22%20rx%3D%2214%22%20fill%3D%22%23151019%22/%3E%3Crect%20x%3D%22-78%22%20y%3D%22-145%22%20width%3D%22156%22%20height%3D%22278%22%20rx%3D%2214%22%20fill%3D%22url%28%23rg%29%22%20opacity%3D%220.5%22/%3E%3Ccircle%20cx%3D%220%22%20cy%3D%22148%22%20r%3D%2210%22%20fill%3D%22none%22%20stroke%3D%22%23ff6a2b%22%20stroke-width%3D%222%22%20opacity%3D%220.6%22/%3E%3Crect%20x%3D%22-30%22%20y%3D%22-152%22%20width%3D%2260%22%20height%3D%227%22%20rx%3D%223.5%22%20fill%3D%22%23ff6a2b%22%20opacity%3D%220.4%22/%3E%3Cg%20opacity%3D%220.55%22%20stroke%3D%22%23ff8c42%22%20stroke-width%3D%222%22%20fill%3D%22none%22%3E%3Ccircle%20cx%3D%22-40%22%20cy%3D%22-80%22%20r%3D%2213%22/%3E%3Ccircle%20cx%3D%22-40%22%20cy%3D%22-80%22%20r%3D%224%22%20fill%3D%22%23ff8c42%22/%3E%3Cpath%20d%3D%22M-40%20-67%20v40%20M-53%20-54%20h26%22/%3E%3Ccircle%20cx%3D%2235%22%20cy%3D%2220%22%20r%3D%2211%22/%3E%3Ccircle%20cx%3D%2235%22%20cy%3D%2220%22%20r%3D%223.5%22%20fill%3D%22%23ff8c42%22/%3E%3Cpath%20d%3D%22M35%2031%20v34%20M24%2042%20h22%22/%3E%3Ccircle%20cx%3D%22-20%22%20cy%3D%2290%22%20r%3D%2210%22/%3E%3C/g%3E%3C/g%3E%3Cg%20transform%3D%22translate%28170%20250%29%20rotate%2835%29%22%20opacity%3D%220.8%22%3E%3Crect%20x%3D%22-7%22%20y%3D%22-90%22%20width%3D%2214%22%20height%3D%22150%22%20rx%3D%226%22%20fill%3D%22%23c0c0c8%22/%3E%3Crect%20x%3D%22-9%22%20y%3D%22-100%22%20width%3D%2218%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23ff6a2b%22/%3E%3Cpath%20d%3D%22M-7%2060%20L0%2078%20L7%2060%20Z%22%20fill%3D%22%23909098%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28440%20470%29%20rotate%28-42%29%22%20opacity%3D%220.8%22%3E%3Crect%20x%3D%22-6%22%20y%3D%22-80%22%20width%3D%2212%22%20height%3D%22130%22%20rx%3D%225%22%20fill%3D%22%23b0b0b8%22/%3E%3Crect%20x%3D%22-13%22%20y%3D%2248%22%20width%3D%2226%22%20height%3D%2240%22%20rx%3D%225%22%20fill%3D%22%23ff6a2b%22/%3E%3Cpath%20d%3D%22M-6%20-80%20Q0%20-96%206%20-80%20Z%22%20fill%3D%22%23d0d0d8%22/%3E%3C/g%3E%3Cg%20opacity%3D%220.5%22%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%22600%22%20r%3D%225%22%20fill%3D%22%23ff8c42%22/%3E%3Ccircle%20cx%3D%22480%22%20cy%3D%22180%22%20r%3D%224%22%20fill%3D%22%23ff8c42%22/%3E%3Ccircle%20cx%3D%2290%22%20cy%3D%22420%22%20r%3D%223%22%20fill%3D%22%23ffb088%22/%3E%3Ccircle%20cx%3D%22510%22%20cy%3D%22620%22%20r%3D%226%22%20fill%3D%22%23ff6a2b%22/%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%22700%22%20r%3D%223%22%20fill%3D%22%23ffb088%22/%3E%3C/g%3E%3C/svg%3E\")", backgroundSize:"cover", backgroundPosition:"center" },
   visualGlow: { position:"absolute", zIndex:1, width:500, height:500, borderRadius:"50%", background:"radial-gradient(circle,rgba(255,106,43,0.4),transparent 70%)", bottom:-150, right:-100, filter:"blur(70px)", pointerEvents:"none" },
@@ -9513,19 +9035,31 @@ function _writePublicMirror(clientId, appDataObj, settingsObj) {
 }
 
 // ─── PANTALLA: INICIO DE SESIÓN ────────────────────────────
+function _svgIco(html, size) {
+  return /*#__PURE__*/React.createElement("span", {
+    style: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: size||18, height: size||18 },
+    dangerouslySetInnerHTML: { __html: html }
+  });
+}
+var _FEAT_ICONS = {
+  rep: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M14.9 6.1a3.9 3.9 0 0 0-5.2 5.1L4 16.9 7.1 20l5.7-5.7a3.9 3.9 0 0 0 5.1-5.2l-2.4 2.4-2.2-.6-.6-2.2 2.2-2.6Z" stroke="#FFB894" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+  inv: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3.5 7.5 12 3.5l8.5 4M3.5 7.5 12 11.5l8.5-4M3.5 7.5v9L12 20.5m0-9v9m8.5-13v9L12 20.5" stroke="#FFB894" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+  cloud: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M7 18.5a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17.2 9.6a3.7 3.7 0 0 1-.2 8.9H7Z" stroke="#FFB894" stroke-width="1.5" stroke-linejoin="round"/></svg>'
+};
 function _buildVisualPanel(headline1, headlineEm) {
   return /*#__PURE__*/React.createElement("div", { style: _AS.visual, className:"auth-visual" },
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualIllustration }),
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualPhoto }),
     /*#__PURE__*/React.createElement("div", { style: _AS.visualGlow }),
     /*#__PURE__*/React.createElement("div", { style: _AS.visualGlow2 }),
     /*#__PURE__*/React.createElement("div", { style: _AS.visualPattern }),
     /*#__PURE__*/React.createElement("div", { style: _AS.visualBrand },
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualBrandMark }, "G"),
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualBrandName }, "GlobalAcce")
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualBrandMark }, "A"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualBrandName }, "ACCE PRO")
     ),
     /*#__PURE__*/React.createElement("div", { style: _AS.visualCenter },
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualBadge }, "🔧 Software de gestión #1"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.visualBadge },
+        _svgIco('<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#FFB894" stroke-width="1.6"/><path d="m8.5 12 2.3 2.3 4.7-4.6" stroke="#FFB894" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>', 13),
+        /*#__PURE__*/React.createElement("span", null, "Software de gestión profesional")
+      ),
       /*#__PURE__*/React.createElement("div", { style: _AS.visualHeadline },
         headline1, " ",
         /*#__PURE__*/React.createElement("span", { style: _AS.visualHeadlineEm }, headlineEm)
@@ -9535,17 +9069,17 @@ function _buildVisualPanel(headline1, headlineEm) {
       ),
       /*#__PURE__*/React.createElement("div", { style: _AS.visualFeats },
         /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
-          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, "🔧"), "Control total de reparaciones"
+          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, _svgIco(_FEAT_ICONS.rep)), "Control total de reparaciones"
         ),
         /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
-          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, "📦"), "Inventario y catálogo sincronizado"
+          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, _svgIco(_FEAT_ICONS.inv)), "Inventario y catálogo sincronizado"
         ),
         /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
-          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, "☁️"), "Respaldo automático en la nube"
+          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, _svgIco(_FEAT_ICONS.cloud)), "Respaldo automático en la nube"
         )
       )
     ),
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualFooter }, "© 2026 GlobalAcce · Tecnología para tu negocio")
+    /*#__PURE__*/React.createElement("div", { style: _AS.visualFooter }, "© 2026 ACCE PRO · Tecnología para tu negocio")
   );
 }
 
@@ -9897,7 +9431,7 @@ function ExpiredScreen(_ref) {
       }, "📱 Solicitar código — "+PRECIO),
       /*#__PURE__*/React.createElement("button", {
         onClick: function(){ onBack && onBack(); },
-        style:{ width:"100%", padding:"12px", background:"rgba(255,255,255,0.06)", color:"#F0F4FF", border:"1px solid rgba(255,255,255,0.12)", borderRadius:14, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
+        style:{ width:"100%", padding:"12px", background:"#F1F3F9", color:"#3A4A63", border:"1px solid #D5DBE8", borderRadius:14, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }
       }, "← Volver a iniciar sesión")
     )
   );
@@ -10280,58 +9814,12 @@ function UpdateBanner() {
   );
 }
 
-// ─── GATE DE ADMINISTRADOR ─────────────────────────────────
-// El panel admin solo se muestra si hay sesión iniciada con la cuenta
-// admin (uid fijo). Reemplaza el viejo gate por URL (?admin=globalacce).
-function AdminGate() {
-  var _g1 = useState(null), _ga1 = _slicedToArray(_g1, 2), uid = _ga1[0], setUid = _ga1[1];
-  var _g2 = useState(true), _ga2 = _slicedToArray(_g2, 2), loading = _ga2[0], setLoading = _ga2[1];
-  var _g3 = useState(""), _ga3 = _slicedToArray(_g3, 2), email = _ga3[0], setEmail = _ga3[1];
-  var _g4 = useState(""), _ga4 = _slicedToArray(_g4, 2), pwd = _ga4[0], setPwd = _ga4[1];
-  var _g5 = useState(""), _ga5 = _slicedToArray(_g5, 2), err = _ga5[0], setErr = _ga5[1];
-  var _g6 = useState(false), _ga6 = _slicedToArray(_g6, 2), busy = _ga6[0], setBusy = _ga6[1];
-  useEffect(function() {
-    var auth = _authInst();
-    if (!auth) { setLoading(false); return; }
-    var unsub = auth.onAuthStateChanged(function(u) { setUid(u ? u.uid : null); setLoading(false); });
-    return function() { if (unsub) unsub(); };
-  }, []);
-  var entrar = function() {
-    var auth = _authInst();
-    if (!auth) { setErr("Servicio no disponible"); return; }
-    setBusy(true); setErr("");
-    auth.signInWithEmailAndPassword(email.trim().toLowerCase(), pwd)
-      .then(function(c){ setBusy(false); if (!_isAdminUid(c.user.uid)) setErr("Esta cuenta no es administrador."); })
-      .catch(function(e){ setBusy(false); setErr(_authErrMsg(e && e.code)); });
-  };
-  var box = { maxWidth:380, margin:"60px auto", background:"#13131A", border:"1px solid #2A2A35", borderRadius:18, padding:28, fontFamily:"'Inter',system-ui,sans-serif", color:"#E8E8F0" };
-  var inp = { width:"100%", padding:"12px 14px", marginBottom:12, borderRadius:12, border:"1px solid #2A2A35", background:"#0C0C12", color:"#fff", fontSize:15 };
-  if (loading) return /*#__PURE__*/React.createElement("div", { style:{padding:60,textAlign:"center",color:"#888",fontFamily:"system-ui"} }, "Cargando...");
-  if (uid && _isAdminUid(uid)) return /*#__PURE__*/React.createElement(AdminPanel, null);
-  return /*#__PURE__*/React.createElement("div", { style: box },
-    /*#__PURE__*/React.createElement("div", { style:{fontSize:20,fontWeight:800,marginBottom:6} }, "🔒 Panel de administración"),
-    /*#__PURE__*/React.createElement("div", { style:{fontSize:13,color:"#9A9AB0",marginBottom:18} }, "Inicia sesión con la cuenta de administrador."),
-    err && /*#__PURE__*/React.createElement("div", { style:{background:"#3A1518",color:"#FF8A8A",padding:"10px 12px",borderRadius:10,fontSize:13,marginBottom:12} }, err),
-    /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Correo admin", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, style:inp }),
-    /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")entrar();}, style:inp }),
-    /*#__PURE__*/React.createElement("button", { onClick:entrar, disabled:busy, style:{width:"100%",padding:"12px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#E8621A,#F97316)",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"} }, busy ? "Entrando..." : "Entrar")
-  );
-}
-
 function Root() {
   var _r1 = useState(null), _ra1 = _slicedToArray(_r1, 2), currentUser = _ra1[0], setCurrentUser = _ra1[1];
   var _r2 = useState(true), _ra2 = _slicedToArray(_r2, 2), checking = _ra2[0], setChecking = _ra2[1];
   var _r3 = useState("login"), _ra3 = _slicedToArray(_r3, 2), screen = _ra3[0], setScreen = _ra3[1];
 
-  var isAdmin = window.location.search.includes("admin=globalacce");
-  // Habilitar scroll para el panel admin (el body tiene overflow:hidden por defecto)
-  if (isAdmin) {
-    try {
-      document.body.style.overflow = "auto";
-      document.body.style.height = "auto";
-      document.documentElement.style.overflow = "auto";
-    } catch(e){}
-  }
+  // Panel admin movido a página aparte (panel-admin.html). Ya no se abre desde la app.
   var isCatalog = window.location.hash === "#catalog";
   var isTracking = window.location.hash.indexOf("#track") === 0;
   if (isCatalog) document.body.classList.add("catalog-mode");
@@ -10400,7 +9888,7 @@ function Root() {
 
   // Auto-login: la sesión la gestiona Firebase Auth (persistente entre recargas)
   useEffect(function() {
-    if (isAdmin || isCatalog || isTracking) { setChecking(false); return; }
+    if (isCatalog || isTracking) { setChecking(false); return; }
     var auth = _authInst();
     if (!auth) { setChecking(false); setScreen("login"); return; }
     var unsub = auth.onAuthStateChanged(function(fbUser) {
@@ -10455,8 +9943,7 @@ function Root() {
     setScreen("login");
   };
 
-  // ─── Retornos especiales (admin y catálogo público) ──────
-  if (isAdmin) return /*#__PURE__*/React.createElement(AdminGate, null);
+  // ─── Retornos especiales (catálogo público) ──────
   if (isCatalog) {
     var _urlP = new URLSearchParams(window.location.search);
     return /*#__PURE__*/React.createElement(PublicCatalogLoader, { clientId: _urlP.get("client") });
@@ -10516,20 +10003,20 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #EF4444, #F97316);
+  background: #2A2F3A;
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(239,68,68,0.35), 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 18px rgba(16,19,24,0.28), 0 1px 4px rgba(0,0,0,0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 22px;
   transition: transform 0.2s, box-shadow 0.2s, opacity 0.25s;
   color: #fff;
-  opacity: 0.12;
+  opacity: 0.35;
   title: "Descargar Catálogo PDF";
 }
-#acce-pdf-btn:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(239,68,68,0.45); opacity: 1; }
+#acce-pdf-btn:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(16,19,24,0.4); opacity: 1; }
 #acce-pdf-btn:active { transform: scale(0.95); }
 #acce-pdf-tooltip {
   position: fixed;
@@ -10559,19 +10046,19 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #10E08A, #4F8EFF);
+  background: linear-gradient(135deg, #4F46E5, #6366F1);
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(16,224,138,0.4), 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 18px rgba(79,70,229,0.32), 0 2px 8px rgba(0,0,0,0.22);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
   transition: transform 0.2s, box-shadow 0.2s, opacity 0.25s;
   color: #fff;
-  opacity: 0.12;
+  opacity: 0.92;
 }
-#acce-ai-btn:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(16,224,138,0.5); opacity: 1; }
+#acce-ai-btn:hover { transform: scale(1.08); box-shadow: 0 6px 26px rgba(79,70,229,0.45); opacity: 1; }
 #acce-ai-btn:active { transform: scale(0.95); }
 
 #acce-ai-panel {
@@ -10609,7 +10096,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 }
 .ai-header-icon {
   width: 32px; height: 32px;
-  background: linear-gradient(135deg, #10E08A, #4F8EFF);
+  background: linear-gradient(135deg, #4F46E5, #6366F1);
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 16px; flex-shrink: 0;
@@ -10754,14 +10241,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 .ai-reset-key:hover { color: #6B7A8D; }
 </style>
 
-<button id="acce-pdf-btn" title="Descargar Catálogo PDF">📄</button>
+<button id="acce-pdf-btn" title="Descargar Catálogo PDF" aria-label="Descargar Catálogo PDF"><svg width="23" height="23" viewBox="0 0 24 24" fill="none"><path d="M14 3v4a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 21V5a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 11.5v5m0 0-2.2-2.2M12 16.5l2.2-2.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 <div id="acce-pdf-tooltip">Descargar Catálogo PDF</div>
 
-<button id="acce-ai-btn" title="Asistente IA">🤖</button>
+<button id="acce-ai-btn" title="Asistente IA" aria-label="Asistente IA"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.3-4.1A7.5 7.5 0 1 1 20 11.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8.6" cy="11.5" r="1.05" fill="currentColor"/><circle cx="12" cy="11.5" r="1.05" fill="currentColor"/><circle cx="15.4" cy="11.5" r="1.05" fill="currentColor"/></svg></button>
 
 <div id="acce-ai-panel" class="hidden">
   <div class="ai-header">
-    <div class="ai-header-icon">🤖</div>
+    <div class="ai-header-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.3-4.1A7.5 7.5 0 1 1 20 11.5Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8.6" cy="11.5" r="1.1" fill="#fff"/><circle cx="12" cy="11.5" r="1.1" fill="#fff"/><circle cx="15.4" cy="11.5" r="1.1" fill="#fff"/></svg></div>
     <div>
       <div class="ai-header-title">Asistente ACCE PRO</div>
       <div class="ai-header-sub">Pregunta sobre tu inventario, ventas y más</div>
