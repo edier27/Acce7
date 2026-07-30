@@ -591,7 +591,28 @@ var _LucideReact = LucideReact,
   Inbox = _LucideReact.Inbox,
   CreditCard = _LucideReact.CreditCard,
   BarChart3 = _LucideReact.BarChart3,
-  Share2 = _LucideReact.Share2;
+  Share2 = _LucideReact.Share2,
+  Camera = _LucideReact.Camera,
+  Lock = _LucideReact.Lock,
+  Unlock = _LucideReact.Unlock,
+  KeyRound = _LucideReact.KeyRound,
+  ShieldCheck = _LucideReact.ShieldCheck,
+  Clock = _LucideReact.Clock,
+  CalendarDays = _LucideReact.CalendarDays,
+  ClipboardList = _LucideReact.ClipboardList,
+  Scale = _LucideReact.Scale,
+  Send = _LucideReact.Send,
+  PartyPopper = _LucideReact.PartyPopper,
+  Download = _LucideReact.Download,
+  Zap = _LucideReact.Zap,
+  Banknote = _LucideReact.Banknote,
+  Repeat = _LucideReact.Repeat,
+  Grid3x3 = _LucideReact.Grid3x3,
+  Hash = _LucideReact.Hash,
+  ImageOff = _LucideReact.ImageOff,
+  QrCode = _LucideReact.QrCode,
+  Moon = _LucideReact.Moon,
+  Sun = _LucideReact.Sun;
 
 // ─── Theme System — Windows 11 Fluent Design ──────────────
 var DARK = {
@@ -622,10 +643,32 @@ var T = _objectSpread(_objectSpread({}, LIGHT), {}, {
   purple: "#7B52E0",
   blue: "#3A7BDC"
 });
+// ─── Temas predefinidos (1 clic cambia toda la interfaz) ──
+var THEME_PRESETS = {
+  oscuro: {
+    label: "Oscuro",
+    isDark: true,
+    accent: "#4F8EFF",
+    base: { bg: "#0A0A0F", surface: "#111118", card: "#16161C", border: "#252530", text: "#E8EAF0", muted: "#6B7190", dim: "#3A3D52" }
+  },
+  azulClaro: {
+    label: "Azul Elegante",
+    isDark: false,
+    accent: "#06B6D4",
+    base: { bg: "#E7F6FB", surface: "#F1FBFE", card: "#FFFFFF", border: "#CDEEF6", text: "#0B2836", muted: "#4C7887", dim: "#9FCBD6" }
+  },
+  azulWindows: {
+    label: "Azul Windows",
+    isDark: true,
+    accent: "#0078FF",
+    base: { bg: "#0F1B2E", surface: "#15243B", card: "#1B2C47", border: "#28405F", text: "#EAF2FF", muted: "#8098B8", dim: "#3E5578" }
+  }
+};
 var applyTheme = function applyTheme(settings) {
-  var isDark = settings.theme === "dark";
-  var base = isDark ? DARK : LIGHT;
-  var accent = settings.accentColor || "#10E08A";
+  var preset = settings.themePreset && THEME_PRESETS[settings.themePreset] ? THEME_PRESETS[settings.themePreset] : null;
+  var isDark = preset ? preset.isDark : settings.theme === "dark";
+  var base = preset ? preset.base : (isDark ? DARK : LIGHT);
+  var accent = preset ? preset.accent : (settings.accentColor || "#10E08A");
   var hex = accent.replace("#", "");
   var r = parseInt(hex.slice(0, 2), 16),
     g = parseInt(hex.slice(2, 4), 16),
@@ -637,12 +680,8 @@ var applyTheme = function applyTheme(settings) {
   // Aplicar clase al body para el CSS 3D matte
   document.body.classList.toggle("dark", isDark);
   document.body.setAttribute("data-theme", isDark ? "dark" : "light");
-  // Fondo con gradiente matte 3D
-  if (isDark) {
-    document.body.style.background = "linear-gradient(145deg,#08080C 0%,#0C0C12 50%,#090911 100%)";
-  } else {
-    document.body.style.background = "linear-gradient(145deg,#E8EAF0 0%,#ECEEF5 50%,#E6E8EE 100%)";
-  }
+  // Fondo con gradiente matte 3D — derivado de la base del tema activo
+  document.body.style.background = "linear-gradient(145deg,".concat(base.bg, " 0%,").concat(base.surface, " 50%,").concat(base.bg, " 100%)");
 };
 // ─── Sistema de Licencias GlobalAcce ─────────────────────
 var LICENSE_WA = "573214016292";
@@ -840,6 +879,7 @@ var DEFAULT_SETTINGS = {
   whatsapp: "",
   theme: "dark",
   accentColor: "#10E08A",
+  themePreset: "oscuro",
   printerType: "normal",
   thermalWidth: "58"
 };
@@ -1940,6 +1980,10 @@ function RepairsView(_ref9) {
     _useState2 = _slicedToArray(_useState, 2),
     search = _useState2[0],
     setSearch = _useState2[1];
+  var _useStateSF = useState(false),
+    _useStateSF2 = _slicedToArray(_useStateSF, 2),
+    searchFocused = _useStateSF2[0],
+    setSearchFocused = _useStateSF2[1];
   var _useState3 = useState(""),
     _useState4 = _slicedToArray(_useState3, 2),
     filterStatus = _useState4[0],
@@ -2004,6 +2048,8 @@ function RepairsView(_ref9) {
     type: "search",
     autoComplete: "off",
     name: "search-repairs",
+    readOnly: !searchFocused,
+    onFocus: function () { return setSearchFocused(true); },
     onChange: function onChange(e) {
       return setSearch(e.target.value);
     },
@@ -2275,7 +2321,7 @@ function RepairsView(_ref9) {
         padding: 5,
         fontSize: 14
       }
-    }, "🔳"), /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement(QrCode, { size: 14 })), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
         showPrintModal(function(type, tw){ printRepair(r, (data.settings && data.settings.storeName) || "ACCE PRO", clientId, type, tw); });
       },
@@ -2477,7 +2523,7 @@ function RepairModal(_ref0) {
     set("customer", newC.name); set("phone", newC.phone);
     setCustSearch(newC.name);
     setShowNewCust(false); setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustCity("");
-    notify("✅ Cliente creado y seleccionado");
+    notify("Cliente creado y seleccionado");
   };
 
   var isView = modal.mode === "view",
@@ -2526,7 +2572,7 @@ function RepairModal(_ref0) {
         var updReps = (data.repairs || []).map(function(r) { return r.id === form.id ? Object.assign({}, r, { photos: newPhotos }) : r; });
         save(Object.assign({}, data, { repairs: updReps }));
         setForm(function(f) { return Object.assign({}, f, { photos: newPhotos }); });
-        notify("✅ Foto añadida");
+        notify("Foto añadida");
       };
       img.src = ev.target.result;
     };
@@ -2662,11 +2708,11 @@ function RepairModal(_ref0) {
     }, form.notes)),
     /*#__PURE__*/React.createElement("div", { style: { background: T.bg, borderRadius: 8, padding: "12px 13px" } },
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: (form.photos && form.photos.length > 0) ? 10 : 0 } },
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, "📷 Fotos de reparaci\xF3n"),
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, /*#__PURE__*/React.createElement(Camera, { size: 11 }), "Fotos de reparaci\xF3n"),
         /*#__PURE__*/React.createElement("label", {
           style: { display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", background: T.accent, color: "#0D1B35", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }
         },
-          "📷 A\xF1adir Foto",
+          /*#__PURE__*/React.createElement(Camera, { size: 13 }), " A\xF1adir Foto",
           /*#__PURE__*/React.createElement("input", {
             type: "file", accept: "image/*", capture: "environment",
             style: { display: "none" },
@@ -2735,7 +2781,7 @@ function RepairModal(_ref0) {
             onBlur: function(){ setTimeout(function(){ setShowDropdown(false); }, 200); },
             style: Object.assign({}, IS, { width:"100%", paddingRight:36 })
           }),
-          custSearch.length >= 1 && /*#__PURE__*/React.createElement("span", { style:{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", color:T.muted, fontSize:16 } }, "🔍"),
+          custSearch.length >= 1 && /*#__PURE__*/React.createElement("span", { style:{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", color:T.muted, display:"flex" } }, /*#__PURE__*/React.createElement(Search, { size: 15 })),
           showDropdown && filteredCusts.length > 0 && /*#__PURE__*/React.createElement("div", {
             style:{ position:"absolute", top:"100%", left:0, right:0, background:T.card, border:"1px solid ".concat(T.border), borderRadius:12, boxShadow:"0 12px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)", zIndex:100, maxHeight:200, overflowY:"auto", marginTop:4 }
           }, filteredCusts.map(function(c) {
@@ -2764,7 +2810,7 @@ function RepairModal(_ref0) {
           target:"_blank",
           title:"Contactar por WhatsApp",
           style:{ width:42, height:42, background:"#25D366", color:"#fff", border:"none", borderRadius:12, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }
-        }, "📱"),
+        }, /*#__PURE__*/React.createElement(MessageCircle, { size: 18 })),
         // Botón compartir recibo (imagen + texto) por WhatsApp
         form.phone && /*#__PURE__*/React.createElement("button", {
           type: "button",
@@ -2778,7 +2824,7 @@ function RepairModal(_ref0) {
       showNewCust && /*#__PURE__*/React.createElement("div", {
         style:{ marginTop:10, padding:14, background:T.accentDim, border:"1px solid ".concat(T.accent,"40"), borderRadius:12 }
       },
-        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, color:T.accent, fontSize:13, marginBottom:10 } }, "➕ Crear cliente nuevo"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:6, fontWeight:700, color:T.accent, fontSize:13, marginBottom:10 } }, /*#__PURE__*/React.createElement(Plus, { size: 14 }), "Crear cliente nuevo"),
         /*#__PURE__*/React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 } },
           /*#__PURE__*/React.createElement("input", { placeholder:"Nombre *", value:newCustName, onChange:function(e){setNewCustName(e.target.value);}, style:Object.assign({},IS,{fontSize:13}) }),
           /*#__PURE__*/React.createElement("input", { placeholder:"Teléfono", value:newCustPhone, onChange:function(e){setNewCustPhone(e.target.value);}, style:Object.assign({},IS,{fontSize:13}) }),
@@ -2786,7 +2832,7 @@ function RepairModal(_ref0) {
           /*#__PURE__*/React.createElement("input", { placeholder:"Ciudad", value:newCustCity, onChange:function(e){setNewCustCity(e.target.value);}, style:Object.assign({},IS,{fontSize:13}) })
         ),
         /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8 } },
-          /*#__PURE__*/React.createElement(Btn, { onClick:saveNewCust, small:true }, "✅ Guardar y seleccionar"),
+          /*#__PURE__*/React.createElement(Btn, { onClick:saveNewCust, small:true, icon: /*#__PURE__*/React.createElement(Check, { size: 13 }) }, "Guardar y seleccionar"),
           /*#__PURE__*/React.createElement(Btn, { variant:"ghost", small:true, onClick:function(){setShowNewCust(false);} }, "Cancelar")
         )
       )
@@ -2821,27 +2867,28 @@ function RepairModal(_ref0) {
             }
           },
           style:{ display:"flex", alignItems:"center", gap:8, background:form.paid?"rgba(0,200,150,0.1)":T.surface, border:"1px solid ".concat(form.paid?T.green:T.border), borderRadius:8, padding:"9px 13px", color:form.paid?T.green:T.muted, cursor:"pointer", fontSize:14, fontWeight:600, fontFamily:"inherit" }
-        }, form.paid ? /*#__PURE__*/React.createElement(CheckCircle,{size:16}) : /*#__PURE__*/React.createElement(XCircle,{size:16}), " ", form.paid?"✅ Pagado completo":"⏳ Sin pagar")
+        }, form.paid ? /*#__PURE__*/React.createElement(CheckCircle,{size:16}) : /*#__PURE__*/React.createElement(XCircle,{size:16}), " ", form.paid?"Pagado completo":"Sin pagar")
       )
     ),
 
     /*#__PURE__*/React.createElement("div", {
       style:{ background:T.surface, border:"1px solid ".concat(T.border), borderRadius:14, padding:14, marginBottom:14 }
     },
-      /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, color:T.text, fontSize:14, marginBottom:10 } }, "🔒 Bloqueo del equipo"),
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:6, fontWeight:700, color:T.text, fontSize:14, marginBottom:10 } }, /*#__PURE__*/React.createElement(Lock, { size: 14 }), "Bloqueo del equipo"),
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 } },
-        [["none","Sin bloqueo","🔓"],["pin","Clave / PIN","🔢"],["pattern","Patrón","⠿"]].map(function(opt){
+        [["none","Sin bloqueo",Unlock],["pin","Clave / PIN",KeyRound],["pattern","Patrón",Grid3x3]].map(function(opt){
           var active = (form.lockType||"none") === opt[0];
           return /*#__PURE__*/React.createElement("button", {
             key: opt[0],
             onClick: function(){ set("lockType", opt[0]); },
             style: {
               flex:"1", minWidth:90, padding:"10px 8px", borderRadius:10, cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600,
+              display:"flex", alignItems:"center", justifyContent:"center", gap:6,
               background: active ? T.accent+"22" : T.bg,
               border: active ? "2px solid "+T.accent : "1.5px solid "+T.border,
               color: active ? T.accent : T.muted, transition:"all .15s"
             }
-          }, opt[2] + " " + opt[1]);
+          }, /*#__PURE__*/React.createElement(opt[2], { size: 14 }), opt[1]);
         })
       ),
       (form.lockType === "pin") && /*#__PURE__*/React.createElement("input", {
@@ -2857,16 +2904,17 @@ function RepairModal(_ref0) {
     /*#__PURE__*/React.createElement("div", {
       style:{ background:T.surface, border:"1px solid ".concat(T.border), borderRadius:14, padding:14, marginBottom:4 }
     },
-      /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, color:T.text, fontSize:14, marginBottom:10 } }, "🔧 Repuestos utilizados"),
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:6, fontWeight:700, color:T.text, fontSize:14, marginBottom:10 } }, /*#__PURE__*/React.createElement(Wrench, { size: 14 }), "Repuestos utilizados"),
       // Buscador de repuesto con autocompletado
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap", alignItems:"flex-start" } },
         /*#__PURE__*/React.createElement("div", { style:{ flex:1, minWidth:180, position:"relative" } },
+          /*#__PURE__*/React.createElement(Search, { size: 13, color: T.muted, style:{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" } }),
           /*#__PURE__*/React.createElement("input", {
             id:"part-search",
             type:"text",
-            placeholder:"🔍 Buscar repuesto...",
+            placeholder:"Buscar repuesto...",
             autoComplete:"off",
-            style:{ width:"100%", padding:"8px 12px", borderRadius:8, border:"1px solid ".concat(T.border),
+            style:{ width:"100%", padding:"8px 12px 8px 30px", borderRadius:8, border:"1px solid ".concat(T.border),
                     background:T.surface, color:T.text, fontSize:13, fontFamily:"inherit", boxSizing:"border-box" },
             onInput:function(e){
               var val = e.target.value.toLowerCase();
@@ -2953,7 +3001,7 @@ function RepairModal(_ref0) {
             document.getElementById("part-selected-id").value="";
             document.getElementById("part-qty").value=1;
             var dd=document.getElementById("part-dropdown"); if(dd) dd.style.display="none";
-            notify("✅ ".concat(item.name," agregado. Stock: ").concat(item.qty-qty," restantes"));
+            notify("".concat(item.name," agregado. Stock: ").concat(item.qty-qty," restantes"));
           },
           style:{ padding:"8px 14px", background:T.accent, color:"#fff", border:"none",
                   borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit" }
@@ -2989,8 +3037,8 @@ function RepairModal(_ref0) {
                   save(_objectSpread(_objectSpread({},data),{},{inventory:newInv2, products:newProds2}));
                   set("parts", usedParts.filter(function(_,j){ return j!==i; }));
                 },
-                style:{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:16, padding:0 }
-              }, "✕")
+                style:{ background:"none", border:"none", color:T.red, cursor:"pointer", padding:0, display:"flex", alignItems:"center" }
+              }, /*#__PURE__*/React.createElement(X, { size: 15 }))
             )
           );
         }),
@@ -3008,9 +3056,9 @@ function RepairModal(_ref0) {
     // ─── ABONOS ─────────────────────────────────────────────
     /*#__PURE__*/React.createElement("div", { style:{ background:T.surface, border:"1px solid ".concat(T.border), borderRadius:14, padding:14 } },
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 } },
-        /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, color:T.text, fontSize:14 } }, "💰 Abonos / Pagos parciales"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:6, fontWeight:700, color:T.text, fontSize:14 } }, /*#__PURE__*/React.createElement(Banknote, { size: 14 }), "Abonos / Pagos parciales"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, color: pendiente > 0 ? T.yellow : T.green, fontWeight:700 } },
-          pendiente > 0 ? "Pendiente: "+fmt(pendiente) : "✅ Pagado"
+          pendiente > 0 ? "Pendiente: "+fmt(pendiente) : "Pagado"
         )
       ),
       // Lista de abonos
@@ -3069,6 +3117,10 @@ function InventoryView(_ref11) {
     _useState0 = _slicedToArray(_useState9, 2),
     search = _useState0[0],
     setSearch = _useState0[1];
+  var _useStateSF = useState(false),
+    _useStateSF2 = _slicedToArray(_useStateSF, 2),
+    searchFocused = _useStateSF2[0],
+    setSearchFocused = _useStateSF2[1];
   var _useState1 = useState(""),
     _useState10 = _slicedToArray(_useState1, 2),
     filterCat = _useState10[0],
@@ -3100,7 +3152,7 @@ function InventoryView(_ref11) {
     });
     if (window.confirm("Sincronizar " + inventory.length + " repuestos del inventario a Productos? (" + synced + " nuevos + " + updated + " por actualizar)")) {
       save(_objectSpread(_objectSpread({}, data), {}, { products: products }));
-      notify("✅ " + synced + " productos nuevos + " + updated + " actualizados desde inventario");
+      notify(synced + " productos nuevos + " + updated + " actualizados desde inventario");
     }
   };
 
@@ -3218,6 +3270,8 @@ function InventoryView(_ref11) {
     type: "search",
     autoComplete: "off",
     name: "search-inventory-items",
+    readOnly: !searchFocused,
+    onFocus: function () { return setSearchFocused(true); },
     onChange: function onChange(e) {
       return setSearch(e.target.value);
     },
@@ -3261,8 +3315,9 @@ function InventoryView(_ref11) {
   }, "Agregar Repuesto"),
   /*#__PURE__*/React.createElement(Btn, {
     style: { background: "transparent", border: "1px solid "+T.accent, color: T.accent },
+    icon: /*#__PURE__*/React.createElement(Repeat, { size: 14 }),
     onClick: function onClick() { sincronizarInventarioProductos(); }
-  }, "🔄 Sync → Productos")), /*#__PURE__*/React.createElement(Card, {
+  }, "Sync → Productos")), /*#__PURE__*/React.createElement(Card, {
     style: {
       padding: 0,
       overflow: "hidden"
@@ -3526,7 +3581,7 @@ function InventoryModal(_ref12) {
       inventory: inventoryFinal,
       products: products
     }));
-    notify(isNew ? "Repuesto agregado y sincronizado con Productos ✅" : "Repuesto actualizado");
+    notify(isNew ? "Repuesto agregado y sincronizado con Productos" : "Repuesto actualizado");
     setModal(null);
   };
   return /*#__PURE__*/React.createElement(ModalWrap, {
@@ -3628,6 +3683,10 @@ function ProductsView(_ref13) {
     _useState16 = _slicedToArray(_useState15, 2),
     search = _useState16[0],
     setSearch = _useState16[1];
+  var _useStateSF = useState(false),
+    _useStateSF2 = _slicedToArray(_useStateSF, 2),
+    searchFocused = _useStateSF2[0],
+    setSearchFocused = _useStateSF2[1];
   var _useState17 = useState(null),
     _useState18 = _slicedToArray(_useState17, 2),
     modal = _useState18[0],
@@ -3690,6 +3749,8 @@ function ProductsView(_ref13) {
     type: "search",
     autoComplete: "off",
     name: "search-products",
+    readOnly: !searchFocused,
+    onFocus: function () { return setSearchFocused(true); },
     onChange: function onChange(e) {
       return setSearch(e.target.value);
     },
@@ -3863,8 +3924,9 @@ function ProductsView(_ref13) {
       variant: "ghost",
       onClick: function onClick() {
         return toggle(p.id, "featured");
-      }
-    }, p.featured ? "✕ Quitar destaque" : "★ Destacar"), /*#__PURE__*/React.createElement(Btn, {
+      },
+      icon: p.featured ? /*#__PURE__*/React.createElement(X, { size: 11 }) : /*#__PURE__*/React.createElement(Star, { size: 11 })
+    }, p.featured ? "Quitar destaque" : "Destacar"), /*#__PURE__*/React.createElement(Btn, {
       small: true,
       variant: p.active ? "warn" : "success",
       onClick: function onClick() {
@@ -4118,7 +4180,7 @@ function ProductModal(_ref14) {
     size: 15,
     fill: form.featured ? T.yellow : "none",
     color: form.featured ? T.yellow : T.muted
-  }), " ", form.featured ? "★ Sí, destacado" : "Sin destacar"))), /*#__PURE__*/React.createElement(Field, {
+  }), " ", form.featured ? "Sí, destacado" : "Sin destacar"))), /*#__PURE__*/React.createElement(Field, {
     label: "Descripci\xF3n del producto",
     value: form.description,
     onChange: function onChange(v) {
@@ -4208,6 +4270,10 @@ function CelularesView(_refCel) {
     _useStateCelS2 = _slicedToArray(_useStateCelS, 2),
     search = _useStateCelS2[0],
     setSearch = _useStateCelS2[1];
+  var _useStateSF = useState(false),
+    _useStateSF2 = _slicedToArray(_useStateSF, 2),
+    searchFocused = _useStateSF2[0],
+    setSearchFocused = _useStateSF2[1];
   var _useStateCelF = useState("Todos"),
     _useStateCelF2 = _slicedToArray(_useStateCelF, 2),
     filtroEstado = _useStateCelF2[0],
@@ -4271,6 +4337,8 @@ function CelularesView(_refCel) {
           type: "search",
           autoComplete: "off",
           name: "search-celulares",
+          readOnly: !searchFocused,
+          onFocus: function () { return setSearchFocused(true); },
           onChange: function onChange(e) { return setSearch(e.target.value); },
           placeholder: "Buscar por marca, modelo o IMEI...",
           style: { background: "none", border: "none", color: T.text, outline: "none", fontSize: 14, padding: "9px 0", width: "100%", fontFamily: "inherit" }
@@ -4414,7 +4482,7 @@ function CelularModal(_refCM) {
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
         var dataUrl = canvas.toDataURL("image/jpeg", 0.75);
         setForm(function (f) { return Object.assign({}, f, { photos: (f.photos || []).concat([dataUrl]) }); });
-        notify("✅ Foto a\xF1adida");
+        notify("Foto a\xF1adida");
       };
       img.src = ev.target.result;
     };
@@ -4465,11 +4533,11 @@ function CelularModal(_refCM) {
       /*#__PURE__*/React.createElement(Field, { label: "Descripci\xF3n", value: form.descripcion, onChange: function (v) { return set("descripcion", v); }, textarea: true, rows: 3, placeholder: "Detalles adicionales, estado est\xE9tico, etc." }),
       /*#__PURE__*/React.createElement("div", { style: { background: T.bg, borderRadius: 8, padding: "12px 13px" } },
         /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: (form.photos && form.photos.length > 0) ? 10 : 0 } },
-          /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, "📷 Fotos (m\xE1x. 2)"),
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, /*#__PURE__*/React.createElement(Camera, { size: 11 }), "Fotos (m\xE1x. 2)"),
           (form.photos || []).length < 2 && /*#__PURE__*/React.createElement("label", {
             style: { display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", background: T.accent, color: "#0D1B35", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }
           },
-            "📷 A\xF1adir Foto",
+            /*#__PURE__*/React.createElement(Camera, { size: 13 }), " A\xF1adir Foto",
             /*#__PURE__*/React.createElement("input", {
               type: "file", accept: "image/*", capture: "environment",
               style: { display: "none" },
@@ -4535,7 +4603,7 @@ function VenderCelularModal(_refVM) {
     });
     var celulares = (data.celulares || []).map(function (c) { return c.id === celular.id ? updatedCel : c; });
     save(Object.assign({}, data, { celulares: celulares }));
-    notify("✅ Venta registrada");
+    notify("Venta registrada");
     onClose();
     showPrintModal(function (type, tw) {
       printCelularReceipt(updatedCel, (data.settings && data.settings.storeName) || "ACCE PRO", type, tw);
@@ -4606,7 +4674,7 @@ function SendCelularesModal(_refSM) {
                   href: "https://wa.me/57" + c.phone.replace(/\D/g, "") + "?text=" + encodeURIComponent(msg),
                   target: "_blank",
                   style: { display: "inline-flex", alignItems: "center", gap: 5, background: "#25D366", color: "#fff", padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: "none" }
-                }, "📱 Enviar")
+                }, /*#__PURE__*/React.createElement(MessageCircle, { size: 13 }), "Enviar")
               );
             })
           ),
@@ -4625,6 +4693,10 @@ function CustomersView(_ref15) {
     _useState22 = _slicedToArray(_useState21, 2),
     search = _useState22[0],
     setSearch = _useState22[1];
+  var _useStateSF = useState(false),
+    _useStateSF2 = _slicedToArray(_useStateSF, 2),
+    searchFocused = _useStateSF2[0],
+    setSearchFocused = _useStateSF2[1];
   var _useState23 = useState(null),
     _useState24 = _slicedToArray(_useState23, 2),
     modal = _useState24[0],
@@ -4679,6 +4751,8 @@ function CustomersView(_ref15) {
     type: "search",
     autoComplete: "off",
     name: "search-customers",
+    readOnly: !searchFocused,
+    onFocus: function () { return setSearchFocused(true); },
     onChange: function onChange(e) {
       return setSearch(e.target.value);
     },
@@ -4825,7 +4899,7 @@ function CustomersView(_ref15) {
       href: "https://wa.me/57" + c.phone.replace(/\D/g,"") + "?text=Hola%20" + encodeURIComponent(c.name) + "%2C%20le%20contactamos%20desde%20ACCE%20PRO.",
       target: "_blank",
       style: { display:"inline-flex", alignItems:"center", gap:5, background:"#25D366", color:"#fff", padding:"5px 10px", borderRadius:8, fontSize:12, fontWeight:600, textDecoration:"none", minHeight:32 }
-    }, "📱 WhatsApp"),
+    }, /*#__PURE__*/React.createElement(MessageCircle, { size: 13 }), "WhatsApp"),
     /*#__PURE__*/React.createElement(Btn, {
       small: true,
       variant: "danger",
@@ -4992,6 +5066,10 @@ function PublicView(_ref17) {
     _useState32 = _slicedToArray(_useState31, 2),
     search = _useState32[0],
     setSearch = _useState32[1];
+  var _useStateSF = useState(false),
+    _useStateSF2 = _slicedToArray(_useStateSF, 2),
+    searchFocused = _useStateSF2[0],
+    setSearchFocused = _useStateSF2[1];
   var _useState33 = useState(""),
     _useState34 = _slicedToArray(_useState33, 2),
     filterCat = _useState34[0],
@@ -5609,7 +5687,7 @@ function PublicView(_ref17) {
   /*#__PURE__*/React.createElement("div", { style: { display:"flex", gap:12, marginBottom:16, flexWrap:"wrap" } },
     /*#__PURE__*/React.createElement("div", { style: { display:"flex", alignItems:"center", gap:10, background:"white", border:"1.5px solid #e2e8f0", borderRadius:14, padding:"0 16px", flex:"1 1 220px", boxShadow:"0 2px 10px rgba(0,0,0,0.05)" } },
       /*#__PURE__*/React.createElement(Search, { size:16, color:"#94a3b8" }),
-      /*#__PURE__*/React.createElement("input", { value:search, type:"search", autoComplete:"off", name:"search-catalog", onChange:function(e){ return setSearch(e.target.value); }, placeholder:"Buscar productos...", style:{ background:"none", border:"none", outline:"none", fontSize:14, padding:"13px 0", width:"100%", color:"#1e293b", fontFamily:"inherit" } })
+      /*#__PURE__*/React.createElement("input", { value:search, type:"search", autoComplete:"off", name:"search-catalog", readOnly:!searchFocused, onFocus:function(){ setSearchFocused(true); }, onChange:function(e){ return setSearch(e.target.value); }, placeholder:"Buscar productos...", style:{ background:"none", border:"none", outline:"none", fontSize:14, padding:"13px 0", width:"100%", color:"#1e293b", fontFamily:"inherit" } })
     )
   ),
   /*#__PURE__*/React.createElement("div", { style: { display:"flex", gap:8, marginBottom:28, flexWrap:"wrap" } },
@@ -5639,8 +5717,8 @@ function PublicView(_ref17) {
         },
           /*#__PURE__*/React.createElement("div", { style:{ height:190, background:"#FAFAFA", position:"relative", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" } },
             p.image && /*#__PURE__*/React.createElement("img", { src:p.image, alt:p.name, style:{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain", padding:12 }, onError:function(e){ e.target.style.display="none"; } }),
-            !p.image && /*#__PURE__*/React.createElement("div", { style:{ color:"#CBD5E1", fontSize:48 } }, "📦"),
-            /*#__PURE__*/React.createElement("div", { style:{ position:"absolute", top:10, left:10, background:"linear-gradient(135deg,#f59e0b,#d97706)", color:"white", borderRadius:20, padding:"3px 10px", fontSize:10, fontWeight:800, boxShadow:"0 2px 8px rgba(245,158,11,0.4)" } }, "★ TOP")
+            !p.image && /*#__PURE__*/React.createElement(ImageOff, { size: 48, color: "#CBD5E1" }),
+            /*#__PURE__*/React.createElement("div", { style:{ position:"absolute", top:10, left:10, background:"linear-gradient(135deg,#f59e0b,#d97706)", color:"white", borderRadius:20, padding:"3px 10px", fontSize:10, fontWeight:800, boxShadow:"0 2px 8px rgba(245,158,11,0.4)", display:"flex", alignItems:"center", gap:3 } }, /*#__PURE__*/React.createElement(Star, { size: 10, fill: "#fff" }), "TOP")
           ),
           /*#__PURE__*/React.createElement("div", { style:{ padding:"14px 16px 18px" } },
             /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#1a1f36", marginBottom:6, lineHeight:1.3 } }, p.name),
@@ -5710,9 +5788,10 @@ function PublicView(_ref17) {
         padding: "3px 10px",
         fontSize: 10,
         fontWeight: 800,
-        backdropFilter: "blur(4px)"
+        backdropFilter: "blur(4px)",
+        display: "flex", alignItems: "center", gap: 4
       }
-    }, "⚡ Últimas unidades"), (p.stock||0) === 0 && /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement(Zap, { size: 11 }), "Últimas unidades"), (p.stock||0) === 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         position: "absolute",
         inset: 0,
@@ -5741,9 +5820,10 @@ function PublicView(_ref17) {
         padding: "3px 10px",
         fontSize: 10,
         fontWeight: 800,
-        boxShadow: "0 2px 8px rgba(245,158,11,0.4)"
+        boxShadow: "0 2px 8px rgba(245,158,11,0.4)",
+        display: "flex", alignItems: "center", gap: 3
       }
-    }, "★ TOP")), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement(Star, { size: 10, fill: "#fff" }), "TOP")), /*#__PURE__*/React.createElement("div", {
       style: { padding: "14px 16px 18px" }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -5797,9 +5877,10 @@ function PublicView(_ref17) {
         cursor: (p.stock||0) === 0 ? "not-allowed" : "pointer",
         fontFamily: "inherit",
         whiteSpace: "nowrap",
-        boxShadow: (p.stock||0) > 0 ? "0 2px 8px rgba(0,0,0,0.2)" : "none"
+        boxShadow: (p.stock||0) > 0 ? "0 2px 8px rgba(0,0,0,0.2)" : "none",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6
       }
-    }, (p.stock||0) === 0 ? "Agotado" : "🛒 Agregar"))));
+    }, (p.stock||0) === 0 ? "Agotado" : [/*#__PURE__*/React.createElement(ShoppingCart, { size: 13, key: "ic" }), "Agregar"]))));
   }), filtered.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       gridColumn: "1/-1",
@@ -5948,7 +6029,7 @@ function showQRModal(clientId, r) {
     "<div id='_qrbox' style='display:flex;justify-content:center;padding:16px;background:#fff;border-radius:16px;border:1px solid #EEE'></div>"+
     "<div style='font-size:12px;color:#8A8398;margin-top:16px;line-height:1.5'>El cliente escanea este código para ver el estado de su reparación en tiempo real</div>"+
     "<div style='display:flex;gap:10px;margin-top:20px'>"+
-      "<button id='_qrprint' style='flex:1;padding:12px;background:#fff;border:1.5px solid rgba(20,15,30,0.12);border-radius:12px;cursor:pointer;font-weight:600;font-size:14;font-family:inherit;color:#15101D'>🖨 Imprimir</button>"+
+      "<button id='_qrprint' style='flex:1;padding:12px;background:#fff;border:1.5px solid rgba(20,15,30,0.12);border-radius:12px;cursor:pointer;font-weight:600;font-size:14;font-family:inherit;color:#15101D'>Imprimir</button>"+
       "<button id='_qrclose' style='flex:1;padding:12px;background:linear-gradient(135deg,#E8540F,#FF6A2B);border:none;border-radius:12px;cursor:pointer;font-weight:700;font-size:14;font-family:inherit;color:#fff'>Cerrar</button>"+
     "</div>";
   overlay.appendChild(box);
@@ -5988,10 +6069,12 @@ function showPrintModal(onSelect) {
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Segoe UI',system-ui,sans-serif";
   var close = function(){ document.body.removeChild(overlay); };
   overlay.addEventListener("click", function(e){ if(e.target===overlay) close(); });
+  var _receiptIco = "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='#1a1f36' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M6 3h12v18l-3-2-3 2-3-2-3 2V3Z'/><path d='M9 8h6M9 12h6'/></svg>";
+  var _printerIco = "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='#1a1f36' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9V3h12v6'/><rect x='4' y='9' width='16' height='8' rx='2'/><path d='M6 17h12v4H6z'/></svg>";
   var options = [
-    { type:"termica", tw:"58", icon:"🧾", label:"Térmica 58mm", desc:"Rollo POS-58 (más común)" },
-    { type:"termica", tw:"80", icon:"🧾", label:"Térmica 80mm", desc:"Rollo ancho POS-80" },
-    { type:"normal",  tw:"",   icon:"🖨️", label:"Normal / A4",  desc:"Hoja carta u oficio" }
+    { type:"termica", tw:"58", icon:_receiptIco, label:"Térmica 58mm", desc:"Rollo POS-58 (más común)" },
+    { type:"termica", tw:"80", icon:_receiptIco, label:"Térmica 80mm", desc:"Rollo ancho POS-80" },
+    { type:"normal",  tw:"",   icon:_printerIco, label:"Normal / A4",  desc:"Hoja carta u oficio" }
   ];
   var card = document.createElement("div");
   card.style.cssText = "background:#fff;border-radius:20px;padding:28px 28px 24px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.25)";
@@ -6177,7 +6260,7 @@ function printRepair(r) {
       "<div class=\"sign-row\"><div class=\"sign-box\">Firma del técnico</div><div class=\"sign-box\">Firma del cliente</div></div>"+
       (qrDataUrl ? "<div style=\"text-align:center;margin:24px 0 8px;padding:18px;background:#FAFAFC;border-radius:12px;border:1px solid #EEE\"><img src='"+qrDataUrl+"' style='width:120px;height:120px'/><div style=\"font-size:12px;color:#666;margin-top:8px;font-weight:600\">📱 Escanea para ver el estado de tu reparación</div></div>" : "")+
       "<div class=\"footer\">¡Gracias por confiar en nosotros!<br>Conserve este documento para reclamar su equipo</div>"+
-      "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">🖨 Imprimir</button></div>"+
+      "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">Imprimir</button></div>"+
       "</body></html>";
     if (returnHTML) return htmlOutC;
     _printHTML(htmlOutC, ptype);
@@ -6319,7 +6402,7 @@ function printReceipt(sale) {
       "<div class=\"total-box\"><div class=\"total-inner\"><div class=\"row\"><span>TOTAL</span><span>"+fmtCOP(sale.total)+"</span></div></div></div>"+
       (sale.notes?"<p style=\"font-size:13px;color:#666;margin-bottom:20px\"><strong>Nota:</strong> "+_escHtml(sale.notes)+"</p>":"")+
       "<div class=\"footer\">¡Gracias por su compra!</div>"+
-      "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">🖨 Imprimir</button></div>"+
+      "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">Imprimir</button></div>"+
       "</body></html>", ptype);
   }
 }
@@ -6417,7 +6500,7 @@ function printCelularReceipt(cel) {
       "<div class=\"total-box\"><div class=\"total-inner\"><div class=\"row\"><span>TOTAL</span><span>"+fmtCOP(precioVenta)+"</span></div></div></div>"+
       (cel.notasVenta?"<p style=\"font-size:13px;color:#666;margin-bottom:20px\"><strong>Nota:</strong> "+_escHtml(cel.notasVenta)+"</p>":"")+
       "<div class=\"footer\">¡Gracias por su compra!</div>"+
-      "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">🖨 Imprimir</button></div>"+
+      "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">Imprimir</button></div>"+
       "</body></html>", ptype);
   }
 }
@@ -6607,10 +6690,11 @@ function VentasView(_ref18) {
     })
   }), dateFilter && /*#__PURE__*/React.createElement(Btn, {
     variant: "ghost",
+    icon: /*#__PURE__*/React.createElement(X, { size: 13 }),
     onClick: function onClick() {
       return setDateFilter("");
     }
-  }, "\u2715 Limpiar filtro"), /*#__PURE__*/React.createElement("div", {
+  }, "Limpiar filtro"), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
     }
@@ -6618,20 +6702,20 @@ function VentasView(_ref18) {
     /*#__PURE__*/React.createElement("button", {
       onClick: function(){ setShowRegistros(function(v){ return !v; }); },
       style:{ display:"flex", alignItems:"center", gap:6, padding:"9px 14px", background:"#F1F5F9", border:"1px solid #E2E8F4", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:700, fontFamily:"inherit", color:"#0D1B35" }
-    }, "📋 Registros ", /*#__PURE__*/React.createElement("span", { style:{ fontSize:10 } }, showRegistros ? "▲" : "▼")),
+    }, /*#__PURE__*/React.createElement(ClipboardList,{size:14}), "Registros ", /*#__PURE__*/React.createElement("span", { style:{ fontSize:10 } }, showRegistros ? "▲" : "▼")),
     showRegistros && /*#__PURE__*/React.createElement("div", {
       style:{ position:"absolute", right:0, top:"calc(100% + 6px)", background:"#fff", border:"1px solid #E2E8F4", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.12)", zIndex:999, minWidth:210, overflow:"hidden" }
     },
       [
-        { label:"🗓️ Registro Diario",    tipo:"diario",   desc:"Ventas de hoy" },
-        { label:"📆 Registro Mensual",   tipo:"mensual",  desc:"Ventas de este mes" }
+        { label:"Registro Diario", icon:CalendarDays, tipo:"diario",   desc:"Ventas de hoy" },
+        { label:"Registro Mensual", icon:CalendarDays, tipo:"mensual",  desc:"Ventas de este mes" }
       ].map(function(op) {
         return /*#__PURE__*/React.createElement("button", {
           key: op.tipo,
           onClick: function(){ imprimirRegistro(op.tipo); },
           style:{ display:"block", width:"100%", padding:"12px 16px", background:"none", border:"none", textAlign:"left", cursor:"pointer", fontFamily:"inherit", borderBottom:"1px solid #F1F5F9" }
         },
-          /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#0D1B35" } }, op.label),
+          /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:6, fontSize:14, fontWeight:700, color:"#0D1B35" } }, /*#__PURE__*/React.createElement(op.icon,{size:13}), op.label),
           /*#__PURE__*/React.createElement("div", { style:{ fontSize:11, color:"#94A3B8", marginTop:2 } }, op.desc)
         );
       })
@@ -6820,6 +6904,10 @@ function SaleModal(_ref19) {
     _useState54 = _slicedToArray(_useState53, 2),
     search = _useState54[0],
     setSearch = _useState54[1];
+  var _useStateSF = useState(false),
+    _useStateSF2 = _slicedToArray(_useStateSF, 2),
+    searchFocused = _useStateSF2[0],
+    setSearchFocused = _useStateSF2[1];
   var _useState55 = useState(false),
     _useState56 = _slicedToArray(_useState55, 2),
     showPicker = _useState56[0],
@@ -6930,7 +7018,7 @@ function SaleModal(_ref19) {
       products: products,
       sales: sales
     }));
-    notify("✅ Venta registrada exitosamente");
+    notify("Venta registrada exitosamente");
     setModal(null);
     showPrintModal(function(type, tw){ printReceipt(sale, (data.settings && data.settings.storeName) || "", type, tw); });
   };
@@ -6981,12 +7069,14 @@ function SaleModal(_ref19) {
     type: "search",
     autoComplete: "off",
     name: "search-inventory-picker",
+    readOnly: !searchFocused,
     onChange: function onChange(e) {
       setSearch(e.target.value);
       setShowPicker(true);
     },
     onFocus: function onFocus() {
-      return setShowPicker(true);
+      setSearchFocused(true);
+      setShowPicker(true);
     },
     placeholder: "Buscar \xEDtem del inventario...",
     style: {
@@ -7295,28 +7385,40 @@ function SettingsView(_ref20) {
   };
   var handleSave = function handleSave() {
     saveSettings(form);
-    notify("✅ Configuración guardada");
+    notify("Configuración guardada");
+  };
+  var handleThemePreset = function handleThemePreset(key) {
+    var preset = THEME_PRESETS[key];
+    if (!preset) return;
+    var updated = Object.assign({}, form, {
+      themePreset: key,
+      theme: preset.isDark ? "dark" : "light",
+      accentColor: preset.accent
+    });
+    setForm(updated);
+    saveSettings(updated);
+    notify("Tema aplicado: " + preset.label);
   };
   var isBypass = false;
   try { isBypass = localStorage.getItem("trp_bypass_" + clientId) === "true"; } catch(e) {}
   var handleChangePwd = function() {
     var auth = _authInst();
     var fbUser = auth && auth.currentUser;
-    if (!fbUser) { notify("❌ No hay sesión activa", "error"); return; }
-    if (newPwd.length < 6) { notify("❌ La nueva contraseña debe tener al menos 6 caracteres", "error"); return; }
-    if (newPwd !== newPwd2) { notify("❌ Las contraseñas no coinciden", "error"); return; }
+    if (!fbUser) { notify("No hay sesión activa", "error"); return; }
+    if (newPwd.length < 6) { notify("La nueva contraseña debe tener al menos 6 caracteres", "error"); return; }
+    if (newPwd !== newPwd2) { notify("Las contraseñas no coinciden", "error"); return; }
     var doUpdate = function() {
       fbUser.updatePassword(newPwd).then(function() {
         try { localStorage.removeItem("trp_bypass_" + clientId); } catch(e) {}
         setCurPwd(""); setNewPwd(""); setNewPwd2("");
-        notify("✅ Contraseña actualizada correctamente");
-      }).catch(function(e) { notify("❌ " + _authErrMsg(e && e.code), "error"); });
+        notify("Contraseña actualizada correctamente");
+      }).catch(function(e) { notify(_authErrMsg(e && e.code), "error"); });
     };
     // Firebase exige reautenticación reciente para cambiar la contraseña
     try {
       var cred = firebase.auth.EmailAuthProvider.credential(fbUser.email, curPwd);
       fbUser.reauthenticateWithCredential(cred).then(doUpdate).catch(function(e) {
-        notify("❌ " + _authErrMsg(e && e.code), "error");
+        notify(_authErrMsg(e && e.code), "error");
       });
     } catch(e) { doUpdate(); }
   };
@@ -7477,7 +7579,48 @@ function SettingsView(_ref20) {
     }
   }, "El n\xFAmero de WhatsApp se usa para recibir pedidos del cat\xE1logo p\xFAblico. Incluye el c\xF3digo del pa\xEDs sin el + (ej: 573001234567).")), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitle
-  }, "\uD83C\uDFA8 Apariencia"), /*#__PURE__*/React.createElement("label", {
+  }, "\uD83C\uDFA8 Apariencia"),
+  /*#__PURE__*/React.createElement("label", {
+    style: labelStyle
+  }, "Temas predefinidos \u2014 haz clic para aplicar al instante"),
+  /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }
+  }, Object.keys(THEME_PRESETS).map(function (key) {
+    var preset = THEME_PRESETS[key];
+    var active = form.themePreset === key;
+    return /*#__PURE__*/React.createElement("div", {
+      key: key,
+      onClick: function () { return handleThemePreset(key); },
+      style: {
+        flex: "1 1 150px",
+        minWidth: 150,
+        padding: 14,
+        borderRadius: 14,
+        border: "2px solid ".concat(active ? preset.accent : T.border),
+        background: T.bg,
+        cursor: "pointer",
+        transition: "all 0.15s"
+      }
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style: {
+          height: 46, borderRadius: 10, marginBottom: 10, overflow: "hidden",
+          display: "flex", border: "1px solid ".concat(preset.base.border),
+          background: preset.base.surface
+        }
+      },
+        /*#__PURE__*/React.createElement("div", { style: { flex: 1, background: preset.base.card } }),
+        /*#__PURE__*/React.createElement("div", { style: { width: 18, background: preset.accent } })
+      ),
+      /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 2 }
+      }, preset.label),
+      active
+        ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: preset.accent, fontWeight: 700 } }, "\u2713 Activo")
+        : /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted } }, "Clic para aplicar")
+    );
+  })),
+  /*#__PURE__*/React.createElement("label", {
     style: labelStyle
   }, "Modo de color"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -7487,11 +7630,13 @@ function SettingsView(_ref20) {
     }
   }, [{
     id: "dark",
-    label: "🌙 Oscuro",
+    label: "Oscuro",
+    icon: Moon,
     desc: "Fondo negro, texto claro"
   }, {
     id: "light",
-    label: "☀️ Claro",
+    label: "Claro",
+    icon: Sun,
     desc: "Fondo blanco, texto oscuro"
   }].map(function (opt) {
     return /*#__PURE__*/React.createElement("div", {
@@ -7510,10 +7655,11 @@ function SettingsView(_ref20) {
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
+        display: "flex", alignItems: "center", gap: 6,
         fontSize: 16,
         marginBottom: 4
       }
-    }, opt.label), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement(opt.icon, { size: 15 }), opt.label), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 14,
         color: T.muted
@@ -7645,7 +7791,7 @@ function SettingsView(_ref20) {
   }, "Guardar Configuraci\xF3n"),
 
   /*#__PURE__*/React.createElement(Card, { s: { marginTop: 8 } },
-    /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, "🔑 Licencia"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, /*#__PURE__*/React.createElement(KeyRound, { size: 15 }), "Licencia"),
     (function() {
       var _lics = useState(""), _licsa = _slicedToArray(_lics, 2), newLic = _licsa[0], setNewLic = _licsa[1];
       var _lice = useState(""), _licea = _slicedToArray(_lice, 2), licErr = _lice[0], setLicErr = _lice[1];
@@ -7708,7 +7854,7 @@ function SettingsView(_ref20) {
               }, { merge: true });
             }
           } catch(e){}
-          setLicOk(result.type === "pro" ? "✅ Licencia Pro activada. Aplicando..." : "✅ Licencia activada — " + result.daysLeft + " días. Aplicando...");
+          setLicOk(result.type === "pro" ? "Licencia Pro activada. Aplicando..." : "Licencia activada — " + result.daysLeft + " días. Aplicando...");
           setTimeout(function(){ window.location.reload(); }, 1500);
         } else {
           setLicErr("Error: no se encontró tu cuenta. Vuelve a iniciar sesión.");
@@ -7722,12 +7868,12 @@ function SettingsView(_ref20) {
           style: { background: T.accentDim, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13 }
         },
           /*#__PURE__*/React.createElement("div", { style: { fontWeight: 600, color: T.text, marginBottom: 2 } }, "Estado actual"),
-          /*#__PURE__*/React.createElement("div", { style: { color: T.muted } },
+          /*#__PURE__*/React.createElement("div", { style: { color: T.muted, display: "flex", alignItems: "center", gap: 6 } },
             !curStatus || !curStatus.valid
               ? "Sin licencia activa"
               : curStatus.type === "pro"
-                ? "✅ Licencia Pro — Acceso permanente"
-                : "🕐 Demo activo — " + curStatus.daysLeft + " día" + (curStatus.daysLeft !== 1 ? "s" : "") + " restante" + (curStatus.daysLeft !== 1 ? "s" : "")
+                ? [/*#__PURE__*/React.createElement(CheckCircle, { size: 13, key: "i" }), "Licencia Pro — Acceso permanente"]
+                : [/*#__PURE__*/React.createElement(Clock, { size: 13, key: "i" }), "Demo activo — " + curStatus.daysLeft + " día" + (curStatus.daysLeft !== 1 ? "s" : "") + " restante" + (curStatus.daysLeft !== 1 ? "s" : "")]
           )
         ),
         /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, color: T.muted, marginBottom: 10 } },
@@ -7748,8 +7894,8 @@ function SettingsView(_ref20) {
           style: { marginTop: 8, color: T.red, fontSize: 15, padding: "8px 12px", background: "rgba(239,68,68,0.08)", borderRadius: 8 }
         }, licErr),
         licOk && /*#__PURE__*/React.createElement("div", {
-          style: { marginTop: 8, color: T.green, fontSize: 15, padding: "8px 12px", background: T.accentDim, borderRadius: 8, fontWeight: 600 }
-        }, licOk,
+          style: { marginTop: 8, color: T.green, fontSize: 15, padding: "8px 12px", background: T.accentDim, borderRadius: 8, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }
+        }, /*#__PURE__*/React.createElement(CheckCircle, { size: 14 }), licOk,
           /*#__PURE__*/React.createElement("button", {
             onClick: function() { window.location.reload(); },
             style: { marginLeft: 12, background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontSize: 14, fontFamily: "inherit", fontWeight: 600 }
@@ -7760,10 +7906,10 @@ function SettingsView(_ref20) {
   ),
 
   /*#__PURE__*/React.createElement(Card, { s: { marginTop: 8 } },
-    /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, "🔐 Seguridad"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, /*#__PURE__*/React.createElement(ShieldCheck, { size: 15 }), "Seguridad"),
     isBypass && /*#__PURE__*/React.createElement("div", {
-      style: { background: "rgba(157,93,0,0.1)", border: "1px solid rgba(157,93,0,0.3)", borderRadius: 6, padding: "12px 16px", marginBottom: 16, fontSize: 15, color: T.yellow, fontWeight: 600 }
-    }, "⚠️ Estás en modo recuperación. Establece una nueva contraseña para asegurar tu cuenta."),
+      style: { display: "flex", alignItems: "center", gap: 8, background: "rgba(157,93,0,0.1)", border: "1px solid rgba(157,93,0,0.3)", borderRadius: 6, padding: "12px 16px", marginBottom: 16, fontSize: 15, color: T.yellow, fontWeight: 600 }
+    }, /*#__PURE__*/React.createElement(AlertTriangle, { size: 15 }), "Estás en modo recuperación. Establece una nueva contraseña para asegurar tu cuenta."),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, color: T.muted, marginBottom: 16 } }, isBypass ? "Establece tu nueva contraseña de acceso" : "Cambiar contraseña de acceso al software"),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, maxWidth: 340 } },
       !isBypass && /*#__PURE__*/React.createElement("input", {
@@ -7868,7 +8014,7 @@ function CashflowView(_props) {
       if (isNew) { cf.unshift(entry); }
       else { var idx=cf.findIndex(function(x){return x.id===modal.entry.id;}); if(idx>=0) cf[idx]=entry; }
       save(_objectSpread(_objectSpread({},data),{},{cashflow:cf}));
-      notify((isNew?"Registro agregado":"Registro actualizado")+" ✅");
+      notify(isNew?"Registro agregado":"Registro actualizado");
       setModal(null);
     };
 
@@ -7903,8 +8049,9 @@ function CashflowView(_props) {
             return /*#__PURE__*/React.createElement("button",{
               key:t, onClick:function(){ setTipo(t); setCat(t==="ingreso"?CATS_ING[0]:CATS_EGR[0]); },
               style:{ flex:1, padding:"10px 0", border:"none", borderRadius:9, cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:14,
+                display:"flex", alignItems:"center", justifyContent:"center", gap:6,
                 background: active ? col : "transparent", color: active ? "#fff" : T.muted, transition:"all 0.15s" }
-            }, t==="ingreso"?"⬆ Ingreso":"⬇ Egreso");
+            }, t==="ingreso"? /*#__PURE__*/React.createElement(ArrowUpCircle,{size:15}) : /*#__PURE__*/React.createElement(ArrowDownCircle,{size:15}), t==="ingreso"?"Ingreso":"Egreso");
           })
         ),
         /* Monto */
@@ -7959,16 +8106,16 @@ function CashflowView(_props) {
     /* ── Resumen tarjetas ── */
     /*#__PURE__*/React.createElement("div", { style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12} },
       [
-        { label:"Ingresos", value:totalIngresos, color:T.green, bg:"rgba(16,224,138,0.08)", icon:"⬆" },
-        { label:"Egresos",  value:totalEgresos,  color:T.red,   bg:"rgba(239,68,68,0.08)",  icon:"⬇" },
-        { label:"Balance",  value:balance, color:balance>=0?T.green:T.red, bg:balance>=0?"rgba(16,224,138,0.08)":"rgba(239,68,68,0.08)", icon:"⚖" }
+        { label:"Ingresos", value:totalIngresos, color:T.green, bg:"rgba(16,224,138,0.08)", icon:ArrowUpCircle },
+        { label:"Egresos",  value:totalEgresos,  color:T.red,   bg:"rgba(239,68,68,0.08)",  icon:ArrowDownCircle },
+        { label:"Balance",  value:balance, color:balance>=0?T.green:T.red, bg:balance>=0?"rgba(16,224,138,0.08)":"rgba(239,68,68,0.08)", icon:Scale }
       ].map(function(card){
         return /*#__PURE__*/React.createElement("div",{ key:card.label,
           style:{background:T.card,border:"1px solid "+T.border,borderRadius:14,padding:"16px 18px"}
         },
-          /*#__PURE__*/React.createElement("div",{style:{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}},card.icon+" "+card.label),
+          /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}},/*#__PURE__*/React.createElement(card.icon,{size:12}),card.label),
           /*#__PURE__*/React.createElement("div",{style:{fontSize:20,fontWeight:800,color:card.color}},fmtC(Math.abs(card.value))),
-          balance<0&&card.label==="Balance"&&/*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:T.red,marginTop:2}},"⚠ Déficit")
+          balance<0&&card.label==="Balance"&&/*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",gap:4,fontSize:11,color:T.red,marginTop:2}},/*#__PURE__*/React.createElement(AlertTriangle,{size:11}),"Déficit")
         );
       })
     ),
@@ -7993,7 +8140,7 @@ function CashflowView(_props) {
     /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap"}},
       /*#__PURE__*/React.createElement("input",{ type:"date", value:dateFilter, onChange:function(e){setDateFilter(e.target.value);},
         style:{background:T.surface,border:"1px solid "+T.border,borderRadius:10,color:T.text,padding:"9px 14px",fontSize:14,fontFamily:"inherit",outline:"none"} }),
-      dateFilter&&/*#__PURE__*/React.createElement("button",{onClick:function(){setDateFilter("");},style:{background:"none",border:"1px solid "+T.border,borderRadius:10,padding:"9px 14px",cursor:"pointer",color:T.muted,fontFamily:"inherit"}},"✕ Limpiar"),
+      dateFilter&&/*#__PURE__*/React.createElement("button",{onClick:function(){setDateFilter("");},style:{background:"none",border:"1px solid "+T.border,borderRadius:10,padding:"9px 14px",cursor:"pointer",color:T.muted,fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}},/*#__PURE__*/React.createElement(X,{size:13}),"Limpiar"),
       /*#__PURE__*/React.createElement("div",{style:{position:"relative",flex:1,minWidth:160}},
         /*#__PURE__*/React.createElement(Search,{size:15,style:{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:T.muted,pointerEvents:"none"}}),
         /*#__PURE__*/React.createElement("input",{ type:"text", placeholder:"Buscar...", value:buscar, onChange:function(e){setBuscar(e.target.value);},
@@ -8028,7 +8175,7 @@ function CashflowView(_props) {
                       /*#__PURE__*/React.createElement("span",{style:{background:T.surface,color:T.muted,padding:"3px 10px",borderRadius:8,fontSize:12,fontWeight:600}},e.category)
                     ),
                     /*#__PURE__*/React.createElement("td",{style:{padding:"11px 14px"}},
-                      /*#__PURE__*/React.createElement("span",{style:{background:isIng?"rgba(16,224,138,0.12)":"rgba(239,68,68,0.12)",color:col,padding:"3px 10px",borderRadius:8,fontSize:12,fontWeight:700}},isIng?"⬆ Ingreso":"⬇ Egreso")
+                      /*#__PURE__*/React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:4,background:isIng?"rgba(16,224,138,0.12)":"rgba(239,68,68,0.12)",color:col,padding:"3px 10px",borderRadius:8,fontSize:12,fontWeight:700}},isIng?/*#__PURE__*/React.createElement(ArrowUpCircle,{size:12}):/*#__PURE__*/React.createElement(ArrowDownCircle,{size:12}),isIng?"Ingreso":"Egreso")
                     ),
                     /*#__PURE__*/React.createElement("td",{style:{padding:"11px 14px",textAlign:"right",fontWeight:800,color:col,whiteSpace:"nowrap"}},(isIng?"+":"-")+fmtC(e.amount)),
                     /*#__PURE__*/React.createElement("td",{style:{padding:"11px 14px",textAlign:"right"}},
@@ -8221,7 +8368,7 @@ function ReporteView(_props) {
       "<div><div style=\"font-size:13px;font-weight:700;color:#64748B;text-transform:uppercase\">Balance del Período</div></div>"+
       "<div style=\"font-size:26px;font-weight:900;color:"+bColor+"\">"+fmtR(balance)+"</div></div>"+
       "<div class=\"no-print\" style=\"text-align:center;margin-top:24px\">"+
-      "<button onclick=\"window.print()\" style=\"padding:12px 36px;background:#0D1B35;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:800\">🖨 Imprimir</button></div>"+
+      "<button onclick=\"window.print()\" style=\"padding:12px 36px;background:#0D1B35;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:800\">Imprimir</button></div>"+
       "<p style=\"text-align:center;margin-top:14px;color:#94A3B8;font-size:11px\">Generado el "+new Date().toLocaleString("es-CO")+"</p></body></html>";
 
     _printHTML(html);
@@ -8232,6 +8379,7 @@ function ReporteView(_props) {
     return /*#__PURE__*/React.createElement("button",{
       onClick:function(){setModo(id);},
       style:{flex:1,padding:"9px 0",border:"none",borderRadius:9,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,
+        display:"flex",alignItems:"center",justifyContent:"center",gap:6,
         background:modo===id?T.accent:"transparent",color:modo===id?"#0D1B35":T.muted,transition:"all 0.15s"}
     },lbl);
   };
@@ -8239,10 +8387,10 @@ function ReporteView(_props) {
   return /*#__PURE__*/React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:20,width:"100%"}},
     // Título + Toggle en la misma fila
     /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}},
-      /*#__PURE__*/React.createElement("h2",{style:{fontSize:22,fontWeight:800,color:T.text,letterSpacing:"-0.03em",margin:0}},"📊 Reporte"),
+      /*#__PURE__*/React.createElement("h2",{style:{display:"flex",alignItems:"center",gap:8,fontSize:22,fontWeight:800,color:T.text,letterSpacing:"-0.03em",margin:0}},/*#__PURE__*/React.createElement(BarChart3,{size:20}),"Reporte"),
       /*#__PURE__*/React.createElement("div",{style:{display:"flex",background:T.surface,borderRadius:12,padding:4,gap:4}},
-        modoBtn("dia","📅 Por Día"),
-        modoBtn("mes","📆 Por Mes")
+        modoBtn("dia",[/*#__PURE__*/React.createElement(CalendarDays,{size:14,key:"i"}),"Por Día"]),
+        modoBtn("mes",[/*#__PURE__*/React.createElement(CalendarDays,{size:14,key:"i"}),"Por Mes"])
       )
     ),
 
@@ -8270,13 +8418,13 @@ function ReporteView(_props) {
         // Tarjetas resumen 2x2
         /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
           [
-            {l:"Ventas",      v:res.tv, c:T.green,  icon:"🛒", n:res.ventas.length},
-            {l:"Reparaciones",v:res.tr, c:"#8B5CF6", icon:"🔧", n:res.reps.length},
-            {l:"Ingresos",    v:res.ti, c:"#4F8EFF", icon:"⬆",  n:res.ingresos.length},
-            {l:"Egresos",     v:res.te, c:T.red,     icon:"⬇",  n:res.egresos.length}
+            {l:"Ventas",      v:res.tv, c:T.green,  icon:ShoppingCart, n:res.ventas.length},
+            {l:"Reparaciones",v:res.tr, c:"#8B5CF6", icon:Wrench, n:res.reps.length},
+            {l:"Ingresos",    v:res.ti, c:"#4F8EFF", icon:ArrowUpCircle,  n:res.ingresos.length},
+            {l:"Egresos",     v:res.te, c:T.red,     icon:ArrowDownCircle,  n:res.egresos.length}
           ].map(function(x){
             return /*#__PURE__*/React.createElement("div",{key:x.l,style:{background:T.card,border:"1px solid "+T.border,borderRadius:14,padding:"18px 20px"}},
-              /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:T.muted,fontWeight:700,textTransform:"uppercase",marginBottom:6}},x.icon+" "+x.l),
+              /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",gap:5,fontSize:12,color:T.muted,fontWeight:700,textTransform:"uppercase",marginBottom:6}},/*#__PURE__*/React.createElement(x.icon,{size:13}),x.l),
               /*#__PURE__*/React.createElement("div",{style:{fontSize:22,fontWeight:800,color:x.c}},fmtR(x.v)),
               /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:T.muted,marginTop:4}},x.n+" registro"+(x.n===1?"":"s"))
             );
@@ -8291,8 +8439,9 @@ function ReporteView(_props) {
           /*#__PURE__*/React.createElement("div",{style:{fontSize:28,fontWeight:900,color:balance>=0?T.green:T.red}},fmtR(balance))
         ),
         // Sin datos aviso
-        totalActs===0&&/*#__PURE__*/React.createElement("div",{style:{background:T.card,border:"1px dashed "+T.border,borderRadius:14,padding:"22px 18px",textAlign:"center",color:T.muted,fontSize:15}},
-          "📭 Sin registros para este período"
+        totalActs===0&&/*#__PURE__*/React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:6,background:T.card,border:"1px dashed "+T.border,borderRadius:14,padding:"22px 18px",textAlign:"center",color:T.muted,fontSize:15}},
+          /*#__PURE__*/React.createElement(Inbox,{size:22}),
+          "Sin registros para este período"
         ),
         // Botón imprimir
         /*#__PURE__*/React.createElement("button",{
@@ -8341,10 +8490,10 @@ function ProveedoresView(_pRef) {
     var payload = { name: pForm.name.trim(), whatsapp: waNum, notes: pForm.notes.trim(), accounts: pForm.accounts || [] };
     if (!editId) {
       save(Object.assign({}, data, { providers: providers.concat([Object.assign({ id: uid() }, payload)]) }));
-      notify("✅ Proveedor añadido");
+      notify("Proveedor añadido");
     } else {
       save(Object.assign({}, data, { providers: providers.map(function(p) { return p.id === editId ? Object.assign({}, p, payload) : p; }) }));
-      notify("✅ Proveedor actualizado");
+      notify("Proveedor actualizado");
     }
     setModal(null);
   };
@@ -8381,13 +8530,13 @@ function ProveedoresView(_pRef) {
 
   return /*#__PURE__*/React.createElement("div", null,
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 } },
-      /*#__PURE__*/React.createElement("h2", { style: { margin: 0, fontSize: 20, fontWeight: 700, color: T.text } }, "📦 Proveedores"),
+      /*#__PURE__*/React.createElement("h2", { style: { display: "flex", alignItems: "center", gap: 8, margin: 0, fontSize: 20, fontWeight: 700, color: T.text } }, /*#__PURE__*/React.createElement(Package, { size: 18 }), "Proveedores"),
       /*#__PURE__*/React.createElement(Btn, { icon: /*#__PURE__*/React.createElement(Plus, { size: 15 }), onClick: openAdd }, "Añadir Proveedor")
     ),
     providers.length === 0 && /*#__PURE__*/React.createElement("div", {
       style: { textAlign: "center", padding: "48px 24px", color: T.muted, background: T.surface, borderRadius: 14, border: "1px dashed " + T.border }
     },
-      /*#__PURE__*/React.createElement("div", { style: { fontSize: 40, marginBottom: 12 } }, "📦"),
+      /*#__PURE__*/React.createElement(Package, { size: 40, style: { marginBottom: 12, opacity: 0.6 } }),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 600, marginBottom: 6 } }, "Sin proveedores aún"),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 13 } }, "Añade un proveedor para comenzar a enviarle pedidos por WhatsApp")
     ),
@@ -8401,7 +8550,7 @@ function ProveedoresView(_pRef) {
           /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between" } },
             /*#__PURE__*/React.createElement("div", null,
               /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 3 } }, p.name),
-              /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, display: "flex", alignItems: "center", gap: 4 } }, "📱 +" + p.whatsapp),
+              /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, display: "flex", alignItems: "center", gap: 4 } }, /*#__PURE__*/React.createElement(Phone, { size: 11 }), "+" + p.whatsapp),
               p.notes && /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, marginTop: 4, fontStyle: "italic" } }, p.notes)
             ),
             /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 4 } },
@@ -8410,7 +8559,7 @@ function ProveedoresView(_pRef) {
             )
           ),
           accs.length > 0 && /*#__PURE__*/React.createElement("div", { style: { borderTop: "1px solid " + T.border, paddingTop: 8 } },
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" } }, "💳 Cuentas"),
+            /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" } }, /*#__PURE__*/React.createElement(CreditCard, { size: 11 }), "Cuentas"),
             accs.map(function(a) {
               return /*#__PURE__*/React.createElement("div", { key: a.id, style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 4 } },
                 /*#__PURE__*/React.createElement("span", { style: { background: T.bg, border: "1px solid " + T.border, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, color: T.text } }, a.type),
@@ -8422,7 +8571,7 @@ function ProveedoresView(_pRef) {
           /*#__PURE__*/React.createElement("button", {
             onClick: function() { openOrder(p); },
             style: { background: "#25D366", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }
-          }, "📋 Hacer Pedido por WhatsApp")
+          }, /*#__PURE__*/React.createElement(ClipboardList, { size: 14 }), "Hacer Pedido por WhatsApp")
         );
       })
     ),
@@ -8438,7 +8587,7 @@ function ProveedoresView(_pRef) {
 
         /*#__PURE__*/React.createElement("div", { style: { borderTop: "1px solid " + T.border, paddingTop: 12 } },
           /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: T.text } }, "💳 Cuentas para consignar"),
+            /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: T.text } }, /*#__PURE__*/React.createElement(CreditCard, { size: 13 }), "Cuentas para consignar"),
             !showAddAcc && /*#__PURE__*/React.createElement("button", {
               onClick: function() { setShowAddAcc(true); },
               style: { background: T.accent || "#2563eb", color: "#fff", border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }
@@ -8516,10 +8665,10 @@ function ProveedoresView(_pRef) {
     },
       /*#__PURE__*/React.createElement("div", { style: { padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 } },
         /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, display: "flex", alignItems: "center", gap: 5 } },
-          "📱 WhatsApp: +" + modal.provider.whatsapp
+          /*#__PURE__*/React.createElement(Phone, { size: 12 }), "WhatsApp: +" + modal.provider.whatsapp
         ),
         (modal.provider.accounts || []).length > 0 && /*#__PURE__*/React.createElement("div", { style: { background: T.bg, border: "1px solid " + T.border, borderRadius: 8, padding: "10px 12px" } },
-          /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, fontWeight: 700, marginBottom: 6, textTransform: "uppercase" } }, "💳 Cuentas del proveedor"),
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.muted, fontWeight: 700, marginBottom: 6, textTransform: "uppercase" } }, /*#__PURE__*/React.createElement(CreditCard, { size: 11 }), "Cuentas del proveedor"),
           (modal.provider.accounts || []).map(function(a) {
             return /*#__PURE__*/React.createElement("div", { key: a.id, style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 3 } },
               /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: "#2563eb" } }, a.type + ":"),
@@ -8541,7 +8690,7 @@ function ProveedoresView(_pRef) {
         /*#__PURE__*/React.createElement("button", {
           onClick: sendOrder,
           style: { background: "#25D366", color: "#fff", border: "none", borderRadius: 10, padding: "12px 0", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }
-        }, "📲 Enviar por WhatsApp")
+        }, /*#__PURE__*/React.createElement(Send, { size: 14 }), "Enviar por WhatsApp")
       )
     )
   );
@@ -8550,7 +8699,6 @@ function ProveedoresView(_pRef) {
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var onLogout = _appProps && _appProps.onLogout ? _appProps.onLogout : function(){};
-  var _navItems$find;
 
   // ─── TEMPORIZADOR DE INACTIVIDAD (10 minutos) ──────────
   var _it1 = useState(false), _ita1 = _slicedToArray(_it1, 2), showIdleWarn = _ita1[0], setShowIdleWarn = _ita1[1];
@@ -8634,10 +8782,6 @@ function App(_appProps) {
     _useState66 = _slicedToArray(_useState65, 2),
     toast = _useState66[0],
     setToast = _useState66[1];
-  var _useState67 = useState(function() { return window.innerWidth >= 1024; }),
-    _useState68 = _slicedToArray(_useState67, 2),
-    sidebarOpen = _useState68[0],
-    setSidebarOpen = _useState68[1];
   var _useState69 = useState(function () {
       try {
         var s = localStorage.getItem("trp_settings_v1");
@@ -8652,8 +8796,6 @@ function App(_appProps) {
   applyTheme(settings);
   var _wsize = useWindowSize();
   var isMobile = _wsize.w < 640;
-  var isTablet = !isMobile && _wsize.w < 1024;
-  var isSidebarExpanded = !isMobile && !isTablet && sidebarOpen;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SINCRONIZACIÓN — REGLA DE ORO: los datos NUNCA se borran.
@@ -8957,7 +9099,24 @@ function App(_appProps) {
       return setToast(null);
     }, 3000);
   };
-  var _sbV = useState(false), _sbVA = _slicedToArray(_sbV, 2), sidebarVisible = _sbVA[0], setSidebarVisible = _sbVA[1];
+  var _smOpen = useState(false), _smOpenA = _slicedToArray(_smOpen, 2), startMenuOpen = _smOpenA[0], setStartMenuOpen = _smOpenA[1];
+  var _clockS = useState(function () { return new Date(); }), _clockSA = _slicedToArray(_clockS, 2), clockNow = _clockSA[0], setClockNow = _clockSA[1];
+  useEffect(function () {
+    var _t = setInterval(function () { setClockNow(new Date()); }, 15000);
+    return function () { clearInterval(_t); };
+  }, []);
+  // ─── Ventanas abiertas en la barra de tareas (estilo Windows) ───
+  var _ovS = useState(["dashboard"]), _ovSA = _slicedToArray(_ovS, 2), openViews = _ovSA[0], setOpenViews = _ovSA[1];
+  useEffect(function () {
+    setOpenViews(function (prev) { return prev.indexOf(view) === -1 ? prev.concat([view]) : prev; });
+  }, [view]);
+  var closeOpenView = function (id, e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    var next = openViews.filter(function (v) { return v !== id; });
+    if (next.length === 0) next = ["dashboard"];
+    setOpenViews(next);
+    if (view === id) { setView(next[next.length - 1]); }
+  };
   if (!data) return /*#__PURE__*/React.createElement("div", {
     style: {
       background: T.bg,
@@ -9062,10 +9221,11 @@ function App(_appProps) {
       size: 17
     })
   }];
+  var _activeNavItem = navItems.find(function (n) { return n.id === view; });
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      flexDirection: "row",
+      flexDirection: "column",
       height: "100dvh",
       background: T.bg,
       color: T.text,
@@ -9074,123 +9234,8 @@ function App(_appProps) {
       overflow: "hidden"
     }
   }, toast && /*#__PURE__*/React.createElement(Toast, toast),
-  !isMobile && !sidebarVisible && /*#__PURE__*/React.createElement("div", {
-    onMouseEnter: function(){ setSidebarVisible(true); },
-    style: { position: "fixed", left: 0, top: 0, bottom: 0, width: 16, zIndex: 100 }
-  }),
-  !isMobile && /*#__PURE__*/React.createElement("aside", {
-    onMouseEnter: function(){ setSidebarVisible(true); },
-    onMouseLeave: function(){ setSidebarVisible(false); },
-    style: {
-      width: sidebarVisible ? (isSidebarExpanded ? 230 : 60) : 0,
-      minWidth: sidebarVisible ? (isSidebarExpanded ? 230 : 60) : 0,
-      background: "linear-gradient(180deg, ".concat(T.surface, " 0%, ").concat(T.card, " 100%)"),
-      borderRight: "1px solid ".concat(T.border),
-      display: "flex",
-      flexDirection: "column",
-      transition: "width 0.35s cubic-bezier(0.4,0,0.2,1), min-width 0.35s cubic-bezier(0.4,0,0.2,1)",
-      overflow: "hidden",
-      zIndex: 50,
-      color: T.text
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "18px 14px",
-      borderBottom: "1px solid ".concat(T.border),
-      display: "flex",
-      alignItems: "center",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 34,
-      height: 34,
-      background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)",
-      borderRadius: 12,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0,
-      overflow: "hidden",
-      boxShadow: "0 4px 12px rgba(16,224,138,0.25)"
-    }
-  }, settings.logo ? /*#__PURE__*/React.createElement("img", {
-    src: settings.logo,
-    alt: "logo",
-    style: { width: "100%", height: "100%", objectFit: "cover" }
-  }) : /*#__PURE__*/React.createElement(Smartphone, { size: 19, color: "#fff" })),
-  isSidebarExpanded && /*#__PURE__*/React.createElement("div", null,
-    /*#__PURE__*/React.createElement("div", {
-      style: { fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: "-0.03em" }
-    }, settings.storeName || "ACCE PRO"),
-    /*#__PURE__*/React.createElement("div", {
-      style: { fontSize: 9, color: T.accent, letterSpacing: "0.12em", fontWeight: 600, textTransform: "uppercase" }
-    }, settings.storeSubtitle || "GESTIÓN TALLER")
-  )),
-  /*#__PURE__*/React.createElement("nav", {
-    style: { flex: 1, padding: "10px 7px", display: "flex", flexDirection: "column", gap: 2 }
-  }, navItems.map(function (item) {
-    return /*#__PURE__*/React.createElement("button", {
-      key: item.id,
-      onClick: function onClick() { return setView(item.id); },
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 11,
-        padding: isSidebarExpanded ? "10px 11px" : "10px 0",
-        justifyContent: isSidebarExpanded ? "flex-start" : "center",
-        border: "none",
-        borderRadius: 4,
-        cursor: "pointer",
-        width: "100%",
-        background: view === item.id ? T.accentDim : "transparent",
-        color: view === item.id ? T.accent : T.muted,
-        fontWeight: view === item.id ? 600 : 400,
-        fontSize: 14,
-        transition: "all 0.1s",
-        fontFamily: "inherit",
-        position: "relative",
-        borderLeft: "none",
-          background: view === item.id ? "linear-gradient(90deg, ".concat(T.accent, "20, ").concat(T.accent, "08)") : "transparent",
-          boxShadow: view === item.id ? "inset 3px 0 0 ".concat(T.accent) : "none",
-        minHeight: 44
-      }
-    }, /*#__PURE__*/React.createElement("span", { style: { flexShrink: 0 } }, item.icon),
-    isSidebarExpanded && /*#__PURE__*/React.createElement("span", { style: { flex: 1, textAlign: "left" } }, item.label),
-    isSidebarExpanded && item.badge > 0 && /*#__PURE__*/React.createElement("span", {
-      style: { background: T.orange, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 15, fontWeight: 800 }
-    }, item.badge),
-    isSidebarExpanded && item.alert && /*#__PURE__*/React.createElement("span", {
-      style: { width: 7, height: 7, background: T.yellow, borderRadius: "50%" }
-    }));
-  })),
-  /*#__PURE__*/React.createElement("div", {
-    style: { padding: 10, borderTop: "1px solid ".concat(T.border) }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: openCatalog,
-    style: {
-      width: "100%",
-      padding: isSidebarExpanded ? "10px 11px" : "10px 0",
-      border: "1px solid ".concat(T.border),
-      borderRadius: 8,
-      background: "transparent",
-      color: T.accent,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      gap: 9,
-      fontSize: 14,
-      fontWeight: 700,
-      justifyContent: isSidebarExpanded ? "flex-start" : "center",
-      fontFamily: "inherit",
-      minHeight: 44
-    }
-  }, /*#__PURE__*/React.createElement(ExternalLink, { size: 15 }),
-  isSidebarExpanded && "Abrir Catálogo Público"))),
 
-  /*#__PURE__*/React.createElement("div", {
-    style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }
-  }, /*#__PURE__*/React.createElement("header", {
+  /*#__PURE__*/React.createElement("header", {
     style: {
       height: isMobile ? 52 : 58,
       display: "flex",
@@ -9202,16 +9247,12 @@ function App(_appProps) {
       flexShrink: 0
     }
   },
-  !isMobile && /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() { return setSidebarOpen(function (o) { return !o; }); },
-    style: { background: "none", border: "none", color: T.muted, cursor: "pointer", padding: 4, display: "flex", minHeight: 44, alignItems: "center" }
-  }, /*#__PURE__*/React.createElement(Menu, { size: 19 })),
-  isMobile && /*#__PURE__*/React.createElement("div", {
-    style: { width: 28, height: 28, background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }
-  }, settings.logo ? /*#__PURE__*/React.createElement("img", { src: settings.logo, alt: "logo", style: { width: "100%", height: "100%", objectFit: "cover" } }) : /*#__PURE__*/React.createElement(Smartphone, { size: 14, color: "#fff" })),
+  /*#__PURE__*/React.createElement("div", {
+    style: { width: isMobile ? 26 : 30, height: isMobile ? 26 : 30, background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }
+  }, settings.logo ? /*#__PURE__*/React.createElement("img", { src: settings.logo, alt: "logo", style: { width: "100%", height: "100%", objectFit: "cover" } }) : /*#__PURE__*/React.createElement(Smartphone, { size: isMobile ? 14 : 17, color: "#fff" })),
   /*#__PURE__*/React.createElement("h1", {
     style: { margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.03em" }
-  }, ((_navItems$find = navItems.find(function (n) { return n.id === view; })) === null || _navItems$find === void 0 ? void 0 : _navItems$find.label) || "Dashboard"),
+  }, (_activeNavItem && _activeNavItem.label) || "Dashboard"),
   /*#__PURE__*/React.createElement("div", { style: { flex: 1 } }),
   !isMobile && lowStock.length > 0 && /*#__PURE__*/React.createElement("div", {
     onClick: function onClick() { return setView("inventory"); },
@@ -9230,8 +9271,7 @@ function App(_appProps) {
     onClick: function onClick() { return setView("repairs"); },
     title: "Listas para entregar",
     style: { width: 10, height: 10, borderRadius: "50%", background: T.green, flexShrink: 0, cursor: "pointer" }
-  }),
-  // Banner de días restantes demo/trial — mostrado en DemoBanner (Root level)
+  })
   ),
 
   /*#__PURE__*/React.createElement("main", {
@@ -9248,55 +9288,133 @@ function App(_appProps) {
   view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
   view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
   view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data }),
-  view === "proveedores" && /*#__PURE__*/React.createElement(ProveedoresView, { data: data, save: save, notify: notify })),
+  view === "proveedores" && /*#__PURE__*/React.createElement(ProveedoresView, { data: data, save: save, notify: notify })
+  ),
 
-  isMobile && /*#__PURE__*/React.createElement("nav", {
-    className: "trp-bottom-nav",
+  // ─── MENÚ DE INICIO (estilo Windows) ────────────────────
+  startMenuOpen && /*#__PURE__*/React.createElement("div", {
+    onClick: function () { setStartMenuOpen(false); },
+    style: { position: "fixed", inset: 0, zIndex: 998, background: "transparent" }
+  }),
+  startMenuOpen && /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      borderTop: "1px solid ".concat(T.border),
-      background: T.surface,
-      overflowX: "auto",
-      flexShrink: 0,
-      WebkitOverflowScrolling: "touch",
-      msOverflowStyle: "none",
-      scrollbarWidth: "none"
+      position: "fixed", left: isMobile ? 8 : 12, bottom: (isMobile ? 52 : 50) + 8, zIndex: 999,
+      width: isMobile ? "calc(100% - 16px)" : 300,
+      maxHeight: "70vh", overflow: "auto",
+      background: T.surface, border: "1px solid ".concat(T.border), borderRadius: 12,
+      boxShadow: "0 20px 60px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.35)",
+      display: "flex", flexDirection: "column", padding: 8
     }
-  }, navItems.map(function (item) {
-    return /*#__PURE__*/React.createElement("button", {
-      key: item.id,
-      onClick: function onClick() { return setView(item.id); },
+  },
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 10px 12px", borderBottom: "1px solid ".concat(T.border), marginBottom: 6 }
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style: { width: 34, height: 34, background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }
+      }, settings.logo ? /*#__PURE__*/React.createElement("img", { src: settings.logo, alt: "logo", style: { width: "100%", height: "100%", objectFit: "cover" } }) : /*#__PURE__*/React.createElement(Smartphone, { size: 18, color: "#fff" })),
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 14, fontWeight: 800, color: T.text } }, settings.storeName || "ACCE PRO"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted } }, "Menú de inicio")
+      )
+    ),
+    navItems.map(function (item) {
+      var active = view === item.id;
+      return /*#__PURE__*/React.createElement("button", {
+        key: item.id,
+        onClick: function () { setView(item.id); setStartMenuOpen(false); },
+        style: {
+          display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+          padding: "10px 12px", border: "none", borderRadius: 8, cursor: "pointer",
+          background: active ? T.accentDim : "transparent",
+          color: active ? T.accent : T.text,
+          fontWeight: active ? 700 : 500,
+          fontSize: 14, fontFamily: "inherit", minHeight: 42
+        }
+      },
+        /*#__PURE__*/React.createElement("span", { style: { display: "flex", flexShrink: 0, color: active ? T.accent : T.muted } }, item.icon),
+        /*#__PURE__*/React.createElement("span", { style: { flex: 1 } }, item.label),
+        item.badge > 0 && /*#__PURE__*/React.createElement("span", {
+          style: { background: T.orange, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800 }
+        }, item.badge),
+        item.alert && /*#__PURE__*/React.createElement("span", { style: { width: 7, height: 7, background: T.yellow, borderRadius: "50%" } })
+      );
+    }),
+    /*#__PURE__*/React.createElement("div", { style: { borderTop: "1px solid ".concat(T.border), marginTop: 6, paddingTop: 6 } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: function () { setStartMenuOpen(false); openCatalog(); },
+        style: {
+          display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+          padding: "10px 12px", border: "none", borderRadius: 8, cursor: "pointer",
+          background: "transparent", color: T.accent, fontWeight: 600, fontSize: 14, fontFamily: "inherit", minHeight: 42
+        }
+      }, /*#__PURE__*/React.createElement(ExternalLink, { size: 16 }), "Abrir Catálogo Público")
+    )
+  ),
+
+  // ─── BARRA DE TAREAS (estilo Windows) ───────────────────
+  /*#__PURE__*/React.createElement("div", {
+    className: "win-taskbar",
+    style: {
+      height: isMobile ? 52 : 50,
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "0 10px",
+      background: T.card,
+      borderTop: "1px solid ".concat(T.border),
+      flexShrink: 0, zIndex: 60
+    }
+  },
+    /*#__PURE__*/React.createElement("button", {
+      onClick: function () { setStartMenuOpen(function (o) { return !o; }); },
       style: {
-        flex: "1 0 auto",
-        minWidth: 52,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 2,
-        padding: "6px 4px 5px",
-        border: "none",
-        borderTop: view === item.id ? "3px solid ".concat(T.accent) : "3px solid transparent",
-        background: "transparent",
-        color: view === item.id ? T.accent : T.muted,
-        fontSize: 9,
-        fontWeight: view === item.id ? 600 : 400,
-        cursor: "pointer",
-        fontFamily: "inherit",
-        position: "relative",
-        transition: "color 0.1s",
-        touchAction: "manipulation",
-        minHeight: 54
+        display: "flex", alignItems: "center", gap: 8,
+        padding: isMobile ? "8px 12px" : "8px 16px",
+        background: startMenuOpen ? T.accentDim : "transparent",
+        border: "none", borderRadius: 6, cursor: "pointer",
+        color: startMenuOpen ? T.accent : T.text, fontWeight: 700, fontSize: 14, fontFamily: "inherit", minHeight: 40
       }
-    }, /*#__PURE__*/React.createElement("span", { style: { flexShrink: 0, display: "flex" } }, item.icon),
-    /*#__PURE__*/React.createElement("span", { style: { lineHeight: 1.2, textAlign: "center" } }, item.label),
-    item.badge > 0 && /*#__PURE__*/React.createElement("span", {
-      style: { position: "absolute", top: 4, right: "calc(50% - 18px)", background: T.red, color: "#fff", borderRadius: 8, padding: "0 4px", fontSize: 9, fontWeight: 700, minWidth: 14, textAlign: "center", lineHeight: "14px" }
-    }, item.badge),
-    item.alert && /*#__PURE__*/React.createElement("span", {
-      style: { position: "absolute", top: 7, right: "calc(50% - 16px)", width: 7, height: 7, background: T.yellow, borderRadius: "50%", border: "2px solid ".concat(T.surface) }
-    }));
-  })),
+    },
+      /*#__PURE__*/React.createElement("span", {
+        style: { width: 20, height: 20, borderRadius: 4, background: "linear-gradient(135deg,#10E08A,#4F8EFF)", display: "flex", alignItems: "center", justifyContent: "center" }
+      }, /*#__PURE__*/React.createElement(LayoutDashboard, { size: 12, color: "#fff" })),
+      !isMobile && "Inicio"
+    ),
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", alignItems: "center", gap: 6, overflowX: "auto", flex: 1, minWidth: 0, height: "100%" }
+    }, openViews.map(function (id) {
+      var ovItem = navItems.find(function (n) { return n.id === id; });
+      if (!ovItem) return null;
+      var isActive = view === id;
+      return /*#__PURE__*/React.createElement("div", {
+        key: id,
+        onClick: function () { setView(id); },
+        style: {
+          display: "flex", alignItems: "center", gap: 7, flexShrink: 0,
+          padding: isMobile ? "7px 10px" : "7px 12px", borderRadius: 6, cursor: "pointer",
+          background: isActive ? T.accentDim : "transparent",
+          color: isActive ? T.accent : T.muted, fontWeight: isActive ? 700 : 500, fontSize: 13,
+          borderBottom: isActive ? "2px solid ".concat(T.accent) : "2px solid transparent"
+        }
+      },
+        /*#__PURE__*/React.createElement("span", { style: { display: "flex" } }, ovItem.icon),
+        !isMobile && ovItem.label,
+        openViews.length > 1 && /*#__PURE__*/React.createElement("span", {
+          onClick: function (e) { closeOpenView(id, e); },
+          title: "Cerrar",
+          style: {
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 15, height: 15, borderRadius: "50%", marginLeft: 2,
+            color: isActive ? T.accent : T.muted, fontSize: 12, lineHeight: 1
+          }
+        }, "×")
+      );
+    })),
+    /*#__PURE__*/React.createElement("div", {
+      style: { textAlign: "right", padding: "4px 10px", borderRadius: 6, color: T.muted, fontSize: isMobile ? 11 : 12, lineHeight: 1.3, cursor: "default" }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, color: T.text } }, clockNow.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })),
+      !isMobile && /*#__PURE__*/React.createElement("div", null, clockNow.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }))
+    )
+  ),
 
   // ─── Aviso de inactividad ───────────────────────────────
   showIdleWarn && /*#__PURE__*/React.createElement("div", {
@@ -9304,7 +9422,7 @@ function App(_appProps) {
   }, /*#__PURE__*/React.createElement("div", {
     style: { background:T.card, border:"1px solid ".concat(T.border), borderRadius:20, padding:32, maxWidth:360, width:"90%", textAlign:"center", boxShadow:"0 40px 100px rgba(0,0,0,0.65), 0 20px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)" }
   },
-    /*#__PURE__*/React.createElement("div", { style:{fontSize:48, marginBottom:12} }, "⏱️"),
+    /*#__PURE__*/React.createElement(Clock, { size: 44, color: T.accent, style:{ marginBottom:12 } }),
     /*#__PURE__*/React.createElement("div", { style:{fontWeight:800, fontSize:20, color:T.text, marginBottom:8, letterSpacing:"-0.02em"} }, "¿Sigues ahí?"),
     /*#__PURE__*/React.createElement("div", { style:{color:T.muted, fontSize:14, marginBottom:20} },
       "La sesión se cerrará en ",
@@ -9313,10 +9431,10 @@ function App(_appProps) {
     ),
     /*#__PURE__*/React.createElement("button", {
       onClick: function(){ resetIdleTimer(); },
-      style:{ width:"100%", padding:"13px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:12, fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }
-    }, "✅ Continuar trabajando")
+      style:{ width:"100%", padding:"13px", background:"linear-gradient(135deg,#10E08A,#0DD87A)", color:"#0D1B35", border:"none", borderRadius:12, fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }
+    }, /*#__PURE__*/React.createElement(CheckCircle, { size: 16 }), "Continuar trabajando")
   ))
-  ));
+  );
 }
 
 // ─── SISTEMA DE LICENCIAS ──────────────────────────────────
@@ -9378,10 +9496,10 @@ function _validarCodigoServidor(rawCode, uid) {
     db.collection("trp_users").doc(codeKey).get().then(function(cdoc) {
       var cd = cdoc.exists ? cdoc.data() : null;
       if (!cd || cd.createdByAdmin !== true) {
-        resolve({ ok:false, error:"❌ Este código no fue emitido por GlobalAcce. Solicita uno válido." }); return;
+        resolve({ ok:false, error:"Este código no fue emitido por GlobalAcce. Solicita uno válido." }); return;
       }
       if (cd.used === true && cd.usedBy && cd.usedBy !== uid) {
-        resolve({ ok:false, error:"❌ Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce." }); return;
+        resolve({ ok:false, error:"Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce." }); return;
       }
       resolve({ ok:true });
     }).catch(function() {
@@ -9813,14 +9931,14 @@ function CreateAccountScreen(_ref) {
           var cd = cdoc.exists ? cdoc.data() : null;
           // a) No emitido por GlobalAcce → forjado / inexistente
           if (!cd || cd.createdByAdmin !== true) {
-            setErr("❌ Este código no fue emitido por GlobalAcce. Solicita uno válido.");
+            setErr("Este código no fue emitido por GlobalAcce. Solicita uno válido.");
             setLoading(false);
             try { cred.user.delete(); } catch(e){}
             return;
           }
           // b) Ya quemado por OTRA cuenta → un solo uso
           if (cd.used === true && cd.usedBy && cd.usedBy !== uid) {
-            setErr("❌ Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce.");
+            setErr("Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce.");
             setLoading(false);
             try { cred.user.delete(); } catch(e){}
             return;
@@ -9929,15 +10047,16 @@ function ExpiredScreen(_ref) {
   },
     /*#__PURE__*/React.createElement("div", { style: Object.assign({}, _AS.card, { maxWidth:480 }) },
       /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", marginBottom:20 } },
-        /*#__PURE__*/React.createElement("div", { style:{ fontSize:48 } }, "⏰"),
+        /*#__PURE__*/React.createElement(Clock, { size: 44, color: "#fff" }),
         /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Licencia vencida"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, color:"#7A8EAA", marginTop:6 } },
           "Hola ", /*#__PURE__*/React.createElement("strong", { style:{color:"#10E08A"} }, currentUser.username),
           ". Tu licencia ha expirado."
         )
       ),
-      /*#__PURE__*/React.createElement("div", { style:{ background:"rgba(16,224,138,0.06)", border:"1px solid rgba(16,224,138,0.2)", borderRadius:12, padding:"12px 16px", marginBottom:20, fontSize:13, color:"#7A8EAA" } },
-        "✅ Tus datos están seguros y completos. Al ingresar el nuevo código todo vuelve a funcionar exactamente igual."
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"flex-start", gap:8, background:"rgba(16,224,138,0.06)", border:"1px solid rgba(16,224,138,0.2)", borderRadius:12, padding:"12px 16px", marginBottom:20, fontSize:13, color:"#7A8EAA" } },
+        /*#__PURE__*/React.createElement(CheckCircle, { size: 15, style:{ flexShrink:0, marginTop:1 } }),
+        "Tus datos están seguros y completos. Al ingresar el nuevo código todo vuelve a funcionar exactamente igual."
       ),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
       /*#__PURE__*/React.createElement("input", {
@@ -9946,14 +10065,14 @@ function ExpiredScreen(_ref) {
         onKeyDown:function(e){if(e.key==="Enter")renovar();},
         style:Object.assign({},_AS.input,{letterSpacing:"0.06em",textAlign:"center",fontSize:16,fontWeight:600})
       }),
-      /*#__PURE__*/React.createElement("button", { onClick:renovar, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
-        loading ? "Activando..." : "🔓 Activar y continuar"
+      /*#__PURE__*/React.createElement("button", { onClick:renovar, disabled:loading, style:Object.assign({display:"flex",alignItems:"center",justifyContent:"center",gap:8},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
+        loading ? "Activando..." : [/*#__PURE__*/React.createElement(Unlock,{size:15,key:"i"}),"Activar y continuar"]
       ),
       /*#__PURE__*/React.createElement("a", {
         href:"https://wa.me/"+WHATSAPP+"?text=Hola%2C%20mi%20licencia%20venci%C3%B3.%20Usuario%3A%20"+encodeURIComponent(currentUser.username)+"%20Precio%3A%20"+encodeURIComponent(PRECIO),
         target:"_blank",
         style:{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#25D366", color:"#fff", padding:"12px", borderRadius:14, fontWeight:700, fontSize:14, textDecoration:"none", marginBottom:10 }
-      }, "📱 Solicitar código — "+PRECIO),
+      }, /*#__PURE__*/React.createElement(MessageCircle,{size:15}), "Solicitar código — "+PRECIO),
       /*#__PURE__*/React.createElement("button", {
         onClick: function(){ onBack && onBack(); },
         style:{ width:"100%", padding:"12px", background:"#F1F3F9", color:"#3A4A63", border:"1px solid #D5DBE8", borderRadius:14, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }
@@ -10005,12 +10124,12 @@ function TrackingLoader(_ref) {
 
   // Estados con su progreso
   var STAGES = ["Recibido","Diagnóstico","En Reparación","Listo","Entregado"];
-  var STAGE_ICONS = { "Recibido":"📥", "Diagnóstico":"🔍", "En Reparación":"🔧", "Listo":"✅", "Entregado":"📦", "Cancelado":"❌" };
+  var STAGE_ICONS = { "Recibido":Inbox, "Diagnóstico":Search, "En Reparación":Wrench, "Listo":CheckCircle, "Entregado":Package, "Cancelado":XCircle };
 
   if (loading) return /*#__PURE__*/React.createElement("div", {
     style:{ minHeight:"100dvh", background:"#F7F6FA", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:14, fontFamily:"'DM Sans',system-ui,sans-serif" }
   },
-    /*#__PURE__*/React.createElement("div", { style:{ width:48, height:48, borderRadius:14, background:"linear-gradient(135deg,#E8540F,#FF6A2B)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, animation:"pulse 1.5s ease-in-out infinite" } }, "📱"),
+    /*#__PURE__*/React.createElement("div", { style:{ width:48, height:48, borderRadius:14, background:"linear-gradient(135deg,#E8540F,#FF6A2B)", display:"flex", alignItems:"center", justifyContent:"center", animation:"pulse 1.5s ease-in-out infinite" } }, /*#__PURE__*/React.createElement(Smartphone, { size: 22, color: "#fff" })),
     /*#__PURE__*/React.createElement("style", null, "@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}"),
     /*#__PURE__*/React.createElement("div", { style:{color:"#8A8398",fontSize:14,fontWeight:500} }, "Cargando seguimiento...")
   );
@@ -10018,12 +10137,12 @@ function TrackingLoader(_ref) {
   if (errorMsg) return /*#__PURE__*/React.createElement("div", {
     style:{ minHeight:"100dvh", background:"#F7F6FA", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16, padding:24, fontFamily:"'DM Sans',system-ui,sans-serif" }
   },
-    /*#__PURE__*/React.createElement("div", { style:{fontSize:48} }, "🔍"),
+    /*#__PURE__*/React.createElement(Search, { size: 44, color: "#8A8398" }),
     /*#__PURE__*/React.createElement("div", { style:{color:"#15101D",fontSize:18,fontWeight:700,textAlign:"center",maxWidth:320} }, errorMsg),
     /*#__PURE__*/React.createElement("button", {
       onClick: function(){ setLoading(true); setErrorMsg(""); loadTrack(3); },
-      style:{padding:"12px 28px",background:"linear-gradient(135deg,#E8540F,#FF6A2B)",color:"#fff",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700,fontSize:14}
-    }, "🔄 Reintentar")
+      style:{padding:"12px 28px",background:"linear-gradient(135deg,#E8540F,#FF6A2B)",color:"#fff",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:8}
+    }, /*#__PURE__*/React.createElement(RefreshCw,{size:15}), "Reintentar")
   );
 
   var r = repair;
@@ -10053,7 +10172,7 @@ function TrackingLoader(_ref) {
       /*#__PURE__*/React.createElement("div", {
         style:{ background:"#fff", borderRadius:20, padding:"26px 24px", boxShadow:"0 8px 32px rgba(20,15,30,0.10)", marginBottom:16, textAlign:"center", border:"1px solid rgba(20,15,30,0.05)" }
       },
-        /*#__PURE__*/React.createElement("div", { style:{ fontSize:40, marginBottom:8 } }, STAGE_ICONS[r.status]||"🔧"),
+        /*#__PURE__*/React.createElement(STAGE_ICONS[r.status]||Wrench, { size: 36, color: statusColor, style:{ marginBottom:8 } }),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, color:"#8A8398", fontWeight:500, marginBottom:4 } }, "Estado actual"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:24, fontWeight:800, color:statusColor, letterSpacing:"-0.5px" } }, r.status||"—")
       ),
@@ -10088,8 +10207,8 @@ function TrackingLoader(_ref) {
       /*#__PURE__*/React.createElement("div", {
         style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
       },
-        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:16 } }, "📱 Datos del equipo"),
-        [["Cliente", r.customer], ["Equipo", r.device], ["Categoría", r.category], ["Problema", r.problem], ["Técnico", r.technician], ["Fecha de ingreso", r.date], ["🔒 Bloqueo", (r.lockType==="pin"&&r.lockValue)?("Clave: "+r.lockValue):((r.lockType==="pattern"&&r.lockPattern&&r.lockPattern.length)?("Patrón: "+r.lockPattern.map(function(n){return n+1;}).join(" → ")):"")]].map(function(row){
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:7, fontSize:14, fontWeight:700, color:"#15101D", marginBottom:16 } }, /*#__PURE__*/React.createElement(Smartphone,{size:14}), "Datos del equipo"),
+        [["Cliente", r.customer], ["Equipo", r.device], ["Categoría", r.category], ["Problema", r.problem], ["Técnico", r.technician], ["Fecha de ingreso", r.date], ["Bloqueo", (r.lockType==="pin"&&r.lockValue)?("Clave: "+r.lockValue):((r.lockType==="pattern"&&r.lockPattern&&r.lockPattern.length)?("Patrón: "+r.lockPattern.map(function(n){return n+1;}).join(" → ")):"")]].map(function(row){
           if(!row[1]) return null;
           return /*#__PURE__*/React.createElement("div", { key:row[0], style:{ display:"flex", justifyContent:"space-between", gap:16, padding:"9px 0", borderBottom:"1px solid #F4F2F7" } },
             /*#__PURE__*/React.createElement("span", { style:{ fontSize:13, color:"#8A8398", fontWeight:500, flexShrink:0 } }, row[0]),
@@ -10101,7 +10220,7 @@ function TrackingLoader(_ref) {
       /*#__PURE__*/React.createElement("div", {
         style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
       },
-        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:16 } }, "💰 Información de pago"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:7, fontSize:14, fontWeight:700, color:"#15101D", marginBottom:16 } }, /*#__PURE__*/React.createElement(Banknote,{size:14}), "Información de pago"),
         /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:"1px solid #F4F2F7" } },
           /*#__PURE__*/React.createElement("span", { style:{ fontSize:13, color:"#8A8398", fontWeight:500 } }, "Costo total"),
           /*#__PURE__*/React.createElement("span", { style:{ fontSize:16, color:"#15101D", fontWeight:800 } }, fmt(r.cost))
@@ -10116,16 +10235,16 @@ function TrackingLoader(_ref) {
         ),
         /*#__PURE__*/React.createElement("div", { style:{ marginTop:14, textAlign:"center" } },
           /*#__PURE__*/React.createElement("span", {
-            style:{ display:"inline-block", padding:"7px 18px", borderRadius:30, fontSize:13, fontWeight:700,
+            style:{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 18px", borderRadius:30, fontSize:13, fontWeight:700,
               background: r.paid ? "#DCFCE7" : "#FEF3E2", color: r.paid ? "#16A34A" : "#C24A12" }
-          }, r.paid ? "✓ PAGADO" : "⏳ PAGO PENDIENTE")
+          }, r.paid ? /*#__PURE__*/React.createElement(CheckCircle,{size:14}) : /*#__PURE__*/React.createElement(Clock,{size:14}), r.paid ? "PAGADO" : "PAGO PENDIENTE")
         )
       ),
       // Historial de abonos
       (r.advances && r.advances.length > 0) && /*#__PURE__*/React.createElement("div", {
         style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
       },
-        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:14 } }, "📋 Historial de abonos"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:7, fontSize:14, fontWeight:700, color:"#15101D", marginBottom:14 } }, /*#__PURE__*/React.createElement(ClipboardList,{size:14}), "Historial de abonos"),
         r.advances.map(function(adv, i){
           return /*#__PURE__*/React.createElement("div", { key:i, style:{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom: i<r.advances.length-1?"1px solid #F4F2F7":"none" } },
             /*#__PURE__*/React.createElement("div", null,
@@ -10140,13 +10259,13 @@ function TrackingLoader(_ref) {
       r.notes && /*#__PURE__*/React.createElement("div", {
         style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
       },
-        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:10 } }, "📝 Notas del técnico"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:7, fontSize:14, fontWeight:700, color:"#15101D", marginBottom:10 } }, /*#__PURE__*/React.createElement(ClipboardList,{size:14}), "Notas del técnico"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, color:"#6B6478", lineHeight:1.6 } }, r.notes)
       ),
       (r.photos && r.photos.length > 0) && /*#__PURE__*/React.createElement("div", {
         style:{ background:"#fff", borderRadius:20, padding:"22px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)" }
       },
-        /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:14 } }, "📷 Fotos de tu reparaci\xF3n"),
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:7, fontSize:14, fontWeight:700, color:"#15101D", marginBottom:14 } }, /*#__PURE__*/React.createElement(Camera,{size:14}), "Fotos de tu reparaci\xF3n"),
         /*#__PURE__*/React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 } },
           r.photos.map(function(src, i) {
             return /*#__PURE__*/React.createElement("div", { key:i, style:{ borderRadius:10, overflow:"hidden", aspectRatio:"1" } },
@@ -10181,7 +10300,7 @@ function TrackingLoader(_ref) {
         store && store.whatsapp ? /*#__PURE__*/React.createElement("a", {
           href:"https://wa.me/"+(store.whatsapp||"").replace(/[^0-9]/g,""), target:"_blank",
           style:{ display:"inline-flex", alignItems:"center", gap:8, padding:"13px 28px", background:"#25D366", color:"#fff", borderRadius:12, fontWeight:700, fontSize:14, textDecoration:"none", marginBottom:18 }
-        }, "💬 Contactar al taller") : null,
+        }, /*#__PURE__*/React.createElement(MessageCircle,{size:15}), "Contactar al taller") : null,
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#A39DB0", marginTop:8 } }, "Powered by GlobalAcce · Actualizado en tiempo real")
       )
     )
@@ -10250,8 +10369,8 @@ function PublicCatalogLoader(_ref) {
     /*#__PURE__*/React.createElement("div", { style:{color:"#EF4444",fontSize:16,fontWeight:700,textAlign:"center",maxWidth:300} }, errorMsg),
     /*#__PURE__*/React.createElement("button", {
       onClick: function(){ loadFromFirebase(3); },
-      style:{padding:"10px 24px",background:"#10E08A",border:"none",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:14}
-    }, "🔄 Reintentar")
+      style:{padding:"10px 24px",background:"#10E08A",border:"none",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:8}
+    }, /*#__PURE__*/React.createElement(RefreshCw,{size:15}), "Reintentar")
   );
 
   if (!pubData || !clientId) return /*#__PURE__*/React.createElement("div", {
@@ -10307,7 +10426,7 @@ function UpdateBanner() {
     }
   },
     /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:10, marginBottom:10 } },
-      /*#__PURE__*/React.createElement("div", { style:{ fontSize:28 } }, "🎉"),
+      /*#__PURE__*/React.createElement(PartyPopper, { size: 26, color: "#E8621A" }),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { style:{ fontWeight:800, fontSize:16, color:"#0A0A0A" } }, "Nueva versión disponible"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#888" } }, "Versión " + update.version + " · Actual: " + APP_VERSION)
@@ -10324,9 +10443,9 @@ function UpdateBanner() {
         style: {
           flex: 1, textAlign:"center", padding:"11px 16px", borderRadius:10,
           background:"#E8621A", color:"#fff", textDecoration:"none",
-          fontWeight:700, fontSize:14
+          fontWeight:700, fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", gap:7
         }
-      }, "⬇️ Descargar"),
+      }, /*#__PURE__*/React.createElement(Download, { size: 15 }), "Descargar"),
       /*#__PURE__*/React.createElement("button", {
         onClick: function(){ setDismissed(true); },
         style: {
@@ -10879,12 +10998,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
         stockBadge = '<span style="background:#DCFCE7;color:#16A34A;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Disponible</span>';
       }
 
+      var _pkgIco = "<svg width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='#CBD5E1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='m21 8-9-5-9 5 9 5 9-5Z'/><path d='M3 8v8l9 5 9-5V8'/><path d='M12 13v8'/></svg>";
       var imgHtml = p.image
         ? '<img src="' + _escHtml(p.image) + '" alt="' + _escHtml(p.name||"") + '" style="width:100%;height:160px;object-fit:cover;display:block;border-radius:10px 10px 0 0;" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">'
-          + '<div style="display:none;height:160px;align-items:center;justify-content:center;font-size:48px;background:#F8FAFC;border-radius:10px 10px 0 0;">📦</div>'
-        : '<div style="height:160px;display:flex;align-items:center;justify-content:center;font-size:48px;background:#F8FAFC;border-radius:10px 10px 0 0;">📦</div>';
+          + '<div style="display:none;height:160px;align-items:center;justify-content:center;background:#F8FAFC;border-radius:10px 10px 0 0;">' + _pkgIco + '</div>'
+        : '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:#F8FAFC;border-radius:10px 10px 0 0;">' + _pkgIco + '</div>';
 
-      var featStar = p.featured ? '<span style="position:absolute;top:8px;left:8px;background:#FBBF24;color:#000;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">⭐ TOP</span>' : "";
+      var featStar = p.featured ? '<span style="display:inline-flex;align-items:center;gap:3;position:absolute;top:8px;left:8px;background:#FBBF24;color:#000;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">★ TOP</span>' : "";
 
       var desc = p.description ? '<div style="font-size:11px;color:#64748B;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + _escHtml(p.description) + '</div>' : "";
       var sku  = p.sku ? '<div style="font-size:10px;color:#94A3B8;margin-top:3px;">SKU: ' + _escHtml(p.sku) + '</div>' : "";
@@ -10945,7 +11065,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 
       // Botón imprimir (no aparece en impresión)
       + '<div class="no-print" style="margin-bottom:20px;display:flex;gap:10px;">'
-      + '<button onclick="window.print()" style="background:linear-gradient(135deg,#EF4444,#F97316);color:#fff;border:none;padding:10px 22px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Imprimir / Guardar PDF</button>'
+      + '<button onclick="window.print()" style="background:linear-gradient(135deg,#EF4444,#F97316);color:#fff;border:none;padding:10px 22px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Imprimir / Guardar PDF</button>'
       + '<button onclick="window.close()" style="background:#F1F5F9;color:#64748B;border:none;padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">✕ Cerrar</button>'
       + '</div>'
 
