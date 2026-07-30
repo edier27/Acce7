@@ -1093,7 +1093,8 @@ var INIT = {
     notes: ""
   }],
   sales: [],
-  cashflow: []
+  cashflow: [],
+  celulares: []
 };
 var IS = {
   background: T.surface,
@@ -1458,7 +1459,7 @@ function ResumenDia(_props) {
     ),
 
     // 4 tarjetas de totales
-    /*#__PURE__*/React.createElement("div",{ style:{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 } },
+    /*#__PURE__*/React.createElement("div",{ style:{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:16,marginBottom:16 } },
       [
         { label:"Ventas",       valor:totalVentas,   color:T.green,  icon:ShoppingCart,  n:ventasHoy.length,   view:"sales" },
         { label:"Reparaciones", valor:totalReps,     color:"#8B5CF6",icon:Wrench,        n:repsHoy.length,     view:"repairs" },
@@ -1467,16 +1468,19 @@ function ResumenDia(_props) {
       ].map(function(x){
         return /*#__PURE__*/React.createElement("div",{ key:x.label,
           onClick:function(){ setView(x.view); },
-          onMouseEnter:function(e){ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 16px rgba(0,0,0,0.10)"; e.currentTarget.style.borderColor=x.color; },
-          onMouseLeave:function(e){ e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.05)"; e.currentTarget.style.borderColor=T.border; },
-          style:{ background:T.card,border:"1px solid "+T.border,borderRadius:14,padding:"14px",cursor:"pointer",transition:"all 0.15s ease",boxShadow:"0 1px 3px rgba(0,0,0,0.05)",display:"flex",flexDirection:"column",gap:8 }
+          onMouseEnter:function(e){ e.currentTarget.style.transform="translateY(-3px)"; e.currentTarget.style.boxShadow="0 10px 24px rgba(0,0,0,0.16)"; e.currentTarget.style.borderColor=x.color; },
+          onMouseLeave:function(e){ e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)"; e.currentTarget.style.borderColor=T.border; },
+          style:{ position:"relative",overflow:"hidden",background:T.surface,border:"1px solid "+T.border,borderRadius:16,padding:"16px",cursor:"pointer",transition:"all 0.18s ease",boxShadow:"0 2px 8px rgba(0,0,0,0.08)" }
         },
-          /*#__PURE__*/React.createElement("div",{ style:{ display:"inline-flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:9,background:x.color+"1A" } },
-            /*#__PURE__*/React.createElement(x.icon,{ size:15,color:x.color })
+          /*#__PURE__*/React.createElement("div",{ style:{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 } },
+            /*#__PURE__*/React.createElement("div",{ style:{ fontSize:11,color:T.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.04em",marginTop:4 } }, x.label),
+            /*#__PURE__*/React.createElement("div",{ style:{ width:34,height:34,borderRadius:10,background:x.color+"20",display:"flex",alignItems:"center",justifyContent:"center",color:x.color,flexShrink:0 } },
+              /*#__PURE__*/React.createElement(x.icon,{ size:16,color:x.color })
+            )
           ),
-          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:11,color:T.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.04em" } }, x.label),
-          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:18,fontWeight:800,color:x.color,lineHeight:1.1 } }, fmtD(x.valor)),
-          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:11,color:T.muted } }, x.n+" mov.")
+          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:19,fontWeight:800,color:T.text,lineHeight:1.1 } }, fmtD(x.valor)),
+          /*#__PURE__*/React.createElement("div",{ style:{ fontSize:11,color:T.muted,marginTop:4 } }, x.n+" mov."),
+          /*#__PURE__*/React.createElement("div",{ style:{ position:"absolute",bottom:0,left:0,right:0,height:3,background:x.color,opacity:0.8 } })
         );
       })
     ),
@@ -1997,6 +2001,9 @@ function RepairsView(_ref9) {
     color: T.muted
   }), /*#__PURE__*/React.createElement("input", {
     value: search,
+    type: "search",
+    autoComplete: "off",
+    name: "search-repairs",
     onChange: function onChange(e) {
       return setSearch(e.target.value);
     },
@@ -3208,6 +3215,9 @@ function InventoryView(_ref11) {
     color: T.muted
   }), /*#__PURE__*/React.createElement("input", {
     value: search,
+    type: "search",
+    autoComplete: "off",
+    name: "search-inventory-items",
     onChange: function onChange(e) {
       return setSearch(e.target.value);
     },
@@ -3677,6 +3687,9 @@ function ProductsView(_ref13) {
     color: T.muted
   }), /*#__PURE__*/React.createElement("input", {
     value: search,
+    type: "search",
+    autoComplete: "off",
+    name: "search-products",
     onChange: function onChange(e) {
       return setSearch(e.target.value);
     },
@@ -4186,6 +4199,422 @@ function ProductModal(_ref14) {
   }, "Cancelar")))));
 }
 
+// ─── CELULARES ───────────────────────────────────────────
+function CelularesView(_refCel) {
+  var data = _refCel.data,
+    save = _refCel.save,
+    notify = _refCel.notify;
+  var _useStateCelS = useState(""),
+    _useStateCelS2 = _slicedToArray(_useStateCelS, 2),
+    search = _useStateCelS2[0],
+    setSearch = _useStateCelS2[1];
+  var _useStateCelF = useState("Todos"),
+    _useStateCelF2 = _slicedToArray(_useStateCelF, 2),
+    filtroEstado = _useStateCelF2[0],
+    setFiltroEstado = _useStateCelF2[1];
+  var _useStateCelM = useState(null),
+    _useStateCelM2 = _slicedToArray(_useStateCelM, 2),
+    modal = _useStateCelM2[0],
+    setModal = _useStateCelM2[1];
+  var _useStateCelV = useState(null),
+    _useStateCelV2 = _slicedToArray(_useStateCelV, 2),
+    ventaModal = _useStateCelV2[0],
+    setVentaModal = _useStateCelV2[1];
+  var _useStateCelSend = useState(false),
+    _useStateCelSend2 = _slicedToArray(_useStateCelSend, 2),
+    sendModal = _useStateCelSend2[0],
+    setSendModal = _useStateCelSend2[1];
+
+  var EMPTY = {
+    id: uid(),
+    marca: "",
+    modelo: "",
+    condicion: "Nuevo",
+    precio: "",
+    imei: "",
+    capacidad: "",
+    ram: "",
+    color: "",
+    bateria: "",
+    accesorios: "",
+    descripcion: "",
+    photos: [],
+    estado: "Disponible",
+    fecha: today()
+  };
+
+  var celulares = data.celulares || [];
+  var filtered = celulares.filter(function (c) {
+    var q = search.toLowerCase();
+    var matchSearch = !search || (c.marca || "").toLowerCase().includes(q) || (c.modelo || "").toLowerCase().includes(q) || (c.imei || "").includes(search);
+    var matchEstado = filtroEstado === "Todos" || c.estado === filtroEstado;
+    return matchSearch && matchEstado;
+  });
+
+  var del = function del(id) {
+    if (!confirm("¿Eliminar este celular?")) return;
+    save(Object.assign({}, data, { celulares: celulares.filter(function (c) { return c.id !== id; }) }));
+    notify("Celular eliminado");
+  };
+
+  var disponibles = celulares.filter(function (c) { return c.estado !== "Vendido"; }).length;
+  var ESTADOS_FILTRO = ["Todos", "Disponible", "Reservado", "Vendido"];
+
+  return /*#__PURE__*/React.createElement("div", null,
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" } },
+      /*#__PURE__*/React.createElement("div", {
+        style: { display: "flex", alignItems: "center", gap: 8, background: T.surface, border: "1px solid ".concat(T.border), borderRadius: 8, padding: "0 12px", flex: "1 1 180px" }
+      },
+        /*#__PURE__*/React.createElement(Search, { size: 15, color: T.muted }),
+        /*#__PURE__*/React.createElement("input", {
+          value: search,
+          type: "search",
+          autoComplete: "off",
+          name: "search-celulares",
+          onChange: function onChange(e) { return setSearch(e.target.value); },
+          placeholder: "Buscar por marca, modelo o IMEI...",
+          style: { background: "none", border: "none", color: T.text, outline: "none", fontSize: 14, padding: "9px 0", width: "100%", fontFamily: "inherit" }
+        })
+      ),
+      /*#__PURE__*/React.createElement(Btn, {
+        variant: "ghost",
+        icon: /*#__PURE__*/React.createElement(Share2, { size: 15 }),
+        onClick: function onClick() { return setSendModal(true); }
+      }, "Enviar cat\xE1logo"),
+      /*#__PURE__*/React.createElement(Btn, {
+        icon: /*#__PURE__*/React.createElement(Plus, { size: 15 }),
+        onClick: function onClick() { return setModal({ mode: "add", celular: Object.assign({}, EMPTY) }); }
+      }, "Nuevo Celular")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" } },
+      ESTADOS_FILTRO.map(function (est) {
+        var active = filtroEstado === est;
+        return /*#__PURE__*/React.createElement("button", {
+          key: est,
+          onClick: function () { return setFiltroEstado(est); },
+          style: {
+            padding: "6px 14px", borderRadius: 20, border: "1px solid ".concat(active ? T.accent : T.border),
+            background: active ? T.accentDim : "transparent", color: active ? T.accent : T.muted,
+            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit"
+          }
+        }, est);
+      })
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted, marginBottom: 14 } }, disponibles, " disponible", disponibles !== 1 ? "s" : "", " de ", celulares.length, " registrados"),
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))", gap: 16 }
+    }, filtered.map(function (c) {
+      var estadoColor = c.estado === "Disponible" ? T.green : c.estado === "Reservado" ? T.yellow : T.muted;
+      var estadoBg = c.estado === "Disponible" ? "rgba(0,200,150,0.92)" : c.estado === "Reservado" ? "rgba(255,211,42,0.92)" : "rgba(100,116,139,0.85)";
+      return /*#__PURE__*/React.createElement("div", {
+        key: c.id,
+        style: { background: T.card, border: "1px solid ".concat(T.border), borderRadius: 12, overflow: "hidden", opacity: c.estado === "Vendido" ? 0.65 : 1 }
+      },
+        /*#__PURE__*/React.createElement("div", { style: { position: "relative", height: 180, background: T.bg, overflow: "hidden", display: "flex" } },
+          (c.photos && c.photos[0])
+            ? /*#__PURE__*/React.createElement("img", { src: c.photos[0], alt: "", style: { width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }, onClick: function () { window.open(c.photos[0]); } })
+            : /*#__PURE__*/React.createElement("div", { style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: T.dim } }, /*#__PURE__*/React.createElement(Smartphone, { size: 48 })),
+          c.photos && c.photos[1] && /*#__PURE__*/React.createElement("img", {
+            src: c.photos[1], alt: "",
+            style: { position: "absolute", bottom: 8, right: 8, width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "2px solid #fff", cursor: "pointer" },
+            onClick: function () { window.open(c.photos[1]); }
+          }),
+          /*#__PURE__*/React.createElement("div", { style: { position: "absolute", top: 8, left: 8 } },
+            /*#__PURE__*/React.createElement(Badge, { label: c.estado, color: estadoColor, bg: estadoBg })
+          ),
+          /*#__PURE__*/React.createElement("div", { style: { position: "absolute", top: 8, right: 8 } },
+            /*#__PURE__*/React.createElement(Badge, { label: c.condicion, color: c.condicion === "Nuevo" ? T.accent : T.orange, bg: "rgba(0,0,0,0.75)" })
+          )
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { padding: 16 } },
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4, lineHeight: 1.3 } }, c.marca, " ", c.modelo),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 800, color: T.green, marginBottom: 10 } }, fmt(Number(c.precio) || 0)),
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 2, marginBottom: 14, fontSize: 13, color: T.muted } },
+            c.capacidad && /*#__PURE__*/React.createElement("div", null, "• ", c.capacidad, c.ram ? " · " + c.ram + " RAM" : ""),
+            c.color && /*#__PURE__*/React.createElement("div", null, "• Color: ", c.color),
+            c.condicion === "Usado" && c.bateria && /*#__PURE__*/React.createElement("div", null, "• Bater\xEDa: ", c.bateria, "%"),
+            c.imei && /*#__PURE__*/React.createElement("div", null, "• IMEI: ", c.imei),
+            c.estado === "Vendido" && c.vendidoA && /*#__PURE__*/React.createElement("div", { style: { color: T.accent } }, "• Vendido a: ", c.vendidoA)
+          ),
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 5, flexWrap: "wrap" } },
+            /*#__PURE__*/React.createElement(Btn, {
+              small: true,
+              icon: /*#__PURE__*/React.createElement(Edit2, { size: 11 }),
+              onClick: function onClick() { return setModal({ mode: "edit", celular: Object.assign({}, c, { photos: c.photos || [] }) }); }
+            }, "Editar"),
+            c.estado !== "Vendido" && /*#__PURE__*/React.createElement(Btn, {
+              small: true,
+              variant: "success",
+              icon: /*#__PURE__*/React.createElement(DollarSign, { size: 11 }),
+              onClick: function onClick() { return setVentaModal(c); }
+            }, "Vender"),
+            c.estado === "Vendido" && /*#__PURE__*/React.createElement(Btn, {
+              small: true,
+              variant: "ghost",
+              icon: /*#__PURE__*/React.createElement(Printer, { size: 11 }),
+              onClick: function onClick() { return showPrintModal(function (type, tw) { printCelularReceipt(c, (data.settings && data.settings.storeName) || "ACCE PRO", type, tw); }); }
+            }, "Factura"),
+            /*#__PURE__*/React.createElement(Btn, {
+              small: true,
+              variant: "danger",
+              icon: /*#__PURE__*/React.createElement(Trash2, { size: 11 }),
+              onClick: function onClick() { return del(c.id); }
+            }, "Borrar")
+          )
+        )
+      );
+    }),
+    filtered.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: { gridColumn: "1/-1", padding: 60, textAlign: "center", color: T.muted }
+    },
+      /*#__PURE__*/React.createElement(Smartphone, { size: 48, style: { marginBottom: 12, opacity: 0.3 } }),
+      /*#__PURE__*/React.createElement("div", null, "No hay celulares registrados. Agrega el primero.")
+    )),
+    modal && /*#__PURE__*/React.createElement(CelularModal, { modal: modal, setModal: setModal, data: data, save: save, notify: notify }),
+    ventaModal && /*#__PURE__*/React.createElement(VenderCelularModal, {
+      celular: ventaModal,
+      onClose: function () { return setVentaModal(null); },
+      data: data,
+      save: save,
+      notify: notify
+    }),
+    sendModal && /*#__PURE__*/React.createElement(SendCelularesModal, { data: data, onClose: function () { return setSendModal(false); } })
+  );
+}
+
+function CelularModal(_refCM) {
+  var modal = _refCM.modal,
+    setModal = _refCM.setModal,
+    data = _refCM.data,
+    save = _refCM.save,
+    notify = _refCM.notify;
+  var _useStateCM = useState(modal.celular),
+    _useStateCM2 = _slicedToArray(_useStateCM, 2),
+    form = _useStateCM2[0],
+    setForm = _useStateCM2[1];
+  var set = function set(k, v) {
+    return setForm(function (f) {
+      var o = Object.assign({}, f);
+      o[k] = v;
+      return o;
+    });
+  };
+  var isNew = modal.mode === "add";
+
+  var _compressAndAddPhoto = function (file) {
+    if ((form.photos || []).length >= 2) { notify("M\xE1ximo 2 fotos por celular", "error"); return; }
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var img = new Image();
+      img.onload = function () {
+        var canvas = document.createElement("canvas");
+        var maxS = 900, w = img.width, h = img.height;
+        if (w > maxS || h > maxS) { if (w > h) { h = Math.round(h * maxS / w); w = maxS; } else { w = Math.round(w * maxS / h); h = maxS; } }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+        setForm(function (f) { return Object.assign({}, f, { photos: (f.photos || []).concat([dataUrl]) }); });
+        notify("✅ Foto a\xF1adida");
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  var _removePhoto = function (idx) {
+    if (!confirm("¿Eliminar esta foto?")) return;
+    setForm(function (f) { return Object.assign({}, f, { photos: (f.photos || []).filter(function (_, i) { return i !== idx; }) }); });
+  };
+
+  var handleSave = function () {
+    if (!form.marca || !form.modelo || !form.precio) {
+      notify("Marca, modelo y precio son requeridos", "error");
+      return;
+    }
+    var cel = Object.assign({}, form, { precio: Number(form.precio) });
+    var celulares = data.celulares || [];
+    var updated = isNew ? celulares.concat([cel]) : celulares.map(function (c) { return c.id === form.id ? cel : c; });
+    save(Object.assign({}, data, { celulares: updated }));
+    notify(isNew ? "Celular agregado" : "Celular actualizado");
+    setModal(null);
+  };
+
+  return /*#__PURE__*/React.createElement(ModalWrap, {
+    title: isNew ? "Nuevo Celular" : "Editar Celular",
+    onClose: function () { return setModal(null); },
+    wide: true
+  },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+        /*#__PURE__*/React.createElement(Field, { label: "Marca *", value: form.marca, onChange: function (v) { return set("marca", v); }, placeholder: "Samsung, iPhone, Xiaomi...", required: true }),
+        /*#__PURE__*/React.createElement(Field, { label: "Modelo *", value: form.modelo, onChange: function (v) { return set("modelo", v); }, placeholder: "Galaxy S23, iPhone 13...", required: true })
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+        /*#__PURE__*/React.createElement(Field, { label: "Condici\xF3n", value: form.condicion, onChange: function (v) { return set("condicion", v); }, options: ["Nuevo", "Usado"] }),
+        /*#__PURE__*/React.createElement(Field, { label: "Precio (COP) *", value: form.precio, onChange: function (v) { return set("precio", v); }, type: "number", placeholder: "800000", required: true })
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 } },
+        /*#__PURE__*/React.createElement(Field, { label: "Capacidad", value: form.capacidad, onChange: function (v) { return set("capacidad", v); }, placeholder: "128GB" }),
+        /*#__PURE__*/React.createElement(Field, { label: "RAM", value: form.ram, onChange: function (v) { return set("ram", v); }, placeholder: "8GB" }),
+        /*#__PURE__*/React.createElement(Field, { label: "Color", value: form.color, onChange: function (v) { return set("color", v); }, placeholder: "Negro" })
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: form.condicion === "Usado" ? "1fr 1fr" : "1fr", gap: 12 } },
+        form.condicion === "Usado" && /*#__PURE__*/React.createElement(Field, { label: "Salud de bater\xEDa (%)", value: form.bateria, onChange: function (v) { return set("bateria", v); }, type: "number", placeholder: "85" }),
+        /*#__PURE__*/React.createElement(Field, { label: "IMEI", value: form.imei, onChange: function (v) { return set("imei", v); }, placeholder: "356938035643809" })
+      ),
+      /*#__PURE__*/React.createElement(Field, { label: "Accesorios incluidos", value: form.accesorios, onChange: function (v) { return set("accesorios", v); }, placeholder: "Cargador, caja, aud\xEDfonos..." }),
+      /*#__PURE__*/React.createElement(Field, { label: "Descripci\xF3n", value: form.descripcion, onChange: function (v) { return set("descripcion", v); }, textarea: true, rows: 3, placeholder: "Detalles adicionales, estado est\xE9tico, etc." }),
+      /*#__PURE__*/React.createElement("div", { style: { background: T.bg, borderRadius: 8, padding: "12px 13px" } },
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: (form.photos && form.photos.length > 0) ? 10 : 0 } },
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, "📷 Fotos (m\xE1x. 2)"),
+          (form.photos || []).length < 2 && /*#__PURE__*/React.createElement("label", {
+            style: { display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", background: T.accent, color: "#0D1B35", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }
+          },
+            "📷 A\xF1adir Foto",
+            /*#__PURE__*/React.createElement("input", {
+              type: "file", accept: "image/*", capture: "environment",
+              style: { display: "none" },
+              onChange: function (e) { var f = e.target.files && e.target.files[0]; if (f) _compressAndAddPhoto(f); e.target.value = ""; }
+            })
+          )
+        ),
+        (form.photos && form.photos.length > 0)
+          ? /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } },
+              form.photos.map(function (src, i) {
+                return /*#__PURE__*/React.createElement("div", { key: i, style: { position: "relative", borderRadius: 7, overflow: "hidden", aspectRatio: "1" } },
+                  /*#__PURE__*/React.createElement("img", { src: src, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }, onClick: function () { window.open(src); } }),
+                  /*#__PURE__*/React.createElement("button", {
+                    onClick: function () { _removePhoto(i); },
+                    style: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(239,68,68,0.92)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1 }
+                  }, "\xD7")
+                );
+              })
+            )
+          : /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, textAlign: "center", padding: "10px 0" } }, "Sin fotos \xB7 agrega hasta 2 desde la c\xE1mara o galer\xEDa")
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8 } },
+        /*#__PURE__*/React.createElement(Btn, { onClick: handleSave, icon: /*#__PURE__*/React.createElement(Check, { size: 15 }) }, isNew ? "Guardar Celular" : "Guardar Cambios"),
+        /*#__PURE__*/React.createElement(Btn, { variant: "ghost", onClick: function () { return setModal(null); } }, "Cancelar")
+      )
+    )
+  );
+}
+
+function VenderCelularModal(_refVM) {
+  var celular = _refVM.celular,
+    onClose = _refVM.onClose,
+    data = _refVM.data,
+    save = _refVM.save,
+    notify = _refVM.notify;
+  var _useStateVM = useState({
+      vendidoA: "", vendidoTel: "", precioVenta: celular.precio || "", medioPago: "Efectivo", notasVenta: "", garantiaDias: ""
+    }),
+    _useStateVM2 = _slicedToArray(_useStateVM, 2),
+    form = _useStateVM2[0],
+    setForm = _useStateVM2[1];
+  var set = function (k, v) {
+    return setForm(function (f) {
+      var o = Object.assign({}, f);
+      o[k] = v;
+      return o;
+    });
+  };
+  var handleVender = function () {
+    if (!form.vendidoA || !form.precioVenta) {
+      notify("Nombre del cliente y precio final son requeridos", "error");
+      return;
+    }
+    var updatedCel = Object.assign({}, celular, {
+      estado: "Vendido",
+      vendidoA: form.vendidoA,
+      vendidoTel: form.vendidoTel,
+      precioVenta: Number(form.precioVenta),
+      medioPago: form.medioPago,
+      notasVenta: form.notasVenta,
+      garantiaDias: Number(form.garantiaDias) || 0,
+      fechaVenta: today()
+    });
+    var celulares = (data.celulares || []).map(function (c) { return c.id === celular.id ? updatedCel : c; });
+    save(Object.assign({}, data, { celulares: celulares }));
+    notify("✅ Venta registrada");
+    onClose();
+    showPrintModal(function (type, tw) {
+      printCelularReceipt(updatedCel, (data.settings && data.settings.storeName) || "ACCE PRO", type, tw);
+    });
+  };
+  return /*#__PURE__*/React.createElement(ModalWrap, { title: "Vender " + celular.marca + " " + celular.modelo, onClose: onClose },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+      /*#__PURE__*/React.createElement("div", { style: { background: T.bg, borderRadius: 8, padding: "10px 13px", fontSize: 14, color: T.text } },
+        celular.marca, " ", celular.modelo, " · ", celular.condicion, " · Precio lista: ", fmt(Number(celular.precio) || 0)
+      ),
+      /*#__PURE__*/React.createElement(Field, { label: "Nombre del cliente *", value: form.vendidoA, onChange: function (v) { return set("vendidoA", v); }, required: true, placeholder: "Nombre completo" }),
+      /*#__PURE__*/React.createElement(Field, { label: "Tel\xE9fono del cliente", value: form.vendidoTel, onChange: function (v) { return set("vendidoTel", v); }, placeholder: "300 000 0000" }),
+      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+        /*#__PURE__*/React.createElement(Field, { label: "Precio final de venta *", value: form.precioVenta, onChange: function (v) { return set("precioVenta", v); }, type: "number", required: true }),
+        /*#__PURE__*/React.createElement(Field, { label: "Forma de pago", value: form.medioPago, onChange: function (v) { return set("medioPago", v); }, options: ["Efectivo", "Transferencia", "Tarjeta", "Otro"] })
+      ),
+      /*#__PURE__*/React.createElement(Field, { label: "Garant\xEDa (d\xEDas)", value: form.garantiaDias, onChange: function (v) { return set("garantiaDias", v); }, type: "number", placeholder: "30" }),
+      /*#__PURE__*/React.createElement(Field, { label: "Notas", value: form.notasVenta, onChange: function (v) { return set("notasVenta", v); }, textarea: true, rows: 2 }),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8 } },
+        /*#__PURE__*/React.createElement(Btn, { onClick: handleVender, variant: "success", icon: /*#__PURE__*/React.createElement(DollarSign, { size: 15 }) }, "Confirmar Venta y Generar Factura"),
+        /*#__PURE__*/React.createElement(Btn, { variant: "ghost", onClick: onClose }, "Cancelar")
+      )
+    )
+  );
+}
+
+function SendCelularesModal(_refSM) {
+  var data = _refSM.data,
+    onClose = _refSM.onClose;
+  var disponibles = (data.celulares || []).filter(function (c) { return c.estado !== "Vendido"; });
+  var buildMsg = function () {
+    if (disponibles.length === 0) return "Por el momento no tengo celulares disponibles.";
+    var lines = disponibles.map(function (c) {
+      var specs = [c.capacidad, c.ram ? c.ram + " RAM" : "", c.color].filter(Boolean).join(" · ");
+      var accesorios = c.accesorios ? "\nAccesorios: " + c.accesorios : "";
+      return "📱 *" + c.marca + " " + c.modelo + "* (" + c.condicion + ")" + (specs ? "\n" + specs : "") + accesorios + "\nPrecio: " + fmt(Number(c.precio) || 0);
+    });
+    return "¡Hola! Estos son los celulares disponibles:\n\n" + lines.join("\n\n") + "\n\n¿Cu\xE1l te interesa? 📲";
+  };
+  var msg = buildMsg();
+  var copyMsg = function () {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg);
+    }
+  };
+  var customers = (data.customers || []).filter(function (c) { return c.phone; });
+  return /*#__PURE__*/React.createElement(ModalWrap, { title: "Enviar cat\xE1logo de celulares", onClose: onClose, wide: true },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted } }, disponibles.length, " celular", disponibles.length !== 1 ? "es" : "", " disponible", disponibles.length !== 1 ? "s" : "", " se incluir\xE1n en el mensaje."),
+      /*#__PURE__*/React.createElement("div", {
+        style: { background: T.bg, borderRadius: 8, padding: "12px 13px", fontSize: 13, color: T.text, whiteSpace: "pre-wrap", maxHeight: 200, overflow: "auto" }
+      }, msg),
+      /*#__PURE__*/React.createElement(Btn, { variant: "ghost", onClick: copyMsg }, "Copiar mensaje"),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 6 } }, "Enviar a un cliente"),
+      customers.length === 0
+        ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted } }, "No tienes clientes con tel\xE9fono registrado a\xFAn.")
+        : /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflow: "auto" } },
+            customers.map(function (c) {
+              return /*#__PURE__*/React.createElement("div", {
+                key: c.id,
+                style: { display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg, borderRadius: 8, padding: "8px 12px" }
+              },
+                /*#__PURE__*/React.createElement("div", null,
+                  /*#__PURE__*/React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: T.text } }, c.name),
+                  /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted } }, c.phone)
+                ),
+                /*#__PURE__*/React.createElement("a", {
+                  href: "https://wa.me/57" + c.phone.replace(/\D/g, "") + "?text=" + encodeURIComponent(msg),
+                  target: "_blank",
+                  style: { display: "inline-flex", alignItems: "center", gap: 5, background: "#25D366", color: "#fff", padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: "none" }
+                }, "📱 Enviar")
+              );
+            })
+          ),
+      /*#__PURE__*/React.createElement(Btn, { variant: "ghost", onClick: onClose }, "Cerrar")
+    )
+  );
+}
+
 // ─── CUSTOMERS ───────────────────────────────────────────
 
 function CustomersView(_ref15) {
@@ -4247,6 +4676,9 @@ function CustomersView(_ref15) {
     color: T.muted
   }), /*#__PURE__*/React.createElement("input", {
     value: search,
+    type: "search",
+    autoComplete: "off",
+    name: "search-customers",
     onChange: function onChange(e) {
       return setSearch(e.target.value);
     },
@@ -5177,7 +5609,7 @@ function PublicView(_ref17) {
   /*#__PURE__*/React.createElement("div", { style: { display:"flex", gap:12, marginBottom:16, flexWrap:"wrap" } },
     /*#__PURE__*/React.createElement("div", { style: { display:"flex", alignItems:"center", gap:10, background:"white", border:"1.5px solid #e2e8f0", borderRadius:14, padding:"0 16px", flex:"1 1 220px", boxShadow:"0 2px 10px rgba(0,0,0,0.05)" } },
       /*#__PURE__*/React.createElement(Search, { size:16, color:"#94a3b8" }),
-      /*#__PURE__*/React.createElement("input", { value:search, onChange:function(e){ return setSearch(e.target.value); }, placeholder:"Buscar productos...", style:{ background:"none", border:"none", outline:"none", fontSize:14, padding:"13px 0", width:"100%", color:"#1e293b", fontFamily:"inherit" } })
+      /*#__PURE__*/React.createElement("input", { value:search, type:"search", autoComplete:"off", name:"search-catalog", onChange:function(e){ return setSearch(e.target.value); }, placeholder:"Buscar productos...", style:{ background:"none", border:"none", outline:"none", fontSize:14, padding:"13px 0", width:"100%", color:"#1e293b", fontFamily:"inherit" } })
     )
   ),
   /*#__PURE__*/React.createElement("div", { style: { display:"flex", gap:8, marginBottom:28, flexWrap:"wrap" } },
@@ -5892,6 +6324,104 @@ function printReceipt(sale) {
   }
 }
 
+function printCelularReceipt(cel) {
+  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ACCE PRO";
+  var forceType = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+  var forceTw   = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : null;
+  var fmtCOP = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
+  var ptype = forceType || _getPrinterType();
+  var recId = cel.id.slice(-6).toUpperCase();
+  var precioVenta = cel.precioVenta != null ? cel.precioVenta : cel.precio;
+  var equipo = (cel.marca || "") + " " + (cel.modelo || "");
+  var specsLines = [
+    cel.capacidad ? ["Capacidad", cel.capacidad] : null,
+    cel.ram ? ["RAM", cel.ram] : null,
+    cel.color ? ["Color", cel.color] : null,
+    cel.imei ? ["IMEI", cel.imei] : null,
+    (cel.condicion === "Usado" && cel.bateria) ? ["Salud batería", cel.bateria + "%"] : null,
+    cel.accesorios ? ["Accesorios", cel.accesorios] : null
+  ].filter(Boolean);
+
+  if (ptype === "termica") {
+    var tw = forceTw || _getThermalWidth();
+    var baseFont = tw === "80" ? "12px" : "11px";
+    var bigFont = tw === "80" ? "15px" : "13px";
+    var storeFont = tw === "80" ? "17px" : "15px";
+
+    var specsHtml = specsLines.map(function(sl){
+      return "<div style=\"display:flex;justify-content:space-between;font-size:"+baseFont+"\"><span>"+_escHtml(sl[0])+"</span><span style=\"font-weight:bold\">"+_escHtml(sl[1])+"</span></div>";
+    }).join("");
+
+    _printHTML(
+      "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Factura #"+recId+"</title>"+
+      "<style>*{margin:0;padding:0;box-sizing:border-box}"+
+      "body{font-family:'Arial',sans-serif;font-size:"+baseFont+";line-height:1.4;color:#000;padding:2px;width:100%;font-weight:bold;-webkit-font-smoothing:none}"+
+      "*{font-weight:bold!important}"+
+      ".c{text-align:center}"+
+      ".store{font-size:"+storeFont+";font-weight:900;letter-spacing:0.5px}"+
+      ".small{font-size:10px;font-weight:bold}"+
+      ".dash{border-top:2px solid #000;margin:6px 0;height:1px}"+
+      ".big{font-size:"+bigFont+";font-weight:900}"+
+      ".total-row{display:flex;justify-content:space-between;font-weight:bold;font-size:"+bigFont+";border-top:1px solid #000;padding-top:5px;margin-top:5px}"+
+      "@media print{.no-print{display:none}}</style></head><body>"+
+      "<div class=\"c store\">"+_escHtml(storeName)+"</div>"+
+      "<div class=\"c small\">FACTURA DE VENTA — CELULAR</div>"+
+      "<div class=\"dash\"></div>"+
+      "<div class=\"c\"><span class=\"big\">#"+_escHtml(recId)+"</span><br><span class=\"small\">"+_escHtml(cel.fechaVenta || today())+" | "+_escHtml(cel.medioPago || "")+"</span></div>"+
+      "<div class=\"dash\"></div>"+
+      "<div style=\"font-size:"+bigFont+";font-weight:bold;margin-bottom:4px\">"+_escHtml(equipo)+" ("+_escHtml(cel.condicion || "")+")</div>"+
+      specsHtml+
+      "<div class=\"total-row\"><span>TOTAL</span><span>"+fmtCOP(precioVenta)+"</span></div>"+
+      (cel.vendidoA?"<div style=\"margin-top:6px;font-size:10px\"><b>Cliente:</b> "+_escHtml(cel.vendidoA)+(cel.vendidoTel?" · "+_escHtml(cel.vendidoTel):"")+"</div>":"")+
+      ((cel.garantiaDias||0) > 0 ? "<div style=\"font-size:10px\"><b>Garantía:</b> "+cel.garantiaDias+" días</div>" : "")+
+      (cel.notasVenta?"<div style=\"font-size:10px;margin-top:4px\"><b>Notas:</b> "+_escHtml(cel.notasVenta)+"</div>":"")+
+      "<div class=\"dash\"></div>"+
+      "<div class=\"c small\">Gracias por su compra</div>"+
+      "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>"+
+      "</body></html>",
+      ptype
+    );
+
+  } else {
+    var specsRows = specsLines.map(function(sl){
+      return "<tr><td style=\"padding:8px 14px;border-bottom:1px solid #EEE;font-size:13px;color:#888\">"+_escHtml(sl[0])+"</td><td style=\"padding:8px 14px;border-bottom:1px solid #EEE;font-size:14px;font-weight:600\">"+_escHtml(sl[1])+"</td></tr>";
+    }).join("");
+    _printHTML("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Factura #"+recId+"</title><style>"+
+      "*{margin:0;padding:0;box-sizing:border-box}"+
+      "body{font-family:'Segoe UI',Arial,sans-serif;color:#1A1A1A;padding:40px 48px;line-height:1.5}"+
+      ".header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #E8621A;padding-bottom:20px;margin-bottom:28px}"+
+      ".brand h1{font-size:28px;font-weight:800;color:#0A0A0A;letter-spacing:-0.5px}"+
+      ".brand p{font-size:12px;color:#888;letter-spacing:2px;text-transform:uppercase;margin-top:2px}"+
+      ".rec-box{text-align:right}.rec-box .lbl{font-size:13px;color:#888}.rec-box .id{font-size:24px;font-weight:800;color:#E8621A}.rec-box .date{font-size:12px;color:#888;margin-top:4px}"+
+      ".meta{display:flex;gap:32px;margin-bottom:24px;font-size:14px;flex-wrap:wrap}"+
+      ".meta div span{color:#888;display:block;font-size:12px}.meta div strong{color:#1A1A1A}"+
+      ".equipo-box{background:#FAFAFA;border:1px solid #EEE;border-radius:12px;padding:16px 20px;margin-bottom:20px}"+
+      ".equipo-box h3{font-size:17px;margin-bottom:6px}"+
+      "table.items{width:100%;border-collapse:collapse;margin-bottom:24px}"+
+      "table.items th{background:#0A0A0A;color:#fff;padding:10px 14px;text-align:left;font-size:13px}"+
+      ".total-box{display:flex;justify-content:flex-end;margin-bottom:30px}"+
+      ".total-inner{background:#FFF7F2;border:1px solid #FFE0CC;border-radius:12px;padding:16px 28px;min-width:240px}"+
+      ".total-inner .row{display:flex;justify-content:space-between;font-size:22px;font-weight:800;color:#E8621A}"+
+      ".footer{text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #EEE;font-size:12px;color:#999}"+
+      "@media print{button{display:none}}"+
+      "</style></head><body>"+
+      "<div class=\"header\"><div class=\"brand\"><h1>"+_escHtml(storeName)+"</h1><p>Factura de Venta — Celular</p></div>"+
+      "<div class=\"rec-box\"><div class=\"lbl\">Factura N°</div><div class=\"id\">#"+_escHtml(recId)+"</div><div class=\"date\">"+_escHtml(cel.fechaVenta || today())+"</div></div></div>"+
+      "<div class=\"meta\"><div><span>Forma de pago</span><strong>"+_escHtml(cel.medioPago || "")+"</strong></div>"+
+      (cel.vendidoA?"<div><span>Cliente</span><strong>"+_escHtml(cel.vendidoA)+"</strong></div>":"")+
+      (cel.vendidoTel?"<div><span>Teléfono</span><strong>"+_escHtml(cel.vendidoTel)+"</strong></div>":"")+
+      ((cel.garantiaDias||0) > 0 ? "<div><span>Garantía</span><strong>"+cel.garantiaDias+" días</strong></div>" : "")+
+      "</div>"+
+      "<div class=\"equipo-box\"><h3>"+_escHtml(equipo)+" · "+_escHtml(cel.condicion || "")+"</h3>"+
+      "<table>"+specsRows+"</table></div>"+
+      "<div class=\"total-box\"><div class=\"total-inner\"><div class=\"row\"><span>TOTAL</span><span>"+fmtCOP(precioVenta)+"</span></div></div></div>"+
+      (cel.notasVenta?"<p style=\"font-size:13px;color:#666;margin-bottom:20px\"><strong>Nota:</strong> "+_escHtml(cel.notasVenta)+"</p>":"")+
+      "<div class=\"footer\">¡Gracias por su compra!</div>"+
+      "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#E8621A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">🖨 Imprimir</button></div>"+
+      "</body></html>", ptype);
+  }
+}
+
 // ── VENTAS VIEW ──────────────────────────────────
 function VentasView(_ref18) {
   var data = _ref18.data,
@@ -6448,6 +6978,9 @@ function SaleModal(_ref19) {
     color: T.muted
   }), /*#__PURE__*/React.createElement("input", {
     value: search,
+    type: "search",
+    autoComplete: "off",
+    name: "search-inventory-picker",
     onChange: function onChange(e) {
       setSearch(e.target.value);
       setShowPicker(true);
@@ -8487,6 +9020,12 @@ function App(_appProps) {
       size: 17
     })
   }, {
+    id: "celulares",
+    label: "Celulares",
+    icon: /*#__PURE__*/React.createElement(Smartphone, {
+      size: 17
+    })
+  }, {
     id: "customers",
     label: "Clientes",
     icon: /*#__PURE__*/React.createElement(Users, {
@@ -8703,6 +9242,7 @@ function App(_appProps) {
   view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
   view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
   view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
+  view === "celulares" && /*#__PURE__*/React.createElement(CelularesView, { data: data, save: save, notify: notify }),
   view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
   view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
   view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
@@ -8886,38 +9426,34 @@ function _loadAuthLocal(username) { return _loadUserLocal(username); } // alias
 
 
 var _AS = {
-  page: { minHeight:"100dvh", background:"#F7F6FA", display:"flex", fontFamily:"'DM Sans',system-ui,sans-serif", position:"relative" },
-  // Panel visual izquierdo
-  visual: { flex:"1.1", position:"relative", background:"linear-gradient(162deg,#17141A 0%,#1D1814 52%,#241A12 115%)", display:"flex", flexDirection:"column", justifyContent:"space-between", padding:"56px 52px", overflow:"hidden" },
-  visualPhoto: { position:"absolute", inset:0, zIndex:1, backgroundImage:"linear-gradient(155deg,rgba(21,16,29,0.88) 0%,rgba(35,20,14,0.74) 50%,rgba(232,84,15,0.42) 150%), url('https://images.unsplash.com/premium_photo-1663047430590-f2947119c3f0?fm=jpg&q=85&w=3000&auto=format&fit=crop')", backgroundSize:"cover", backgroundPosition:"center" },
-  visualIllustration: { position:"absolute", inset:0, zIndex:0, backgroundImage:"url(\"data:image/svg+xml;charset=utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20600%20800%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22pg%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%231a1320%22/%3E%3Cstop%20offset%3D%220.5%22%20stop-color%3D%22%232a1a12%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233a1e0c%22/%3E%3C/linearGradient%3E%3CradialGradient%20id%3D%22rg%22%20cx%3D%220.7%22%20cy%3D%220.35%22%20r%3D%220.8%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ff6a2b%22%20stop-opacity%3D%220.35%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ff6a2b%22%20stop-opacity%3D%220%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect%20width%3D%22600%22%20height%3D%22800%22%20fill%3D%22url%28%23pg%29%22/%3E%3Crect%20width%3D%22600%22%20height%3D%22800%22%20fill%3D%22url%28%23rg%29%22/%3E%3Cg%20opacity%3D%220.08%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%221%22%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22240%22%20fill%3D%22none%22/%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22180%22%20fill%3D%22none%22/%3E%3Ccircle%20cx%3D%22300%22%20cy%3D%22350%22%20r%3D%22120%22%20fill%3D%22none%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28300%20360%29%20rotate%28-18%29%22%3E%3Crect%20x%3D%22-90%22%20y%3D%22-160%22%20width%3D%22180%22%20height%3D%22320%22%20rx%3D%2226%22%20fill%3D%22%230d0a12%22%20stroke%3D%22%23ff6a2b%22%20stroke-width%3D%222.5%22%20opacity%3D%220.9%22/%3E%3Crect%20x%3D%22-78%22%20y%3D%22-145%22%20width%3D%22156%22%20height%3D%22278%22%20rx%3D%2214%22%20fill%3D%22%23151019%22/%3E%3Crect%20x%3D%22-78%22%20y%3D%22-145%22%20width%3D%22156%22%20height%3D%22278%22%20rx%3D%2214%22%20fill%3D%22url%28%23rg%29%22%20opacity%3D%220.5%22/%3E%3Ccircle%20cx%3D%220%22%20cy%3D%22148%22%20r%3D%2210%22%20fill%3D%22none%22%20stroke%3D%22%23ff6a2b%22%20stroke-width%3D%222%22%20opacity%3D%220.6%22/%3E%3Crect%20x%3D%22-30%22%20y%3D%22-152%22%20width%3D%2260%22%20height%3D%227%22%20rx%3D%223.5%22%20fill%3D%22%23ff6a2b%22%20opacity%3D%220.4%22/%3E%3Cg%20opacity%3D%220.55%22%20stroke%3D%22%23ff8c42%22%20stroke-width%3D%222%22%20fill%3D%22none%22%3E%3Ccircle%20cx%3D%22-40%22%20cy%3D%22-80%22%20r%3D%2213%22/%3E%3Ccircle%20cx%3D%22-40%22%20cy%3D%22-80%22%20r%3D%224%22%20fill%3D%22%23ff8c42%22/%3E%3Cpath%20d%3D%22M-40%20-67%20v40%20M-53%20-54%20h26%22/%3E%3Ccircle%20cx%3D%2235%22%20cy%3D%2220%22%20r%3D%2211%22/%3E%3Ccircle%20cx%3D%2235%22%20cy%3D%2220%22%20r%3D%223.5%22%20fill%3D%22%23ff8c42%22/%3E%3Cpath%20d%3D%22M35%2031%20v34%20M24%2042%20h22%22/%3E%3Ccircle%20cx%3D%22-20%22%20cy%3D%2290%22%20r%3D%2210%22/%3E%3C/g%3E%3C/g%3E%3Cg%20transform%3D%22translate%28170%20250%29%20rotate%2835%29%22%20opacity%3D%220.8%22%3E%3Crect%20x%3D%22-7%22%20y%3D%22-90%22%20width%3D%2214%22%20height%3D%22150%22%20rx%3D%226%22%20fill%3D%22%23c0c0c8%22/%3E%3Crect%20x%3D%22-9%22%20y%3D%22-100%22%20width%3D%2218%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23ff6a2b%22/%3E%3Cpath%20d%3D%22M-7%2060%20L0%2078%20L7%2060%20Z%22%20fill%3D%22%23909098%22/%3E%3C/g%3E%3Cg%20transform%3D%22translate%28440%20470%29%20rotate%28-42%29%22%20opacity%3D%220.8%22%3E%3Crect%20x%3D%22-6%22%20y%3D%22-80%22%20width%3D%2212%22%20height%3D%22130%22%20rx%3D%225%22%20fill%3D%22%23b0b0b8%22/%3E%3Crect%20x%3D%22-13%22%20y%3D%2248%22%20width%3D%2226%22%20height%3D%2240%22%20rx%3D%225%22%20fill%3D%22%23ff6a2b%22/%3E%3Cpath%20d%3D%22M-6%20-80%20Q0%20-96%206%20-80%20Z%22%20fill%3D%22%23d0d0d8%22/%3E%3C/g%3E%3Cg%20opacity%3D%220.5%22%3E%3Ccircle%20cx%3D%22120%22%20cy%3D%22600%22%20r%3D%225%22%20fill%3D%22%23ff8c42%22/%3E%3Ccircle%20cx%3D%22480%22%20cy%3D%22180%22%20r%3D%224%22%20fill%3D%22%23ff8c42%22/%3E%3Ccircle%20cx%3D%2290%22%20cy%3D%22420%22%20r%3D%223%22%20fill%3D%22%23ffb088%22/%3E%3Ccircle%20cx%3D%22510%22%20cy%3D%22620%22%20r%3D%226%22%20fill%3D%22%23ff6a2b%22/%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%22700%22%20r%3D%223%22%20fill%3D%22%23ffb088%22/%3E%3C/g%3E%3C/svg%3E\")", backgroundSize:"cover", backgroundPosition:"center" },
-  visualGlow: { position:"absolute", zIndex:1, width:500, height:500, borderRadius:"50%", background:"radial-gradient(circle,rgba(255,106,43,0.4),transparent 70%)", bottom:-150, right:-100, filter:"blur(70px)", pointerEvents:"none" },
-  visualGlow2: { position:"absolute", zIndex:1, width:360, height:360, borderRadius:"50%", background:"radial-gradient(circle,rgba(124,79,232,0.25),transparent 70%)", top:-80, left:-60, filter:"blur(60px)", pointerEvents:"none" },
-  visualPattern: { position:"absolute", zIndex:1, inset:0, opacity:0.5, backgroundImage:"radial-gradient(rgba(255,255,255,0.06) 1px,transparent 1px)", backgroundSize:"22px 22px", pointerEvents:"none" },
-  visualBrand: { position:"relative", zIndex:2, display:"flex", alignItems:"center", gap:12 },
-  visualBrandMark: { width:42, height:42, borderRadius:12, background:"linear-gradient(135deg,#E8540F,#FF6A2B)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:21, color:"#fff", boxShadow:"0 8px 24px rgba(232,84,15,0.4)" },
-  visualBrandName: { fontWeight:800, fontSize:19, color:"#fff", letterSpacing:"-0.02em" },
-  visualCenter: { position:"relative", zIndex:2, maxWidth:440 },
-  visualBadge: { display:"inline-flex", alignItems:"center", gap:8, padding:"7px 15px", borderRadius:30, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", fontSize:12, fontWeight:600, color:"#FFD0B0", marginBottom:26, backdropFilter:"blur(10px)" },
-  visualHeadline: { fontSize:42, fontWeight:800, color:"#fff", lineHeight:1.08, letterSpacing:"-0.04em", marginBottom:18 },
-  visualHeadlineEm: { background:"linear-gradient(120deg,#FF8C42,#FFD0B0)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" },
-  visualText: { fontSize:16, color:"rgba(255,255,255,0.7)", lineHeight:1.7, marginBottom:32 },
-  visualFeats: { display:"flex", flexDirection:"column", gap:14 },
-  visualFeat: { display:"flex", alignItems:"center", gap:13, fontSize:15, color:"rgba(255,255,255,0.9)", fontWeight:500 },
-  visualFeatIcon: { width:38, height:38, borderRadius:11, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 },
-  visualFooter: { position:"relative", zIndex:2, fontSize:13, color:"rgba(255,255,255,0.5)" },
-  // Lado derecho del formulario
-  formSide: { flex:"0.9", display:"flex", alignItems:"center", justifyContent:"center", padding:24, position:"relative", overflowY:"auto", maxHeight:"100dvh" },
-  card: { background:"#FFFFFF", borderRadius:24, padding:"44px 40px", width:"100%", maxWidth:400, position:"relative", zIndex:2 },
-  logo: { width:62, height:62, background:"linear-gradient(135deg,#E8540F,#FF6A2B)", borderRadius:17, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 18px", boxShadow:"0 10px 28px rgba(232,84,15,0.28), inset 0 1px 2px rgba(255,255,255,0.3)" },
-  title: { fontWeight:800, fontSize:27, color:"#15101D", letterSpacing:"-0.04em", textAlign:"center", lineHeight:1.1 },
-  sub: { fontSize:14, color:"#8A8398", textAlign:"center", marginTop:6, marginBottom:30 },
-  input: { width:"100%", padding:"15px 18px", border:"1.5px solid rgba(20,15,30,0.10)", borderRadius:14, fontSize:15, outline:"none", fontFamily:"inherit", marginBottom:13, boxSizing:"border-box", background:"#FAFAFC", color:"#15101D", transition:"all .2s", fontWeight:500 },
-  btn: { width:"100%", padding:"15px", background:"linear-gradient(135deg,#E8540F,#FF6A2B)", color:"#fff", border:"none", borderRadius:14, fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"inherit", marginBottom:11, boxShadow:"0 8px 24px rgba(232,84,15,0.32)", letterSpacing:"-0.01em", transition:"all .25s" },
-  btnGhost: { width:"100%", padding:"14px", background:"#FFFFFF", color:"#15101D", border:"1.5px solid rgba(20,15,30,0.10)", borderRadius:14, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:10, transition:"all .2s" },
-  err: { background:"rgba(232,84,15,0.08)", color:"#C24A12", borderRadius:12, padding:"12px 16px", fontSize:13, marginBottom:14, border:"1px solid rgba(232,84,15,0.15)", fontWeight:500 },
-  ok: { background:"rgba(22,168,95,0.08)", color:"#16A85F", borderRadius:12, padding:"12px 16px", fontSize:13, marginBottom:14, border:"1px solid rgba(22,168,95,0.15)", fontWeight:500 },
-  link: { background:"none", border:"none", color:"#E8540F", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }
+  // Fondo tipo "mesh gradient" difuminado + tarjeta de cristal (glassmorphism)
+  page: {
+    minHeight:"100dvh", width:"100%", display:"flex", alignItems:"center", justifyContent:"center",
+    fontFamily:"'DM Sans',system-ui,sans-serif", position:"relative", overflow:"auto", padding:24, boxSizing:"border-box",
+    background: "radial-gradient(circle at 12% 8%, #6B4A9A 0%, transparent 42%),"+
+      "radial-gradient(circle at 88% 15%, #3E4C9E 0%, transparent 48%),"+
+      "radial-gradient(circle at 15% 92%, #8A3F63 0%, transparent 46%),"+
+      "radial-gradient(circle at 85% 88%, #4A5FA8 0%, transparent 50%),"+
+      "radial-gradient(circle at 50% 45%, #7A3A5E 0%, transparent 55%),"+
+      "linear-gradient(135deg, #221530 0%, #171025 100%)"
+  },
+  card: {
+    background:"rgba(255,255,255,0.08)", backdropFilter:"blur(26px)", WebkitBackdropFilter:"blur(26px)",
+    border:"1px solid rgba(255,255,255,0.22)", borderRadius:28, padding:"44px 38px 36px",
+    width:"100%", maxWidth:380, position:"relative", zIndex:2,
+    boxShadow:"0 30px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12)"
+  },
+  avatarWrap: { width:92, height:92, borderRadius:"50%", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.22)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 24px" },
+  title: { fontWeight:700, fontSize:19, color:"#fff", textAlign:"center", letterSpacing:"-0.01em" },
+  sub: { fontSize:12.5, color:"rgba(255,255,255,0.55)", textAlign:"center", marginTop:6, marginBottom:28, lineHeight:1.5 },
+  inputWrap: { display:"flex", alignItems:"center", gap:11, borderBottom:"1px solid rgba(255,255,255,0.28)", padding:"9px 2px", marginBottom:22 },
+  input: { flex:1, width:"100%", background:"transparent", border:"none", outline:"none", color:"#fff", fontSize:14, fontFamily:"inherit", fontWeight:500 },
+  checkRow: { display:"flex", alignItems:"center", gap:8, fontSize:12.5, color:"rgba(255,255,255,0.6)", cursor:"pointer" },
+  btn: { width:"100%", padding:"14px", background:"linear-gradient(135deg,#6B4A9A,#3E4C9E)", color:"#fff", border:"none", borderRadius:30, fontSize:13, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", cursor:"pointer", fontFamily:"inherit", marginBottom:14, boxShadow:"0 14px 32px rgba(62,45,130,0.45)", transition:"transform .15s" },
+  btnGhost: { width:"100%", padding:"13px", background:"rgba(255,255,255,0.07)", color:"#fff", border:"1px solid rgba(255,255,255,0.2)", borderRadius:30, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:12, letterSpacing:"0.02em" },
+  err: { background:"rgba(239,68,68,0.16)", color:"#FFD9D9", borderRadius:10, padding:"10px 14px", fontSize:12.5, marginBottom:16, border:"1px solid rgba(239,68,68,0.32)", fontWeight:500 },
+  ok: { background:"rgba(34,197,94,0.16)", color:"#D3F8E1", borderRadius:10, padding:"10px 14px", fontSize:12.5, marginBottom:16, border:"1px solid rgba(34,197,94,0.32)", fontWeight:500 },
+  link: { background:"none", border:"none", color:"rgba(255,255,255,0.75)", fontSize:12.5, cursor:"pointer", fontFamily:"inherit", fontWeight:500, fontStyle:"italic", textDecoration:"underline" }
 };
 
 // ─── HELPERS DE CUENTAS ────────────────────────────────────
@@ -9041,45 +9577,25 @@ function _svgIco(html, size) {
     dangerouslySetInnerHTML: { __html: html }
   });
 }
-var _FEAT_ICONS = {
-  rep: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M14.9 6.1a3.9 3.9 0 0 0-5.2 5.1L4 16.9 7.1 20l5.7-5.7a3.9 3.9 0 0 0 5.1-5.2l-2.4 2.4-2.2-.6-.6-2.2 2.2-2.6Z" stroke="#FFB894" stroke-width="1.5" stroke-linejoin="round"/></svg>',
-  inv: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3.5 7.5 12 3.5l8.5 4M3.5 7.5 12 11.5l8.5-4M3.5 7.5v9L12 20.5m0-9v9m8.5-13v9L12 20.5" stroke="#FFB894" stroke-width="1.5" stroke-linejoin="round"/></svg>',
-  cloud: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M7 18.5a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17.2 9.6a3.7 3.7 0 0 1-.2 8.9H7Z" stroke="#FFB894" stroke-width="1.5" stroke-linejoin="round"/></svg>'
+var _AUTH_ICONS = {
+  email: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4V6Z" stroke="rgba(255,255,255,0.55)" stroke-width="1.6" stroke-linejoin="round"/><path d="m4.5 6.5 7.5 6 7.5-6" stroke="rgba(255,255,255,0.55)" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+  lock: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="rgba(255,255,255,0.55)" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="rgba(255,255,255,0.55)" stroke-width="1.6"/></svg>',
+  user: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.3" stroke="rgba(255,255,255,0.55)" stroke-width="1.6"/><path d="M5 19c1.2-3.4 4-5 7-5s5.8 1.6 7 5" stroke="rgba(255,255,255,0.55)" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  code: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="m9 8-4 4 4 4M15 8l4 4-4 4" stroke="rgba(255,255,255,0.55)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  userPlus: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="9.5" cy="8.5" r="3.3" stroke="#fff" stroke-width="1.7"/><path d="M3.5 19c1.1-3.3 3.7-5 6-5s4.9 1.7 6 5" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M18.5 8.5v5M16 11h5" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>'
 };
-function _buildVisualPanel(headline1, headlineEm) {
-  return /*#__PURE__*/React.createElement("div", { style: _AS.visual, className:"auth-visual" },
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualGlow }),
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualGlow2 }),
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualPattern }),
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualBrand },
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualBrandMark }, "A"),
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualBrandName }, "ACCE PRO")
-    ),
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualCenter },
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualBadge },
-        _svgIco('<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#FFB894" stroke-width="1.6"/><path d="m8.5 12 2.3 2.3 4.7-4.6" stroke="#FFB894" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>', 13),
-        /*#__PURE__*/React.createElement("span", null, "Software de gestión profesional")
-      ),
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualHeadline },
-        headline1, " ",
-        /*#__PURE__*/React.createElement("span", { style: _AS.visualHeadlineEm }, headlineEm)
-      ),
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualText },
-        "Reparaciones, inventario, ventas y catálogo online en un solo lugar. Todo sincronizado en la nube."
-      ),
-      /*#__PURE__*/React.createElement("div", { style: _AS.visualFeats },
-        /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
-          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, _svgIco(_FEAT_ICONS.rep)), "Control total de reparaciones"
-        ),
-        /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
-          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, _svgIco(_FEAT_ICONS.inv)), "Inventario y catálogo sincronizado"
-        ),
-        /*#__PURE__*/React.createElement("div", { style: _AS.visualFeat },
-          /*#__PURE__*/React.createElement("div", { style: _AS.visualFeatIcon }, _svgIco(_FEAT_ICONS.cloud)), "Respaldo automático en la nube"
-        )
-      )
-    ),
-    /*#__PURE__*/React.createElement("div", { style: _AS.visualFooter }, "© 2026 ACCE PRO · Tecnología para tu negocio")
+// Campo de auth estilo "cristal": ícono + línea inferior (sin caja), usado en las 4 pantallas de acceso
+function _authField(iconKey, inputProps) {
+  return /*#__PURE__*/React.createElement("div", { style: _AS.inputWrap },
+    _svgIco(_AUTH_ICONS[iconKey], 15),
+    /*#__PURE__*/React.createElement("input", Object.assign({ className:"trp-auth-input" }, inputProps, { style: Object.assign({}, _AS.input, inputProps.style) }))
+  );
+}
+// Fondo difuminado + estilos que no se pueden fijar inline (::placeholder)
+function _authBgStyleTag() {
+  return /*#__PURE__*/React.createElement("style", null,
+    ".trp-auth-input::placeholder{color:rgba(255,255,255,0.4)}"+
+    ".trp-auth-btn:hover{transform:translateY(-1px)}"
   );
 }
 
@@ -9095,6 +9611,7 @@ function LoginScreen(_ref) {
   var _l8 = useState(""), _la8 = _slicedToArray(_l8, 2), newPwd2 = _la8[0], setNewPwd2 = _la8[1];
   var _l9 = useState(""), _la9 = _slicedToArray(_l9, 2), email = _la9[0], setEmail = _la9[1];
   var _l10 = useState(false), _la10 = _slicedToArray(_l10, 2), migrateMode = _la10[0], setMigrateMode = _la10[1];
+  var _l11 = useState(true), _la11 = _slicedToArray(_l11, 2), remember = _la11[0], setRemember = _la11[1];
 
   // ── LOGIN con Firebase Auth (email + contraseña) ──
   var doLogin = function() {
@@ -9104,7 +9621,10 @@ function LoginScreen(_ref) {
     var auth = _authInst();
     if (!auth) { setErr("Servicio no disponible. Verifica tu internet."); return; }
     setLoading(true); setErr("");
-    auth.signInWithEmailAndPassword(em, pwd).then(function(cred) {
+    var persistence = remember ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION;
+    auth.setPersistence(persistence).catch(function(){}).then(function() {
+    return auth.signInWithEmailAndPassword(em, pwd);
+    }).then(function(cred) {
       var uid = cred.user.uid;
       window.__uid = uid;
       _loadProfile(uid).then(function(prof) {
@@ -9168,63 +9688,58 @@ function LoginScreen(_ref) {
   };
 
   if (resetMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
-    _buildVisualPanel("Recupera el acceso", "a tu cuenta"),
-    /*#__PURE__*/React.createElement("div", { style: _AS.formSide },
+    _authBgStyleTag(),
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.avatarWrap }, /*#__PURE__*/React.createElement(Smartphone, { size:34, color:"rgba(255,255,255,0.85)" })),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Restablecer contraseña"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Te enviaremos un enlace seguro a tu correo"),
       err && /*#__PURE__*/React.createElement("div", { style: err.startsWith("✅") ? _AS.ok : _AS.err }, err),
-      /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Tu correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doReset();}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("button", { onClick:doReset, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) }, loading ? "Enviando..." : "Enviar enlace de recuperación"),
+      _authField("email", { type:"email", placeholder:"Tu correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doReset();} }),
+      /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:doReset, disabled:loading, style:Object.assign({},_AS.btn,loading?{opacity:0.6}:{}) }, loading ? "Enviando..." : "Enviar enlace de recuperación"),
       /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(false);setErr("");}, style:_AS.btnGhost }, "← Volver")
-    )
     )
   );
 
   // ── PANTALLA: MIGRAR CUENTA ANTIGUA (usuario → correo) ──
   if (migrateMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
-    _buildVisualPanel("Vincula tu cuenta", "a un correo"),
-    /*#__PURE__*/React.createElement("div", { style: _AS.formSide },
+    _authBgStyleTag(),
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.avatarWrap }, /*#__PURE__*/React.createElement(Smartphone, { size:34, color:"rgba(255,255,255,0.85)" })),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Migrar cuenta antigua"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Vincula tu usuario actual a un correo para proteger tus datos. Tus datos NO se pierden."),
       err && /*#__PURE__*/React.createElement("div", { style: err.startsWith("✅") ? _AS.ok : _AS.err }, err),
-      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Tu usuario actual", value:user, onChange:function(e){setUser(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Tu contraseña actual", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Tu correo electrónico (nuevo acceso)", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Nueva contraseña (mín. 6 caracteres)", value:newPwd, onChange:function(e){setNewPwd(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Confirmar nueva contraseña", value:newPwd2, onChange:function(e){setNewPwd2(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("button", { onClick:doMigrate, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) }, loading ? "Vinculando..." : "Vincular y entrar"),
+      _authField("user", { type:"text", placeholder:"Tu usuario actual", value:user, onChange:function(e){setUser(e.target.value);setErr("");} }),
+      _authField("lock", { type:"password", placeholder:"Tu contraseña actual", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");} }),
+      _authField("email", { type:"email", placeholder:"Tu correo electrónico (nuevo acceso)", value:email, onChange:function(e){setEmail(e.target.value);setErr("");} }),
+      _authField("lock", { type:"password", placeholder:"Nueva contraseña (mín. 6 caracteres)", value:newPwd, onChange:function(e){setNewPwd(e.target.value);setErr("");} }),
+      _authField("lock", { type:"password", placeholder:"Confirmar nueva contraseña", value:newPwd2, onChange:function(e){setNewPwd2(e.target.value);setErr("");} }),
+      /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:doMigrate, disabled:loading, style:Object.assign({},_AS.btn,loading?{opacity:0.6}:{}) }, loading ? "Vinculando..." : "Vincular y entrar"),
       /*#__PURE__*/React.createElement("button", { onClick:function(){setMigrateMode(false);setErr("");}, style:_AS.btnGhost }, "← Volver al login")
-    )
     )
   );
 
-  var _visualPanel = _buildVisualPanel("Gestiona tu taller", "sin complicaciones");
-
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
-    _visualPanel,
-    /*#__PURE__*/React.createElement("div", { style: _AS.formSide },
+    _authBgStyleTag(),
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.avatarWrap }, /*#__PURE__*/React.createElement(Smartphone, { size:34, color:"rgba(255,255,255,0.85)" })),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "ACCE PRO"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Bienvenido de nuevo · Inicia sesión"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
-      /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("button", { onClick:doLogin, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
-        loading ? "Verificando..." : "Iniciar sesión"
-      ),
-      /*#__PURE__*/React.createElement("button", { onClick:onCreateNew, style:_AS.btnGhost }, "➕ Crear cuenta nueva"),
-      /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:4} },
+      _authField("email", { type:"email", placeholder:"Correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();} }),
+      _authField("lock", { type:"password", placeholder:"Contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();} }),
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:-6, marginBottom:24 } },
+        /*#__PURE__*/React.createElement("label", { style: _AS.checkRow },
+          /*#__PURE__*/React.createElement("input", { type:"checkbox", checked:remember, onChange:function(e){setRemember(e.target.checked);} }), "Recordarme"
+        ),
         /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(true);setErr("");}, style:_AS.link }, "¿Olvidaste tu contraseña?")
       ),
-      /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:8,borderTop:"1px solid rgba(128,128,150,0.2)",paddingTop:10} },
+      /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:doLogin, disabled:loading, style:Object.assign({},_AS.btn,loading?{opacity:0.6}:{}) },
+        loading ? "Verificando..." : "Iniciar sesión"
+      ),
+      /*#__PURE__*/React.createElement("button", { onClick:onCreateNew, style:Object.assign({},_AS.btnGhost,{display:"flex",alignItems:"center",justifyContent:"center",gap:8}) }, _svgIco(_AUTH_ICONS.userPlus,15), "Crear cuenta nueva"),
+      /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:8,borderTop:"1px solid rgba(255,255,255,0.14)",paddingTop:10} },
         /*#__PURE__*/React.createElement("button", { onClick:function(){setMigrateMode(true);setErr("");}, style:_AS.link }, "¿Cuenta antigua sin correo? Vincúlala aquí")
       )
-    )
     )
   );
 }
@@ -9323,27 +9838,25 @@ function CreateAccountScreen(_ref) {
   };
 
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
-    _buildVisualPanel("Empieza a gestionar", "tu negocio hoy"),
-    /*#__PURE__*/React.createElement("div", { style: _AS.formSide },
+    _authBgStyleTag(),
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.logo }, /*#__PURE__*/React.createElement(Smartphone, { size:30, color:"#fff" })),
+      /*#__PURE__*/React.createElement("div", { style: _AS.avatarWrap }, /*#__PURE__*/React.createElement(Smartphone, { size:34, color:"rgba(255,255,255,0.85)" })),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Crear cuenta nueva"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Necesitas un código de activación para registrarte"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
-      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Nombre de usuario", value:user, onChange:function(e){setUser(e.target.value.toLowerCase());setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"email", placeholder:"Correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Contraseña (mín. 6 caracteres)", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"password", placeholder:"Confirmar contraseña", value:pwd2, onChange:function(e){setPwd2(e.target.value);setErr("");}, style:_AS.input }),
-      /*#__PURE__*/React.createElement("input", { type:"text", placeholder:"Código de activación (ej: DEMO-20260527-XXXX)", value:code, onChange:function(e){setCode(e.target.value.toUpperCase());setErr("");}, onKeyDown:function(e){if(e.key==="Enter")crear();}, style:Object.assign({},_AS.input,{letterSpacing:"0.05em"}) }),
-      /*#__PURE__*/React.createElement("button", { onClick:crear, disabled:loading, style:Object.assign({},_AS.btn,loading?{background:"#D8D2E0",color:"#8A8398",boxShadow:"none"}:{}) },
+      _authField("user", { type:"text", placeholder:"Nombre de usuario", value:user, onChange:function(e){setUser(e.target.value.toLowerCase());setErr("");} }),
+      _authField("email", { type:"email", placeholder:"Correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");} }),
+      _authField("lock", { type:"password", placeholder:"Contraseña (mín. 6 caracteres)", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");} }),
+      _authField("lock", { type:"password", placeholder:"Confirmar contraseña", value:pwd2, onChange:function(e){setPwd2(e.target.value);setErr("");} }),
+      _authField("code", { type:"text", placeholder:"Código de activación (ej: DEMO-20260527-XXXX)", value:code, onChange:function(e){setCode(e.target.value.toUpperCase());setErr("");}, onKeyDown:function(e){if(e.key==="Enter")crear();}, style:{letterSpacing:"0.05em"} }),
+      /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:crear, disabled:loading, style:Object.assign({},_AS.btn,loading?{opacity:0.6}:{}) },
         loading ? "Creando cuenta..." : "Crear cuenta y entrar"
       ),
       /*#__PURE__*/React.createElement("button", { onClick:onBack, style:_AS.btnGhost }, "← Volver al login"),
-      /*#__PURE__*/React.createElement("div", { style:{fontSize:11,color:"#556",textAlign:"center",marginTop:4} },
+      /*#__PURE__*/React.createElement("div", { style:{fontSize:11,color:"rgba(255,255,255,0.5)",textAlign:"center",marginTop:4} },
         "¿No tienes código? ",
-        /*#__PURE__*/React.createElement("a", { href:"https://wa.me/"+WHATSAPP, target:"_blank", style:{color:"#E8540F",textDecoration:"none",fontWeight:600} }, "Contáctanos — "+PRECIO)
+        /*#__PURE__*/React.createElement("a", { href:"https://wa.me/"+WHATSAPP, target:"_blank", style:{color:"#FFB894",textDecoration:"none",fontWeight:600} }, "Contáctanos — "+PRECIO)
       )
-    )
     )
   );
 }
