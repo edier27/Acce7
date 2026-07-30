@@ -9430,24 +9430,24 @@ var _AS = {
   page: {
     minHeight:"100dvh", width:"100%", display:"flex", alignItems:"center", justifyContent:"center",
     fontFamily:"'DM Sans',system-ui,sans-serif", position:"relative", overflow:"auto", padding:24, boxSizing:"border-box",
-    background: "radial-gradient(circle at 12% 8%, #6B4A9A 0%, transparent 42%),"+
-      "radial-gradient(circle at 88% 15%, #3E4C9E 0%, transparent 48%),"+
-      "radial-gradient(circle at 15% 92%, #8A3F63 0%, transparent 46%),"+
-      "radial-gradient(circle at 85% 88%, #4A5FA8 0%, transparent 50%),"+
-      "radial-gradient(circle at 50% 45%, #7A3A5E 0%, transparent 55%),"+
-      "linear-gradient(135deg, #221530 0%, #171025 100%)"
+    background: "radial-gradient(circle at 12% 8%, #4A3270 0%, transparent 40%),"+
+      "radial-gradient(circle at 88% 15%, #2A3570 0%, transparent 46%),"+
+      "radial-gradient(circle at 15% 92%, #5E2A46 0%, transparent 44%),"+
+      "radial-gradient(circle at 85% 88%, #2F3A75 0%, transparent 48%),"+
+      "radial-gradient(circle at 50% 45%, #4A2440 0%, transparent 52%),"+
+      "linear-gradient(135deg, #0D0912 0%, #050308 100%)"
   },
   card: {
-    background:"rgba(255,255,255,0.08)", backdropFilter:"blur(26px)", WebkitBackdropFilter:"blur(26px)",
-    border:"1px solid rgba(255,255,255,0.22)", borderRadius:28, padding:"44px 38px 36px",
+    background:"rgba(0,0,0,0.32)", backdropFilter:"blur(26px)", WebkitBackdropFilter:"blur(26px)",
+    border:"1px solid rgba(255,255,255,0.16)", borderRadius:28, padding:"44px 38px 36px",
     width:"100%", maxWidth:380, position:"relative", zIndex:2,
-    boxShadow:"0 30px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12)"
+    boxShadow:"0 30px 80px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)"
   },
-  avatarWrap: { width:92, height:92, borderRadius:"50%", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.22)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 24px" },
-  title: { fontWeight:700, fontSize:19, color:"#fff", textAlign:"center", letterSpacing:"-0.01em" },
-  sub: { fontSize:12.5, color:"rgba(255,255,255,0.55)", textAlign:"center", marginTop:6, marginBottom:28, lineHeight:1.5 },
-  inputWrap: { display:"flex", alignItems:"center", gap:11, borderBottom:"1px solid rgba(255,255,255,0.28)", padding:"9px 2px", marginBottom:22 },
-  input: { flex:1, width:"100%", background:"transparent", border:"none", outline:"none", color:"#fff", fontSize:14, fontFamily:"inherit", fontWeight:500 },
+  avatarWrap: { width:92, height:92, borderRadius:"50%", background:"rgba(0,0,0,0.25)", border:"1px solid rgba(255,255,255,0.18)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 24px" },
+  title: { fontWeight:700, fontSize:20, color:"#fff", textAlign:"center", letterSpacing:"-0.01em" },
+  sub: { fontSize:13.5, color:"rgba(255,255,255,0.55)", textAlign:"center", marginTop:6, marginBottom:28, lineHeight:1.5 },
+  inputWrap: { display:"flex", alignItems:"center", gap:11, borderBottom:"1px solid rgba(255,255,255,0.28)", padding:"10px 2px", marginBottom:22 },
+  input: { flex:1, width:"100%", background:"transparent", border:"none", outline:"none", color:"#fff", fontSize:16.5, fontFamily:"inherit", fontWeight:500 },
   checkRow: { display:"flex", alignItems:"center", gap:8, fontSize:12.5, color:"rgba(255,255,255,0.6)", cursor:"pointer" },
   btn: { width:"100%", padding:"14px", background:"linear-gradient(135deg,#6B4A9A,#3E4C9E)", color:"#fff", border:"none", borderRadius:30, fontSize:13, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", cursor:"pointer", fontFamily:"inherit", marginBottom:14, boxShadow:"0 14px 32px rgba(62,45,130,0.45)", transition:"transform .15s" },
   btnGhost: { width:"100%", padding:"13px", background:"rgba(255,255,255,0.07)", color:"#fff", border:"1px solid rgba(255,255,255,0.2)", borderRadius:30, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:12, letterSpacing:"0.02em" },
@@ -9595,7 +9595,19 @@ function _authField(iconKey, inputProps) {
 function _authBgStyleTag() {
   return /*#__PURE__*/React.createElement("style", null,
     ".trp-auth-input::placeholder{color:rgba(255,255,255,0.4)}"+
-    ".trp-auth-btn:hover{transform:translateY(-1px)}"
+    ".trp-auth-btn:hover{transform:translateY(-1px)}"+
+    // Evita que el autocompletado del navegador pinte el campo de blanco/amarillo:
+    // fuerza fondo oscuro + texto blanco incluso cuando Chrome rellena el valor.
+    ".trp-auth-input:-webkit-autofill,"+
+    ".trp-auth-input:-webkit-autofill:hover,"+
+    ".trp-auth-input:-webkit-autofill:focus,"+
+    ".trp-auth-input:-webkit-autofill:active{"+
+      "-webkit-text-fill-color:#fff;"+
+      "-webkit-box-shadow:0 0 0px 1000px #120B1C inset;"+
+      "box-shadow:0 0 0px 1000px #120B1C inset;"+
+      "caret-color:#fff;"+
+      "transition:background-color 9999s ease-in-out 0s, color 9999s ease-in-out 0s;"+
+    "}"
   );
 }
 
