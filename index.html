@@ -612,7 +612,8 @@ var _LucideReact = LucideReact,
   ImageOff = _LucideReact.ImageOff,
   QrCode = _LucideReact.QrCode,
   Moon = _LucideReact.Moon,
-  Sun = _LucideReact.Sun;
+  Sun = _LucideReact.Sun,
+  LogOut = _LucideReact.LogOut;
 
 // ─── Theme System — Windows 11 Fluent Design ──────────────
 var DARK = {
@@ -1417,6 +1418,53 @@ var Toast = function Toast(_ref7) {
     size: 16,
     color: T.green
   }), " ", msg);
+};
+
+// ─── Spinner de puntos en anillo (pantallas de carga) ─────
+var DotRingSpinner = function DotRingSpinner(_ref7b) {
+  var _size = (_ref7b && _ref7b.size) || 84;
+  var _dot = (_ref7b && _ref7b.dotSize) || 9;
+  var _color = (_ref7b && _ref7b.color) || "#2648C9";
+  var _count = 12;
+  var _radius = _size / 2 - _dot;
+  var _dots = [];
+  for (var _i = 0; _i < _count; _i++) {
+    var _angle = (360 / _count) * _i;
+    var _delay = ((_count - _i) * (1.1 / _count)).toFixed(2);
+    _dots.push(/*#__PURE__*/React.createElement("div", {
+      key: _i,
+      style: { position: "absolute", top: "50%", left: "50%", width: 0, height: 0, transform: "rotate(".concat(_angle, "deg) translate(").concat(_radius, "px)") }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: _dot, height: _dot, borderRadius: "50%", background: _color,
+        marginLeft: -_dot / 2, marginTop: -_dot / 2,
+        animation: "dotRingPulse 1.1s ease-in-out infinite",
+        animationDelay: _delay + "s"
+      }
+    })));
+  }
+  return /*#__PURE__*/React.createElement("div", { style: { position: "relative", width: _size, height: _size, flexShrink: 0 } },
+    /*#__PURE__*/React.createElement("style", null, "@keyframes dotRingPulse{0%,100%{opacity:.2;transform:scale(.55)}50%{opacity:1;transform:scale(1)}}"),
+    _dots
+  );
+};
+// Pantalla de carga completa: anillo de puntos + título + subtítulo
+var LoadingScreen = function LoadingScreen(_ref7c) {
+  var title = (_ref7c && _ref7c.title) || "Cargando";
+  var subtitle = _ref7c && _ref7c.subtitle;
+  var bg = (_ref7c && _ref7c.bg) || "#F5F7FB";
+  return /*#__PURE__*/React.createElement("div", {
+    style: { minHeight: "100dvh", background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, fontFamily: "'DM Sans',system-ui,sans-serif" }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
+      /*#__PURE__*/React.createElement(DotRingSpinner, null),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 600, color: "#1E3A6E" } },
+        /*#__PURE__*/React.createElement("span", { style: { width: 8, height: 8, borderRadius: "50%", background: "#2648C9", flexShrink: 0 } }),
+        title
+      )
+    ),
+    subtitle && /*#__PURE__*/React.createElement("div", { style: { marginTop: 8, fontSize: 13, fontWeight: 700, color: "#1E3A6E", textAlign: "center", padding: "0 20px" } }, subtitle)
+  );
 };
 
 // ─── DASHBOARD ───────────────────────────────────────────
@@ -7428,11 +7476,6 @@ function SettingsView(_ref20) {
       });
     } catch(e) { doUpdate(); }
   };
-  var handleLogout = function() {
-    var lastUser = localStorage.getItem("trp_current_user");
-    if (lastUser) try { localStorage.removeItem("trp_session_" + lastUser); } catch(e) {}
-    onLogout();
-  };
   var labelStyle = {
     fontSize: 15,
     fontWeight: 600,
@@ -7934,10 +7977,6 @@ function SettingsView(_ref20) {
         style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
       }),
       /*#__PURE__*/React.createElement(Btn, { onClick: handleChangePwd, small: true }, isBypass ? "Establecer nueva contraseña" : "Cambiar contraseña")
-    ),
-    !isBypass && /*#__PURE__*/React.createElement("div", { style: { marginTop: 20, paddingTop: 16, borderTop: "1px solid ".concat(T.border) } },
-      /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, color: T.muted, marginBottom: 10 } }, "Cerrar sesión en este dispositivo"),
-      /*#__PURE__*/React.createElement(Btn, { onClick: handleLogout, variant: "ghost", small: true }, "Cerrar sesión")
     )
   ));
 }
@@ -8980,6 +9019,12 @@ function ProveedoresView(_pRef) {
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var onLogout = _appProps && _appProps.onLogout ? _appProps.onLogout : function(){};
+  var handleLogoutFromMenu = function() {
+    if (!confirm("¿Cerrar sesión?")) return;
+    var lastUser = localStorage.getItem("trp_current_user");
+    if (lastUser) { try { localStorage.removeItem("trp_session_" + lastUser); } catch(e) {} }
+    onLogout();
+  };
 
   // ─── TEMPORIZADOR DE INACTIVIDAD (10 minutos) ──────────
   var _it1 = useState(false), _ita1 = _slicedToArray(_it1, 2), showIdleWarn = _ita1[0], setShowIdleWarn = _ita1[1];
@@ -9051,6 +9096,13 @@ function App(_appProps) {
     _useState60 = _slicedToArray(_useState59, 2),
     data = _useState60[0],
     setData = _useState60[1];
+  // Tiempo mínimo de carga: evita que la pantalla de "Cargando" parpadee y
+  // muestre el software de golpe cuando los datos vienen de caché local.
+  var _mte = useState(false), _mtea = _slicedToArray(_mte, 2), minLoadTimeDone = _mtea[0], setMinLoadTimeDone = _mtea[1];
+  useEffect(function () {
+    var _t = setTimeout(function () { setMinLoadTimeDone(true); }, 3000);
+    return function () { clearTimeout(_t); };
+  }, []);
   var _useState61 = useState("dashboard"),
     _useState62 = _slicedToArray(_useState61, 2),
     view = _useState62[0],
@@ -9398,25 +9450,7 @@ function App(_appProps) {
     setOpenViews(next);
     if (view === id) { setView(next[next.length - 1]); }
   };
-  if (!data) return /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: T.bg,
-      height: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      color: T.accent,
-      fontFamily: "monospace",
-      fontSize: 18,
-      flexDirection: "column",
-      gap: 12
-    }
-  }, /*#__PURE__*/React.createElement(RefreshCw, {
-    size: 32,
-    style: {
-      animation: "spin 1s linear infinite"
-    }
-  }), /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}"), "Cargando ACCE PRO...");
+  if (!data || !minLoadTimeDone) return /*#__PURE__*/React.createElement(LoadingScreen, { title: "Cargando", subtitle: "Recuperando información necesaria" });
   if (publicMode) return /*#__PURE__*/React.createElement(PublicView, {
     data: data,
     settings: settings,
@@ -9628,7 +9662,15 @@ function App(_appProps) {
           padding: "10px 12px", border: "none", borderRadius: 8, cursor: "pointer",
           background: "transparent", color: T.accent, fontWeight: 600, fontSize: 14, fontFamily: "inherit", minHeight: 42
         }
-      }, /*#__PURE__*/React.createElement(ExternalLink, { size: 16 }), "Abrir Catálogo Público")
+      }, /*#__PURE__*/React.createElement(ExternalLink, { size: 16 }), "Abrir Catálogo Público"),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: function () { setStartMenuOpen(false); handleLogoutFromMenu(); },
+        style: {
+          display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+          padding: "10px 12px", border: "none", borderRadius: 8, cursor: "pointer",
+          background: "transparent", color: T.red, fontWeight: 600, fontSize: 14, fontFamily: "inherit", minHeight: 42
+        }
+      }, /*#__PURE__*/React.createElement(LogOut, { size: 16 }), "Cerrar sesión")
     )
   ),
 
@@ -10407,13 +10449,7 @@ function TrackingLoader(_ref) {
   var STAGES = ["Recibido","Diagnóstico","En Reparación","Listo","Entregado"];
   var STAGE_ICONS = { "Recibido":Inbox, "Diagnóstico":Search, "En Reparación":Wrench, "Listo":CheckCircle, "Entregado":Package, "Cancelado":XCircle };
 
-  if (loading) return /*#__PURE__*/React.createElement("div", {
-    style:{ minHeight:"100dvh", background:"#F7F6FA", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:14, fontFamily:"'DM Sans',system-ui,sans-serif" }
-  },
-    /*#__PURE__*/React.createElement("div", { style:{ width:48, height:48, borderRadius:14, background:"linear-gradient(135deg,#E8540F,#FF6A2B)", display:"flex", alignItems:"center", justifyContent:"center", animation:"pulse 1.5s ease-in-out infinite" } }, /*#__PURE__*/React.createElement(Smartphone, { size: 22, color: "#fff" })),
-    /*#__PURE__*/React.createElement("style", null, "@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}"),
-    /*#__PURE__*/React.createElement("div", { style:{color:"#8A8398",fontSize:14,fontWeight:500} }, "Cargando seguimiento...")
-  );
+  if (loading) return /*#__PURE__*/React.createElement(LoadingScreen, { title: "Cargando", subtitle: "Recuperando información de tu reparación" });
 
   if (errorMsg) return /*#__PURE__*/React.createElement("div", {
     style:{ minHeight:"100dvh", background:"#F7F6FA", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16, padding:24, fontFamily:"'DM Sans',system-ui,sans-serif" }
@@ -10636,13 +10672,7 @@ function PublicCatalogLoader(_ref) {
     loadFromFirebase(3); // 3 reintentos automáticos
   }, [clientId]);
 
-  if (loading) return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight:"100dvh", background:"#090E1A", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 }
-  },
-    /*#__PURE__*/React.createElement(RefreshCw, { size:28, color:"#10E08A", style:{animation:"spin 1s linear infinite"} }),
-    /*#__PURE__*/React.createElement("style", null, "@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}"),
-    /*#__PURE__*/React.createElement("div", { style:{color:"#7A8EAA",fontSize:13} }, "Cargando catálogo...")
-  );
+  if (loading) return /*#__PURE__*/React.createElement(LoadingScreen, { title: "Cargando", subtitle: "Recuperando catálogo de productos" });
 
   if (errorMsg) return /*#__PURE__*/React.createElement("div", {
     style: { minHeight:"100dvh", background:"#090E1A", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }
@@ -10839,6 +10869,10 @@ function Root() {
 
   var onLogin = function(userData) {
     window.__uid = userData.uid || window.__uid;
+    // Aviso a Chrome de que aquí "navegamos" (login exitoso), para que el
+    // aviso de "guardar contraseña" se resuelva en este momento y no quede
+    // diferido hasta el próximo guardado cualquiera dentro de la app.
+    try { window.history.replaceState(window.history.state, "", window.location.href); } catch(e) {}
     _startSession(userData);
     _checkLicenseAndEnter(userData);
   };
@@ -10878,11 +10912,7 @@ function Root() {
     return /*#__PURE__*/React.createElement(TrackingLoader, { clientId: _urlT.get("client"), repairId: _urlT.get("r") });
   }
 
-  if (checking) return /*#__PURE__*/React.createElement("div", {
-    style:{ minHeight:"100dvh", background:"#090E1A", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 }
-  }, /*#__PURE__*/React.createElement(RefreshCw, { size:28, color:"#10E08A" }),
-    /*#__PURE__*/React.createElement("div", { style:{color:"#7A8EAA",fontSize:13} }, "Cargando...")
-  );
+  if (checking) return /*#__PURE__*/React.createElement(LoadingScreen, { title: "Cargando", subtitle: "Recuperando información necesaria" });
 
   if (screen === "create") return /*#__PURE__*/React.createElement(CreateAccountScreen, {
     onCreated: onCreated,
