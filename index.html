@@ -928,7 +928,7 @@ function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trac
         + "\n\nImportante: *la garantia aplica unicamente para fallas de fabrica* relacionadas con la reparacion realizada. No cubre danos por golpes, humedad, presiones fuertes en pantalla ni mal uso del equipo.")
       : "\n\n*Este servicio no cuenta con garantia.*";
     var calificarMsg = trackUrl
-      ? ("\n\n¿Como le parecio nuestro servicio? Califiquenos aqui: " + trackUrl)
+      ? ("\n\n⭐ *Nos encantaria conocer su opinion.* ¿Nos regala 30 segundos para calificar nuestro servicio? Su opinion nos ayuda mucho a seguir mejorando y a que mas personas confien en nosotros.\n\n👉 " + trackUrl + "\n\n¡Gracias de antemano!")
       : "";
     msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* ha sido *entregado* exitosamente en *" + tienda + "*."
         + garantiaMsg
