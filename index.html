@@ -616,7 +616,8 @@ var _LucideReact = LucideReact,
   LogOut = _LucideReact.LogOut,
   MoreVertical = _LucideReact.MoreVertical,
   Store = _LucideReact.Store,
-  Palette = _LucideReact.Palette;
+  Palette = _LucideReact.Palette,
+  Bell = _LucideReact.Bell;
 
 // ─── Theme System — Windows 11 Fluent Design ──────────────
 var DARK = {
@@ -1878,7 +1879,25 @@ function DashboardView(_ref8) {
               /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 6, background: T.border, borderRadius: 3, overflow: "hidden" } },
                 /*#__PURE__*/React.createElement("div", { style: { width: pct + "%", height: "100%", background: "#F59E0B" } })
               ),
-              /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: T.muted, width: 22, textAlign: "right" } }, d.count)
+              /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: T.muted, width: 60, textAlign: "right" } }, pct + "% (" + d.count + ")")
+            );
+          })
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { marginTop: 18, paddingTop: 14, borderTop: "1px solid ".concat(T.border) } },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 } }, "Últimas reseñas"),
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 260, overflow: "auto" } },
+          _toConsumableArray(_all).sort(function(a, b) { return (b.date || "").localeCompare(a.date || ""); }).slice(0, 20).map(function(rt, ri) {
+            return /*#__PURE__*/React.createElement("div", { key: ri, style: { padding: "10px 12px", background: T.bg, borderRadius: 10, border: "1px solid ".concat(T.border) } },
+              /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 } },
+                /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: T.text } }, rt.customer || "Cliente anónimo"),
+                /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 1 } },
+                  [1, 2, 3, 4, 5].map(function(n) { return /*#__PURE__*/React.createElement(Star, { key: n, size: 11, color: "#F59E0B", fill: n <= (rt.rating || 0) ? "#F59E0B" : "none" }); })
+                )
+              ),
+              rt.device && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginBottom: rt.comment ? 4 : 0 } }, rt.device),
+              rt.comment && /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.text, fontStyle: "italic" } }, "“" + rt.comment + "”"),
+              rt.date && /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, marginTop: 5 } }, new Date(rt.date).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }))
             );
           })
         )
@@ -9064,6 +9083,17 @@ function App(_appProps) {
       setRatings(snap.docs.map(function (d) { return d.data(); }));
     }).catch(function () {});
   }, [clientId]);
+  var _notifOpen = useState(false), _notifOpenA = _slicedToArray(_notifOpen, 2), notifOpen = _notifOpenA[0], setNotifOpen = _notifOpenA[1];
+  var _seenAt = useState(function () {
+    try { return localStorage.getItem("trp_ratings_seen_" + clientId) || ""; } catch (e) { return ""; }
+  }), _seenAtA = _slicedToArray(_seenAt, 2), ratingsSeenAt = _seenAtA[0], setRatingsSeenAt = _seenAtA[1];
+  var unseenRatings = (ratings || []).filter(function (r) { return (r.date || "") > ratingsSeenAt; }).sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+  var handleOpenNotif = function () {
+    setNotifOpen(function (o) { return !o; });
+    var now = new Date().toISOString();
+    try { localStorage.setItem("trp_ratings_seen_" + clientId, now); } catch (e) {}
+    setRatingsSeenAt(now);
+  };
   // Tiempo mínimo de carga: evita que la pantalla de "Cargando" parpadee y
   // muestre el software de golpe cuando los datos vienen de caché local.
   var _mte = useState(false), _mtea = _slicedToArray(_mte, 2), minLoadTimeDone = _mtea[0], setMinLoadTimeDone = _mtea[1];
@@ -9661,7 +9691,44 @@ function App(_appProps) {
         onClick: function onClick() { return setView("repairs"); },
         title: "Listas para entregar",
         style: { width: 10, height: 10, borderRadius: "50%", background: T.green, flexShrink: 0, cursor: "pointer" }
-      })
+      }),
+      /*#__PURE__*/React.createElement("div", { style: { position: "relative" } },
+        /*#__PURE__*/React.createElement("button", {
+          onClick: handleOpenNotif,
+          title: "Notificaciones",
+          style: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, border: "none", borderRadius: 8, background: notifOpen ? T.accentDim : "transparent", color: T.text, cursor: "pointer", flexShrink: 0 }
+        },
+          /*#__PURE__*/React.createElement(Bell, { size: 18 }),
+          unseenRatings.length > 0 && /*#__PURE__*/React.createElement("span", {
+            style: { position: "absolute", top: 4, right: 4, minWidth: 15, height: 15, padding: "0 3px", borderRadius: 8, background: T.red, color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }
+          }, unseenRatings.length > 9 ? "9+" : unseenRatings.length)
+        ),
+        notifOpen && /*#__PURE__*/React.createElement("div", {
+          onClick: function () { return setNotifOpen(false); },
+          style: { position: "fixed", inset: 0, zIndex: 250 }
+        }),
+        notifOpen && /*#__PURE__*/React.createElement("div", {
+          style: { position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 251, width: isMobile ? 270 : 340, maxHeight: 400, overflow: "auto", background: T.surface, border: "1px solid ".concat(T.border), borderRadius: 12, boxShadow: "0 20px 50px rgba(0,0,0,0.35)" }
+        },
+          /*#__PURE__*/React.createElement("div", { style: { padding: "12px 14px", borderBottom: "1px solid ".concat(T.border), fontWeight: 700, fontSize: 13, color: T.text } }, "Calificaciones de clientes"),
+          (ratings || []).length === 0
+            ? /*#__PURE__*/React.createElement("div", { style: { padding: "24px 14px", textAlign: "center", color: T.muted, fontSize: 13 } }, "Aún no tienes calificaciones")
+            : /*#__PURE__*/React.createElement("div", null, _toConsumableArray(ratings).sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).slice(0, 15).map(function (rt, ri) {
+                return /*#__PURE__*/React.createElement("div", {
+                  key: ri,
+                  onClick: function () { setNotifOpen(false); setView("dashboard"); },
+                  style: { padding: "10px 14px", borderBottom: "1px solid ".concat(T.border), cursor: "pointer" }
+                },
+                  /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 3 } },
+                    /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 13, color: T.text } }, rt.customer || "Cliente anónimo"),
+                    /*#__PURE__*/React.createElement("span", { style: { display: "flex", gap: 1 } }, [1, 2, 3, 4, 5].map(function (n) { return /*#__PURE__*/React.createElement(Star, { key: n, size: 10, color: "#F59E0B", fill: n <= (rt.rating || 0) ? "#F59E0B" : "none" }); }))
+                  ),
+                  rt.comment && /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, "“" + rt.comment + "”"),
+                  rt.date && /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, marginTop: 3 } }, new Date(rt.date).toLocaleDateString("es-CO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }))
+                );
+              }))
+        )
+      )
     ),
 
     /*#__PURE__*/React.createElement("main", {
@@ -10433,7 +10500,7 @@ function TrackingLoader(_ref) {
     if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0) db = firebase.apps[0].firestore();
     if (!db) return;
     setSubmittingRating(true);
-    var payload = { clientId: clientId, repairId: repair.id, rating: myRating, comment: myComment.trim(), date: new Date().toISOString() };
+    var payload = { clientId: clientId, repairId: repair.id, rating: myRating, comment: myComment.trim(), date: new Date().toISOString(), customer: repair.customer || "", device: repair.device || "" };
     db.collection("calificaciones").doc(clientId + "_" + repair.id).set(payload).then(function() {
       setExistingRating(payload);
       setSubmittingRating(false);
