@@ -1630,7 +1630,9 @@ function DashboardView(_ref8) {
     setView = _ref8.setView,
     _ref8$isMobile = _ref8.isMobile,
     isMobile = _ref8$isMobile === void 0 ? false : _ref8$isMobile,
-    ratings = _ref8.ratings;
+    ratings = _ref8.ratings,
+    settings = _ref8.settings,
+    notify = _ref8.notify;
   // Calcular ingresos incluyendo abonos parciales
   var paid = (data.repairs || []).filter(function (r) {
     return r.paid;
@@ -1861,7 +1863,13 @@ function DashboardView(_ref8) {
     var _avg = _all.reduce(function(s, r) { return s + (r.rating || 0); }, 0) / _count;
     var _dist = [5, 4, 3, 2, 1].map(function(n) { return { n: n, count: _all.filter(function(r) { return r.rating === n; }).length }; });
     return /*#__PURE__*/React.createElement(Card, null,
-      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, /*#__PURE__*/React.createElement(Star, { size: 15 }), "Calificaci\xF3n de Clientes"),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 16 } },
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, color: T.text } }, /*#__PURE__*/React.createElement(Star, { size: 15 }), "Calificaci\xF3n de Clientes"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function () { return shareRatingsSummary(_all, (settings && settings.storeName) || "ACCE PRO", settings && settings.logo, notify); },
+          style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: T.accentDim, color: T.accent, border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit" }
+        }, /*#__PURE__*/React.createElement(Download, { size: 13 }), "Compartir resumen")
+      ),
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" } },
         /*#__PURE__*/React.createElement("div", { style: { textAlign: "center" } },
           /*#__PURE__*/React.createElement("div", { style: { fontSize: 36, fontWeight: 800, color: T.text, lineHeight: 1 } }, _avg.toFixed(1)),
@@ -6335,6 +6343,86 @@ function shareRepairReceipt(r, storeName, clientId, notify) {
   }, 400);
 }
 
+// ── COMPARTIR RESUMEN DE CALIFICACIONES (imagen para redes) ────────────────
+function shareRatingsSummary(ratings, storeName, logo, notify) {
+  var all = (ratings || []).slice();
+  var count = all.length;
+  if (count === 0) { notify && notify("Aún no tienes calificaciones para compartir", "error"); return; }
+  if (typeof html2canvas === "undefined") { notify && notify("No se pudo generar la imagen", "error"); return; }
+
+  var avg = all.reduce(function (s, r) { return s + (r.rating || 0); }, 0) / count;
+  var testimonios = all.filter(function (r) { return r.comment && r.comment.trim(); })
+    .sort(function (a, b) { return (b.rating || 0) - (a.rating || 0) || (b.date || "").localeCompare(a.date || ""); })
+    .slice(0, 5);
+
+  var starsHtml = function (n, size) {
+    var h = "";
+    for (var i = 1; i <= 5; i++) h += "<span style='color:" + (i <= n ? "#F59E0B" : "#E2E8F0") + ";font-size:" + size + "px'>★</span>";
+    return h;
+  };
+
+  var testimoniosHtml = testimonios.map(function (t) {
+    return "<div style='background:#F8FAFC;border-radius:14px;padding:14px 16px;margin-bottom:10px'>"
+      + "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px'>"
+      + "<span style='font-weight:800;font-size:14px;color:#15101D'>" + _escHtml(t.customer || "Cliente") + "</span>"
+      + "<span>" + starsHtml(t.rating || 0, 13) + "</span>"
+      + "</div>"
+      + "<div style='font-size:13px;color:#4B5563;font-style:italic;line-height:1.4'>“" + _escHtml(t.comment) + "”</div>"
+      + "</div>";
+  }).join("");
+
+  var html = "<html><head><meta charset='utf-8'><style>"
+    + "*{box-sizing:border-box;margin:0;padding:0;font-family:'DM Sans',Arial,sans-serif}"
+    + "body{padding:26px;background:linear-gradient(160deg,#10E08A,#4F8EFF)}"
+    + "</style></head><body>"
+    + "<div style='background:#fff;border-radius:26px;padding:30px 26px'>"
+    + (logo ? "<img src='" + logo + "' style='width:54px;height:54px;border-radius:14px;object-fit:cover;margin-bottom:12px'/>" : "")
+    + "<div style='font-size:13px;font-weight:800;color:#8A8398;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px'>" + _escHtml(storeName || "ACCE PRO") + "</div>"
+    + "<div style='font-size:19px;font-weight:800;color:#15101D;margin-bottom:18px'>Calificación de nuestros clientes</div>"
+    + "<div style='text-align:center;padding:22px 0;border-radius:20px;background:linear-gradient(135deg,rgba(16,224,138,0.08),rgba(79,142,255,0.08));margin-bottom:20px'>"
+    + "<div style='font-size:52px;font-weight:900;color:#15101D;line-height:1'>" + avg.toFixed(1) + "</div>"
+    + "<div style='margin:8px 0'>" + starsHtml(Math.round(avg), 22) + "</div>"
+    + "<div style='font-size:13px;color:#8A8398;font-weight:600'>Basado en " + count + " calificaci" + (count === 1 ? "ón" : "ones") + " de clientes reales</div>"
+    + "</div>"
+    + (testimoniosHtml
+        ? "<div style='font-size:11px;font-weight:800;color:#8A8398;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px'>Lo que dicen nuestros clientes</div>" + testimoniosHtml
+        : "")
+    + "<div style='text-align:center;margin-top:16px;font-size:12px;color:#8A8398'>¡Gracias por confiar en nosotros!</div>"
+    + "</div>"
+    + "</body></html>";
+
+  var iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:600px;height:1px;border:0;opacity:0";
+  document.body.appendChild(iframe);
+  var cleanup = function () { if (iframe.parentNode) iframe.remove(); };
+  var doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  setTimeout(function () {
+    try {
+      html2canvas(doc.body, { backgroundColor: null, scale: 2, windowWidth: 600 }).then(function (canvas) {
+        canvas.toBlob(function (blob) {
+          cleanup();
+          if (!blob) { notify && notify("No se pudo generar la imagen", "error"); return; }
+          var file = new File([blob], "calificaciones.png", { type: "image/png" });
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: "Calificación de clientes", text: "Mira lo que opinan nuestros clientes" }).catch(function () {});
+          } else {
+            var link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "calificaciones.png";
+            link.click();
+            setTimeout(function () { URL.revokeObjectURL(link.href); }, 4000);
+            notify && notify("Imagen descargada — ya puedes subirla a tus redes");
+          }
+        }, "image/png");
+      }).catch(function () { cleanup(); notify && notify("No se pudo generar la imagen", "error"); });
+    } catch (e) { cleanup(); notify && notify("No se pudo generar la imagen", "error"); }
+  }, 400);
+}
+
 // ── RECEIPT PRINT HELPER ─────────────────────────
 function printReceipt(sale) {
   var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ACCE PRO";
@@ -9735,7 +9823,7 @@ function App(_appProps) {
       className: "trp-scroll",
       style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24, paddingBottom: isMobile ? 78 : 24 }
     },
-    view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings }),
+    view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify }),
     view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
     view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
     view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
