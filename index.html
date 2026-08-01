@@ -613,7 +613,10 @@ var _LucideReact = LucideReact,
   QrCode = _LucideReact.QrCode,
   Moon = _LucideReact.Moon,
   Sun = _LucideReact.Sun,
-  LogOut = _LucideReact.LogOut;
+  LogOut = _LucideReact.LogOut,
+  MoreVertical = _LucideReact.MoreVertical,
+  Store = _LucideReact.Store,
+  Palette = _LucideReact.Palette;
 
 // ─── Theme System — Windows 11 Fluent Design ──────────────
 var DARK = {
@@ -892,7 +895,7 @@ var DEFAULT_SETTINGS = {
 };
 var ACCENT_PRESETS = ["#10E08A", "#0078FF", "#FF6B35", "#8B5CF6", "#EF4444", "#F59E0B", "#06B6D4", "#EC4899", "#10B981", "#6366F1"];
 var STATUSES = ["Recibido", "Diagnóstico", "En Reparación", "Listo", "Entregado", "Cancelado"];
-function buildWAMessage(customer, device, status, paid, cost, warrantyDays) {
+function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trackUrl) {
   var nombre = customer ? customer.split(" ")[0] : "cliente";
   var equipo = device || "su equipo";
   var tienda = "ACCE PRO";
@@ -923,9 +926,13 @@ function buildWAMessage(customer, device, status, paid, cost, warrantyDays) {
       ? ("\n\n*Garantia de " + wDays + " dia" + (wDays === 1 ? "" : "s") + "* a partir de la fecha de entrega. Si presenta algun inconveniente con la reparacion realizada, traigalo y con gusto lo revisamos sin costo adicional."
         + "\n\nImportante: *la garantia aplica unicamente para fallas de fabrica* relacionadas con la reparacion realizada. No cubre danos por golpes, humedad, presiones fuertes en pantalla ni mal uso del equipo.")
       : "\n\n*Este servicio no cuenta con garantia.*";
+    var calificarMsg = trackUrl
+      ? ("\n\n¿Como le parecio nuestro servicio? Califiquenos aqui: " + trackUrl)
+      : "";
     msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* ha sido *entregado* exitosamente en *" + tienda + "*."
         + garantiaMsg
-        + "\n\nGracias por confiar en *" + tienda + "*. Fue un placer atenderle.";
+        + "\n\nGracias por confiar en *" + tienda + "*. Fue un placer atenderle."
+        + calificarMsg;
   } else if (status === "Cancelado") {
     msg = "Hola " + nombre + ", le informamos que el servicio de su equipo *" + equipo + "* en *" + tienda + "* ha sido *cancelado*."
         + "\n\nPuede pasar a recoger su equipo en nuestro horario de atencion. Si tiene alguna duda, con gusto le atendemos."
@@ -1621,7 +1628,8 @@ function DashboardView(_ref8) {
   var data = _ref8.data,
     setView = _ref8.setView,
     _ref8$isMobile = _ref8.isMobile,
-    isMobile = _ref8$isMobile === void 0 ? false : _ref8$isMobile;
+    isMobile = _ref8$isMobile === void 0 ? false : _ref8$isMobile,
+    ratings = _ref8.ratings;
   // Calcular ingresos incluyendo abonos parciales
   var paid = (data.repairs || []).filter(function (r) {
     return r.paid;
@@ -1751,209 +1759,134 @@ function DashboardView(_ref8) {
       }
     }));
   })), /*#__PURE__*/React.createElement(ResumenDia, { data: data, setView: setView }),
-  /*#__PURE__*/React.createElement(React.Fragment, null,
+  (function() {
+    var _hoy = getHoyColombia();
+    var _mesActual = _hoy.slice(0, 7);
+    var _fechaHoy = new Date(_hoy + "T00:00:00");
+    var _mesAntDate = new Date(_fechaHoy.getFullYear(), _fechaHoy.getMonth() - 1, 1);
+    var _mesAnterior = _mesAntDate.getFullYear() + "-" + String(_mesAntDate.getMonth() + 1).padStart(2, "0");
 
-  /*#__PURE__*/React.createElement("div", {
-    style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }
-  },
+    var _ingresoDia = function(day) {
+      var _r = (data.repairs || []).filter(function(x) { return x.date === day && x.paid; }).reduce(function(a, x) { return a + (x.cost || 0); }, 0);
+      var _adv = (data.repairs || []).reduce(function(a, x) { return a + (x.advances || []).filter(function(ad) { return ad.date === day; }).reduce(function(s, ad) { return s + (ad.amount || 0); }, 0); }, 0);
+      var _ventas = (data.sales || []).filter(function(s) { return s.date === day; }).reduce(function(a, s) { return a + (s.total || 0); }, 0);
+      var _ing = (data.cashflow || []).filter(function(e) { return e.date === day && e.type === "ingreso"; }).reduce(function(a, e) { return a + (e.amount || 0); }, 0);
+      return _r + _adv + _ventas + _ing;
+    };
+    var _completadasDia = function(day) {
+      return (data.repairs || []).filter(function(x) {
+        return x.status === "Entregado" && (x.deliveryDate === day || (!x.deliveryDate && x.date === day));
+      }).length;
+    };
 
-    // ── GRÁFICA 1: Ingresos por mes (barras) ─────────────────
-    /*#__PURE__*/React.createElement(Card, null,
-      /*#__PURE__*/React.createElement("div", {
-        style: { fontWeight: 700, fontSize: 15, marginBottom: 4, color: T.text }
-      }, "Ingresos por Mes"),
-      /*#__PURE__*/React.createElement("div", {
-        style: { fontSize: 15, color: T.muted, marginBottom: 16 }
-      }, "Últimos 6 meses · Cobrado vs Pendiente"),
-      (function() {
-        var _now = new Date();
-        var _months = [];
-        for (var _mi = 5; _mi >= 0; _mi--) {
-          var _md = new Date(_now.getFullYear(), _now.getMonth() - _mi, 1);
-          var _mk = _md.getFullYear() + "-" + String(_md.getMonth() + 1).padStart(2, "0");
-          var _mlbl = _md.toLocaleDateString("es", { month: "short" }).replace(".", "");
-          var _mcob = (data.repairs || []).filter(function(r) { return r.date && r.date.startsWith(_mk) && r.paid; }).reduce(function(a, r) { return a + r.cost; }, 0);
-          var _mpend = (data.repairs || []).filter(function(r) { return r.date && r.date.startsWith(_mk) && !r.paid && r.status !== "Cancelado"; }).reduce(function(a, r) { return a + r.cost; }, 0);
-          _months.push({ label: _mlbl, cob: _mcob, pend: _mpend });
-        }
-        var _maxV = Math.max.apply(null, _months.map(function(m) { return m.cob + m.pend; }).concat([1]));
-        var _W = 320, _H = 150, _padL = 8, _padR = 8, _padT = 10, _padB = 32;
-        var _bW = (_W - _padL - _padR) / _months.length;
-        var _gap = _bW * 0.22;
-        return /*#__PURE__*/React.createElement("div", { style: { overflowX: "auto" } },
-          /*#__PURE__*/React.createElement("svg", {
-            viewBox: "0 0 " + _W + " " + _H,
-            width: "100%",
-            style: { display: "block", minWidth: 220, height: "auto" }
-          },
-            // Grid lines
-            [0.25, 0.5, 0.75, 1].map(function(frac) {
-              var _y = _padT + (_H - _padT - _padB) * (1 - frac);
-              return /*#__PURE__*/React.createElement("line", {
-                key: frac,
-                x1: _padL, y1: _y, x2: _W - _padR, y2: _y,
-                stroke: T.border, strokeWidth: 1, strokeDasharray: "3,3"
-              });
-            }),
-            // Bars
-            _months.map(function(m, idx) {
-              var _x = _padL + idx * _bW + _gap / 2;
-              var _bwInner = _bW - _gap;
-              var _bwHalf = _bwInner / 2;
-              var _chartH = _H - _padT - _padB;
-              var _hCob = (m.cob / _maxV) * _chartH;
-              var _hPend = (m.pend / _maxV) * _chartH;
-              var _yBase = _padT + _chartH;
-              return /*#__PURE__*/React.createElement(React.Fragment, { key: m.label },
-                // Cobrado bar
-                m.cob > 0 && /*#__PURE__*/React.createElement("rect", {
-                  x: _x, y: _yBase - _hCob,
-                  width: _bwHalf - 1, height: Math.max(_hCob, 1),
-                  fill: T.accent, rx: 3,
-                  opacity: 0.9
-                }),
-                // Pendiente bar
-                m.pend > 0 && /*#__PURE__*/React.createElement("rect", {
-                  x: _x + _bwHalf + 1, y: _yBase - _hPend,
-                  width: _bwHalf - 1, height: Math.max(_hPend, 1),
-                  fill: T.orange, rx: 3,
-                  opacity: 0.7
-                }),
-                // Label
-                /*#__PURE__*/React.createElement("text", {
-                  x: _x + _bwInner / 2, y: _H - _padB + 14,
-                  textAnchor: "middle", fontSize: 10, fill: T.muted,
-                  fontFamily: "inherit"
-                }, m.label),
-                // Value tooltip-style on hover (just show value above bar if non-zero)
-                (m.cob + m.pend) > 0 && /*#__PURE__*/React.createElement("text", {
-                  x: _x + _bwInner / 2, y: _yBase - Math.max(_hCob, _hPend) - 4,
-                  textAnchor: "middle", fontSize: 9, fill: T.muted,
-                  fontFamily: "inherit"
-                }, (m.cob + m.pend) >= 1000000
-                  ? "$" + Math.round((m.cob + m.pend) / 1000000) + "M"
-                  : (m.cob + m.pend) >= 1000
-                    ? "$" + Math.round((m.cob + m.pend) / 1000) + "K"
-                    : "$" + (m.cob + m.pend))
-              );
-            })
-          ),
-          // Leyenda
-          /*#__PURE__*/React.createElement("div", {
-            style: { display: "flex", gap: 16, justifyContent: "center", marginTop: 8 }
-          },
-            /*#__PURE__*/React.createElement("div", {
-              style: { display: "flex", alignItems: "center", gap: 5, fontSize: 15, color: T.muted }
-            },
-              /*#__PURE__*/React.createElement("div", { style: { width: 10, height: 10, borderRadius: 2, background: T.accent } }),
-              "Cobrado"
-            ),
-            /*#__PURE__*/React.createElement("div", {
-              style: { display: "flex", alignItems: "center", gap: 5, fontSize: 15, color: T.muted }
-            },
-              /*#__PURE__*/React.createElement("div", { style: { width: 10, height: 10, borderRadius: 2, background: T.orange, opacity: 0.7 } }),
-              "Pendiente"
+    var _serieIngresos = [], _serieCompletadas = [], _serieTicket = [];
+    for (var _di = 13; _di >= 0; _di--) {
+      var _d = new Date(_fechaHoy);
+      _d.setDate(_d.getDate() - _di);
+      var _dk = _d.getFullYear() + "-" + String(_d.getMonth() + 1).padStart(2, "0") + "-" + String(_d.getDate()).padStart(2, "0");
+      var _ingD = _ingresoDia(_dk);
+      var _compD = _completadasDia(_dk);
+      _serieIngresos.push(_ingD);
+      _serieCompletadas.push(_compD);
+      _serieTicket.push(_compD > 0 ? _ingD / _compD : 0);
+    }
+
+    var _totalMes = function(mesKey) {
+      var _ingR = (data.repairs || []).filter(function(x) { return x.date && x.date.indexOf(mesKey) === 0 && x.paid; }).reduce(function(a, x) { return a + (x.cost || 0); }, 0);
+      var _advR = (data.repairs || []).reduce(function(a, x) { return a + (x.advances || []).filter(function(ad) { return ad.date && ad.date.indexOf(mesKey) === 0; }).reduce(function(s, ad) { return s + (ad.amount || 0); }, 0); }, 0);
+      var _ventasM = (data.sales || []).filter(function(s) { return s.date && s.date.indexOf(mesKey) === 0; }).reduce(function(a, s) { return a + (s.total || 0); }, 0);
+      var _ingM = (data.cashflow || []).filter(function(e) { return e.date && e.date.indexOf(mesKey) === 0 && e.type === "ingreso"; }).reduce(function(a, e) { return a + (e.amount || 0); }, 0);
+      var _completadasM = (data.repairs || []).filter(function(x) { var _fd = x.deliveryDate || x.date; return x.status === "Entregado" && _fd && _fd.indexOf(mesKey) === 0; }).length;
+      var _ingresoTotal = _ingR + _advR + _ventasM + _ingM;
+      return { ingresos: _ingresoTotal, completadas: _completadasM, ticket: _completadasM > 0 ? _ingresoTotal / _completadasM : 0 };
+    };
+    var _actual = _totalMes(_mesActual);
+    var _anterior = _totalMes(_mesAnterior);
+    var _pctChange = function(cur, prev) {
+      if (prev <= 0) return cur > 0 ? 100 : 0;
+      return Math.round(((cur - prev) / prev) * 1000) / 10;
+    };
+    var _pctIngresos = _pctChange(_actual.ingresos, _anterior.ingresos);
+    var _pctCompletadas = _pctChange(_actual.completadas, _anterior.completadas);
+    var _pctTicket = _pctChange(_actual.ticket, _anterior.ticket);
+
+    var _renderSpark = function(series, color) {
+      var _w = 110, _h = 40;
+      var _max = Math.max.apply(null, series.concat([1]));
+      var _min = Math.min.apply(null, series.concat([0]));
+      var _range = (_max - _min) || 1;
+      var _pts = series.map(function(v, i) {
+        var x = (i / (series.length - 1 || 1)) * _w;
+        var y = _h - ((v - _min) / _range) * _h;
+        return x + "," + y;
+      }).join(" ");
+      var _areaPts = "0," + _h + " " + _pts + " " + _w + "," + _h;
+      return /*#__PURE__*/React.createElement("svg", { viewBox: "0 0 " + _w + " " + _h, width: _w, height: _h, style: { display: "block", flexShrink: 0 } },
+        /*#__PURE__*/React.createElement("polyline", { points: _areaPts, fill: color, opacity: 0.15, stroke: "none" }),
+        /*#__PURE__*/React.createElement("polyline", { points: _pts, fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" })
+      );
+    };
+
+    var _trendCard = function(label, value, pct, color, series, icon) {
+      var _up = pct >= 0;
+      return /*#__PURE__*/React.createElement(Card, { key: label, style: { display: "flex", flexDirection: "column", gap: 10 } },
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.muted, fontWeight: 600 } },
+          /*#__PURE__*/React.createElement("span", { style: { display: "flex", color: color } }, icon), label
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" } },
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 24, fontWeight: 800, color: T.text, lineHeight: 1 } }, value),
+            /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4, marginTop: 6, fontSize: 12, fontWeight: 700, color: _up ? T.green : T.red } },
+              /*#__PURE__*/React.createElement(_up ? ArrowUpCircle : ArrowDownCircle, { size: 12 }),
+              (_up ? "+" : "") + pct + "% vs mes anterior"
             )
-          )
-        );
-      })()
-    ),
-
-    // ── GRÁFICA 2: Distribución por estado (dona) ─────────────
-    /*#__PURE__*/React.createElement(Card, null,
-      /*#__PURE__*/React.createElement("div", {
-        style: { fontWeight: 700, fontSize: 15, marginBottom: 4, color: T.text }
-      }, "Estado de Reparaciones"),
-      /*#__PURE__*/React.createElement("div", {
-        style: { fontSize: 15, color: T.muted, marginBottom: 16 }
-      }, "Distribución actual de órdenes"),
-      (function() {
-        var _statusData = STATUSES.map(function(st) {
-          return { st: st, count: (data.repairs || []).filter(function(r) { return r.status === st; }).length, color: S_COLOR[st], bg: S_BG[st] };
-        }).filter(function(s) { return s.count > 0; });
-        var _totalR = _statusData.reduce(function(a, s) { return a + s.count; }, 0) || 1;
-        var _cx = 120, _cy = 120, _ro = 100, _ri = 65;
-        var _ang = -90;
-        var _segs = _statusData.map(function(s) {
-          var _sweep = (s.count / _totalR) * 360;
-          var _sa = _ang, _ea = _ang + _sweep;
-          _ang += _sweep;
-          var _p = function(a) {
-            var rad = a * Math.PI / 180;
-            return { x: _cx + _ro * Math.cos(rad), y: _cy + _ro * Math.sin(rad) };
-          };
-          var _pi = function(a) {
-            var rad = a * Math.PI / 180;
-            return { x: _cx + _ri * Math.cos(rad), y: _cy + _ri * Math.sin(rad) };
-          };
-          var _s = _p(_sa), _e = _p(_ea), _si = _pi(_sa), _ei = _pi(_ea);
-          var _lg = (_ea - _sa) > 180 ? "1" : "0";
-          var _d = "M " + _s.x + " " + _s.y + " A " + _ro + " " + _ro + " 0 " + _lg + " 1 " + _e.x + " " + _e.y + " L " + _ei.x + " " + _ei.y + " A " + _ri + " " + _ri + " 0 " + _lg + " 0 " + _si.x + " " + _si.y + " Z";
-          return { d: _d, color: s.color, st: s.st, count: s.count, pct: Math.round(s.count / _totalR * 100) };
-        });
-        return /*#__PURE__*/React.createElement("div", {
-          style: { display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }
-        },
-          // SVG dona
-          /*#__PURE__*/React.createElement("svg", {
-            viewBox: "0 0 240 240",
-            width: 210, height: 210,
-            style: { flexShrink: 0 }
-          },
-            _segs.length === 0
-              ? /*#__PURE__*/React.createElement("circle", { cx: _cx, cy: _cy, r: _ro, fill: T.border })
-              : _segs.map(function(seg, si) {
-                return /*#__PURE__*/React.createElement("path", {
-                  key: si, d: seg.d,
-                  fill: seg.color,
-                  stroke: T.surface, strokeWidth: 2,
-                  opacity: 0.85
-                });
-              }),
-            // Centro: total
-            /*#__PURE__*/React.createElement("text", {
-              x: _cx, y: _cy - 8,
-              textAnchor: "middle", fontSize: 30, fontWeight: "700",
-              fill: T.text, fontFamily: "inherit"
-            }, _totalR),
-            /*#__PURE__*/React.createElement("text", {
-              x: _cx, y: _cy + 16,
-              textAnchor: "middle", fontSize: 13, fill: T.muted, fontFamily: "inherit"
-            }, "órdenes")
           ),
-          // Leyenda
-          /*#__PURE__*/React.createElement("div", {
-            style: { display: "flex", flexDirection: "column", gap: 7, flex: 1, minWidth: 0 }
-          },
-            _segs.map(function(seg) {
-              return /*#__PURE__*/React.createElement("div", {
-                key: seg.st,
-                style: { display: "flex", alignItems: "center", gap: 8 }
-              },
-                /*#__PURE__*/React.createElement("div", {
-                  style: { width: 10, height: 10, borderRadius: "50%", background: seg.color, flexShrink: 0 }
-                }),
-                /*#__PURE__*/React.createElement("div", {
-                  style: { flex: 1, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
-                }, seg.st),
-                /*#__PURE__*/React.createElement("div", {
-                  style: { fontSize: 14, fontWeight: 700, color: seg.color, minWidth: 28, textAlign: "right" }
-                }, seg.count),
-                /*#__PURE__*/React.createElement("div", {
-                  style: { fontSize: 10, color: T.muted, minWidth: 32, textAlign: "right" }
-                }, seg.pct + "%")
-              );
-            }),
-            _segs.length === 0 && /*#__PURE__*/React.createElement("div", {
-              style: { fontSize: 15, color: T.muted }
-            }, "Sin datos aún")
-          )
-        );
-      })()
-    )
-  ),
+          _renderSpark(series, color)
+        )
+      );
+    };
 
-  /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
+    return /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16 } },
+      _trendCard("Ingresos del mes", fmt(_actual.ingresos), _pctIngresos, T.orange, _serieIngresos, /*#__PURE__*/React.createElement(TrendingUp, { size: 14 })),
+      _trendCard("Órdenes completadas", _actual.completadas, _pctCompletadas, T.green, _serieCompletadas, /*#__PURE__*/React.createElement(CheckCircle, { size: 14 })),
+      _trendCard("Ticket promedio", fmt(Math.round(_actual.ticket)), _pctTicket, T.blue, _serieTicket, /*#__PURE__*/React.createElement(DollarSign, { size: 14 }))
+    );
+  })(),
+
+  (function() {
+    var _all = ratings || [];
+    var _count = _all.length;
+    if (_count === 0) return null;
+    var _avg = _all.reduce(function(s, r) { return s + (r.rating || 0); }, 0) / _count;
+    var _dist = [5, 4, 3, 2, 1].map(function(n) { return { n: n, count: _all.filter(function(r) { return r.rating === n; }).length }; });
+    return /*#__PURE__*/React.createElement(Card, null,
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, /*#__PURE__*/React.createElement(Star, { size: 15 }), "Calificaci\xF3n de Clientes"),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" } },
+        /*#__PURE__*/React.createElement("div", { style: { textAlign: "center" } },
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 36, fontWeight: 800, color: T.text, lineHeight: 1 } }, _avg.toFixed(1)),
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 2, justifyContent: "center", marginTop: 6 } },
+            [1, 2, 3, 4, 5].map(function(n) { return /*#__PURE__*/React.createElement(Star, { key: n, size: 14, color: "#F59E0B", fill: n <= Math.round(_avg) ? "#F59E0B" : "none" }); })
+          ),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, marginTop: 4 } }, _count + " calificaci" + (_count === 1 ? "\xF3n" : "ones"))
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 160, display: "flex", flexDirection: "column", gap: 5 } },
+          _dist.map(function(d) {
+            var pct = _count > 0 ? Math.round(d.count / _count * 100) : 0;
+            return /*#__PURE__*/React.createElement("div", { key: d.n, style: { display: "flex", alignItems: "center", gap: 8 } },
+              /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: T.muted, width: 14 } }, d.n),
+              /*#__PURE__*/React.createElement(Star, { size: 11, color: "#F59E0B", fill: "#F59E0B" }),
+              /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 6, background: T.border, borderRadius: 3, overflow: "hidden" } },
+                /*#__PURE__*/React.createElement("div", { style: { width: pct + "%", height: "100%", background: "#F59E0B" } })
+              ),
+              /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: T.muted, width: 22, textAlign: "right" } }, d.count)
+            );
+          })
+        )
+      )
+    );
+  })(),
+
+/*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 700,
       fontSize: 15,
@@ -2020,7 +1953,7 @@ function DashboardView(_ref8) {
       color: r.paid ? T.green : T.orange,
       bg: r.paid ? "rgba(0,200,150,0.1)" : "rgba(255,107,43,0.1)"
     }));
-  }))));
+  })));
 }
 
 // ─── REPAIRS ─────────────────────────────────────────────
@@ -2346,7 +2279,7 @@ function RepairsView(_ref9) {
     }, /*#__PURE__*/React.createElement(Edit2, {
       size: 14
     })), r.phone && /*#__PURE__*/React.createElement("a", {
-      href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=" + encodeURIComponent(buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays)),
+      href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=" + encodeURIComponent(buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildTrackUrl(clientId, r) : "")),
       target: "_blank",
       onClick: function(e){ e.stopPropagation(); },
       title: "Contactar por WhatsApp",
@@ -2860,7 +2793,7 @@ function RepairModal(_ref0) {
         }, "+"),
         // Botón WhatsApp si hay teléfono
         form.phone && /*#__PURE__*/React.createElement("a", {
-          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text="+encodeURIComponent(buildWAMessage(form.customer, form.device, form.status, form.paid, form.cost, form.warrantyDays)),
+          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text="+encodeURIComponent(buildWAMessage(form.customer, form.device, form.status, form.paid, form.cost, form.warrantyDays, (clientId && form.id) ? _buildTrackUrl(clientId, form) : "")),
           target:"_blank",
           title:"Contactar por WhatsApp",
           style:{ width:42, height:42, background:"#25D366", color:"#fff", border:"none", borderRadius:12, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }
@@ -5094,7 +5027,8 @@ function CustomerModal(_ref16) {
 function PublicView(_ref17) {
   var data = _ref17.data,
     cfg = _ref17.settings,
-    onBack = _ref17.onBack;
+    onBack = _ref17.onBack,
+    ratingsSummary = _ref17.ratingsSummary;
   var _useState27 = useState([]),
     _useState28 = _slicedToArray(_useState27, 2),
     cart = _useState28[0],
@@ -5264,7 +5198,21 @@ function PublicView(_ref17) {
       letterSpacing: "0.1em",
       fontWeight: 600
     }
-  }, "TIENDA ONLINE"))), /*#__PURE__*/React.createElement("button", {
+  }, "TIENDA ONLINE"), ratingsSummary && ratingsSummary.count > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 2,
+      fontSize: 11,
+      fontWeight: 700,
+      color: "#F59E0B"
+    }
+  }, /*#__PURE__*/React.createElement(Star, {
+    size: 11,
+    color: "#F59E0B",
+    fill: "#F59E0B"
+  }), ratingsSummary.avg.toFixed(1) + " (" + ratingsSummary.count + (ratingsSummary.count === 1 ? " reseña)" : " reseñas)")))), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
       return setShowCart(!showCart);
     },
@@ -6324,7 +6272,7 @@ function printRepair(r) {
 // ── COMPARTIR RECIBO POR WHATSAPP (imagen + texto) ─────────────────────────
 function shareRepairReceipt(r, storeName, clientId, notify) {
   var orderId = (r.id || "").slice(-6).toUpperCase();
-  var caption = buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays);
+  var caption = buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildTrackUrl(clientId, r) : "");
   var waNum = (r.phone || "").replace(/\D/g, "");
   var openWA = function () {
     window.open("https://wa.me/" + (waNum ? "57" + waNum : "") + "?text=" + encodeURIComponent(caption), "_blank");
@@ -7491,18 +7439,25 @@ function SettingsView(_ref20) {
     color: T.text,
     marginBottom: 16,
     paddingBottom: 10,
-    borderBottom: "1px solid ".concat(T.border)
+    borderBottom: "1px solid ".concat(T.border),
+    display: "flex",
+    alignItems: "center",
+    gap: 8
   };
+  var rowItemStyle = { flex: "1 1 380px", minWidth: 0 };
+  var rowWrapStyle = { display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" };
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      maxWidth: 700,
+      maxWidth: 1240,
       display: "flex",
       flexDirection: "column",
       gap: 24
     }
-  }, /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: rowWrapStyle
+  }, /*#__PURE__*/React.createElement(Card, { style: rowItemStyle }, /*#__PURE__*/React.createElement("div", {
     style: sectionTitle
-  }, "\uD83C\uDFEA Identidad del Negocio"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(Store, { size: 15 }), "Identidad del Negocio"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "160px 1fr",
@@ -7597,9 +7552,9 @@ function SettingsView(_ref20) {
       return set("address", v);
     },
     placeholder: "Calle 10 #5-23, Neiva, Huila"
-  })))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
+  })))), /*#__PURE__*/React.createElement(Card, { style: rowItemStyle }, /*#__PURE__*/React.createElement("div", {
     style: sectionTitle
-  }, "\uD83D\uDCDE Informaci\xF3n de Contacto"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(Phone, { size: 15 }), "Informaci\xF3n de Contacto"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
@@ -7626,9 +7581,9 @@ function SettingsView(_ref20) {
       color: T.muted,
       marginTop: 10
     }
-  }, "El n\xFAmero de WhatsApp se usa para recibir pedidos del cat\xE1logo p\xFAblico. Incluye el c\xF3digo del pa\xEDs sin el + (ej: 573001234567).")), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
+  }, "El n\xFAmero de WhatsApp se usa para recibir pedidos del cat\xE1logo p\xFAblico. Incluye el c\xF3digo del pa\xEDs sin el + (ej: 573001234567)."))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitle
-  }, "\uD83C\uDFA8 Apariencia"),
+  }, /*#__PURE__*/React.createElement(Palette, { size: 15 }), "Apariencia"),
   /*#__PURE__*/React.createElement("label", {
     style: labelStyle
   }, "Temas predefinidos \u2014 haz clic para aplicar al instante"),
@@ -7839,7 +7794,10 @@ function SettingsView(_ref20) {
     }
   }, "Guardar Configuraci\xF3n"),
 
-  /*#__PURE__*/React.createElement(Card, { s: { marginTop: 8 } },
+  /*#__PURE__*/React.createElement("div", {
+    style: rowWrapStyle
+  },
+  /*#__PURE__*/React.createElement(Card, { style: rowItemStyle },
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, /*#__PURE__*/React.createElement(KeyRound, { size: 15 }), "Licencia"),
     (function() {
       var _lics = useState(""), _licsa = _slicedToArray(_lics, 2), newLic = _licsa[0], setNewLic = _licsa[1];
@@ -7954,7 +7912,7 @@ function SettingsView(_ref20) {
     })()
   ),
 
-  /*#__PURE__*/React.createElement(Card, { s: { marginTop: 8 } },
+  /*#__PURE__*/React.createElement(Card, { style: rowItemStyle },
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, /*#__PURE__*/React.createElement(ShieldCheck, { size: 15 }), "Seguridad"),
     isBypass && /*#__PURE__*/React.createElement("div", {
       style: { display: "flex", alignItems: "center", gap: 8, background: "rgba(157,93,0,0.1)", border: "1px solid rgba(157,93,0,0.3)", borderRadius: 6, padding: "12px 16px", marginBottom: 16, fontSize: 15, color: T.yellow, fontWeight: 600 }
@@ -7978,7 +7936,7 @@ function SettingsView(_ref20) {
       }),
       /*#__PURE__*/React.createElement(Btn, { onClick: handleChangePwd, small: true }, isBypass ? "Establecer nueva contraseña" : "Cambiar contraseña")
     )
-  ));
+  )));
 }
 
 // ─── Responsive Hook ──────────────────────────────────────
@@ -9096,6 +9054,16 @@ function App(_appProps) {
     _useState60 = _slicedToArray(_useState59, 2),
     data = _useState60[0],
     setData = _useState60[1];
+  var _ratS = useState([]), _ratSA = _slicedToArray(_ratS, 2), ratings = _ratSA[0], setRatings = _ratSA[1];
+  useEffect(function () {
+    if (!clientId) return;
+    var db = window.__firebaseDB;
+    if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0) db = firebase.apps[0].firestore();
+    if (!db) return;
+    db.collection("calificaciones").where("clientId", "==", clientId).get().then(function (snap) {
+      setRatings(snap.docs.map(function (d) { return d.data(); }));
+    }).catch(function () {});
+  }, [clientId]);
   // Tiempo mínimo de carga: evita que la pantalla de "Cargando" parpadee y
   // muestre el software de golpe cuando los datos vienen de caché local.
   var _mte = useState(false), _mtea = _slicedToArray(_mte, 2), minLoadTimeDone = _mtea[0], setMinLoadTimeDone = _mtea[1];
@@ -9432,24 +9400,8 @@ function App(_appProps) {
       return setToast(null);
     }, 3000);
   };
-  var _smOpen = useState(false), _smOpenA = _slicedToArray(_smOpen, 2), startMenuOpen = _smOpenA[0], setStartMenuOpen = _smOpenA[1];
-  var _clockS = useState(function () { return new Date(); }), _clockSA = _slicedToArray(_clockS, 2), clockNow = _clockSA[0], setClockNow = _clockSA[1];
-  useEffect(function () {
-    var _t = setInterval(function () { setClockNow(new Date()); }, 15000);
-    return function () { clearInterval(_t); };
-  }, []);
-  // ─── Ventanas abiertas en la barra de tareas (estilo Windows) ───
-  var _ovS = useState(["dashboard"]), _ovSA = _slicedToArray(_ovS, 2), openViews = _ovSA[0], setOpenViews = _ovSA[1];
-  useEffect(function () {
-    setOpenViews(function (prev) { return prev.indexOf(view) === -1 ? prev.concat([view]) : prev; });
-  }, [view]);
-  var closeOpenView = function (id, e) {
-    if (e && e.stopPropagation) e.stopPropagation();
-    var next = openViews.filter(function (v) { return v !== id; });
-    if (next.length === 0) next = ["dashboard"];
-    setOpenViews(next);
-    if (view === id) { setView(next[next.length - 1]); }
-  };
+  var _sbOpen = useState(function(){return window.innerWidth>=1024;}), _sbOpenA = _slicedToArray(_sbOpen, 2), sidebarOpen = _sbOpenA[0], setSidebarOpen = _sbOpenA[1];
+  var _pmOpen = useState(false), _pmOpenA = _slicedToArray(_pmOpen, 2), profileMenuOpen = _pmOpenA[0], setProfileMenuOpen = _pmOpenA[1];
   if (!data || !minLoadTimeDone) return /*#__PURE__*/React.createElement(LoadingScreen, { title: "Cargando", subtitle: "Recuperando información necesaria" });
   if (publicMode) return /*#__PURE__*/React.createElement(PublicView, {
     data: data,
@@ -9540,7 +9492,6 @@ function App(_appProps) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      flexDirection: "column",
       height: "100dvh",
       background: T.bg,
       color: T.text,
@@ -9550,193 +9501,214 @@ function App(_appProps) {
     }
   }, toast && /*#__PURE__*/React.createElement(Toast, toast),
 
-  /*#__PURE__*/React.createElement("header", {
+  isMobile && sidebarOpen && /*#__PURE__*/React.createElement("div", {
+    onClick: function () { return setSidebarOpen(false); },
+    style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 190 }
+  }),
+
+  /*#__PURE__*/React.createElement("aside", {
+    className: "trp-sidebar",
     style: {
-      height: isMobile ? 52 : 58,
-      display: "flex",
-      alignItems: "center",
-      gap: isMobile ? 8 : 12,
-      padding: isMobile ? "0 14px" : "0 22px",
-      borderBottom: "1px solid ".concat(T.border),
+      position: isMobile ? "fixed" : "relative",
+      top: 0, left: 0, bottom: 0,
+      height: "100dvh",
+      width: 236,
+      transform: (isMobile && !sidebarOpen) ? "translateX(-100%)" : "translateX(0)",
+      transition: "transform 0.25s ease",
       background: T.surface,
-      flexShrink: 0
-    }
-  },
-  /*#__PURE__*/React.createElement("div", {
-    style: { width: isMobile ? 26 : 30, height: isMobile ? 26 : 30, background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }
-  }, settings.logo ? /*#__PURE__*/React.createElement("img", { src: settings.logo, alt: "logo", style: { width: "100%", height: "100%", objectFit: "cover" } }) : /*#__PURE__*/React.createElement(Smartphone, { size: isMobile ? 14 : 17, color: "#fff" })),
-  /*#__PURE__*/React.createElement("h1", {
-    style: { margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.03em" }
-  }, (_activeNavItem && _activeNavItem.label) || "Dashboard"),
-  /*#__PURE__*/React.createElement("div", { style: { flex: 1 } }),
-  !isMobile && lowStock.length > 0 && /*#__PURE__*/React.createElement("div", {
-    onClick: function onClick() { return setView("inventory"); },
-    style: { display: "flex", alignItems: "center", gap: 6, background: "rgba(255,211,42,0.1)", border: "1px solid rgba(157,93,0,0.3)", borderRadius: 4, padding: "5px 12px", fontSize: 14, color: T.yellow, cursor: "pointer" }
-  }, /*#__PURE__*/React.createElement(AlertTriangle, { size: 13 }), " ", lowStock.length, " bajo stock"),
-  !isMobile && readyRepairs.length > 0 && /*#__PURE__*/React.createElement("div", {
-    onClick: function onClick() { return setView("repairs"); },
-    style: { display: "flex", alignItems: "center", gap: 6, background: "rgba(16,124,16,0.1)", border: "1px solid rgba(16,124,16,0.3)", borderRadius: 4, padding: "5px 12px", fontSize: 14, color: T.green, cursor: "pointer" }
-  }, /*#__PURE__*/React.createElement(CheckCircle, { size: 13 }), " ", readyRepairs.length, " lista", readyRepairs.length > 1 ? "s" : "", " para entregar"),
-  isMobile && lowStock.length > 0 && /*#__PURE__*/React.createElement("div", {
-    onClick: function onClick() { return setView("inventory"); },
-    title: "Bajo stock",
-    style: { width: 10, height: 10, borderRadius: "50%", background: T.yellow, flexShrink: 0, cursor: "pointer" }
-  }),
-  isMobile && readyRepairs.length > 0 && /*#__PURE__*/React.createElement("div", {
-    onClick: function onClick() { return setView("repairs"); },
-    title: "Listas para entregar",
-    style: { width: 10, height: 10, borderRadius: "50%", background: T.green, flexShrink: 0, cursor: "pointer" }
-  })
-  ),
-
-  /*#__PURE__*/React.createElement("main", {
-    className: "trp-scroll",
-    style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24 }
-  },
-  view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile }),
-  view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
-  view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
-  view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
-  view === "celulares" && /*#__PURE__*/React.createElement(CelularesView, { data: data, save: save, notify: notify }),
-  view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
-  view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
-  view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
-  view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
-  view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data }),
-  view === "proveedores" && /*#__PURE__*/React.createElement(ProveedoresView, { data: data, save: save, notify: notify })
-  ),
-
-  // ─── MENÚ DE INICIO (estilo Windows) ────────────────────
-  startMenuOpen && /*#__PURE__*/React.createElement("div", {
-    onClick: function () { setStartMenuOpen(false); },
-    style: { position: "fixed", inset: 0, zIndex: 998, background: "transparent" }
-  }),
-  startMenuOpen && /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "fixed", left: isMobile ? 8 : 12, bottom: (isMobile ? 52 : 50) + 8, zIndex: 999,
-      width: isMobile ? "calc(100% - 16px)" : 300,
-      maxHeight: "70vh", overflow: "auto",
-      background: T.surface, border: "1px solid ".concat(T.border), borderRadius: 12,
-      boxShadow: "0 20px 60px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.35)",
-      display: "flex", flexDirection: "column", padding: 8
+      borderRight: "1px solid ".concat(T.border),
+      display: "flex",
+      flexDirection: "column",
+      flexShrink: 0,
+      zIndex: 200
     }
   },
     /*#__PURE__*/React.createElement("div", {
-      style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 10px 12px", borderBottom: "1px solid ".concat(T.border), marginBottom: 6 }
+      style: { display: "flex", alignItems: "center", gap: 10, padding: "18px 16px", borderBottom: "1px solid ".concat(T.border), flexShrink: 0 }
     },
       /*#__PURE__*/React.createElement("div", {
-        style: { width: 34, height: 34, background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }
-      }, settings.logo ? /*#__PURE__*/React.createElement("img", { src: settings.logo, alt: "logo", style: { width: "100%", height: "100%", objectFit: "cover" } }) : /*#__PURE__*/React.createElement(Smartphone, { size: 18, color: "#fff" })),
-      /*#__PURE__*/React.createElement("div", null,
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 14, fontWeight: 800, color: T.text } }, settings.storeName || "ACCE PRO"),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted } }, "Menú de inicio")
+        style: { width: 32, height: 32, background: settings.logo ? "transparent" : "linear-gradient(135deg,#10E08A,#4F8EFF)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }
+      }, settings.logo ? /*#__PURE__*/React.createElement("img", { src: settings.logo, alt: "logo", style: { width: "100%", height: "100%", objectFit: "cover" } }) : /*#__PURE__*/React.createElement(Smartphone, { size: 16, color: "#fff" })),
+      /*#__PURE__*/React.createElement("div", {
+        style: { overflow: "hidden" }
+      },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, settings.storeName || "ACCE PRO"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, letterSpacing: "0.06em" } }, "PANEL DE GESTIÓN")
       )
     ),
-    navItems.map(function (item) {
+
+    /*#__PURE__*/React.createElement("nav", {
+      className: "trp-scroll",
+      style: { flex: 1, overflow: "auto", padding: "10px 8px", display: "flex", flexDirection: "column", gap: 2 }
+    }, navItems.map(function (item) {
       var active = view === item.id;
       return /*#__PURE__*/React.createElement("button", {
         key: item.id,
-        onClick: function () { setView(item.id); setStartMenuOpen(false); },
+        onClick: function () { setView(item.id); if (isMobile) setSidebarOpen(false); },
         style: {
-          display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+          display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left",
           padding: "10px 12px", border: "none", borderRadius: 8, cursor: "pointer",
           background: active ? T.accentDim : "transparent",
           color: active ? T.accent : T.text,
           fontWeight: active ? 700 : 500,
-          fontSize: 14, fontFamily: "inherit", minHeight: 42
+          fontSize: 14, fontFamily: "inherit", minHeight: 40
         }
       },
         /*#__PURE__*/React.createElement("span", { style: { display: "flex", flexShrink: 0, color: active ? T.accent : T.muted } }, item.icon),
-        /*#__PURE__*/React.createElement("span", { style: { flex: 1 } }, item.label),
+        /*#__PURE__*/React.createElement("span", { style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, item.label),
         item.badge > 0 && /*#__PURE__*/React.createElement("span", {
-          style: { background: T.orange, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800 }
+          style: { background: T.orange, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800, flexShrink: 0 }
         }, item.badge),
-        item.alert && /*#__PURE__*/React.createElement("span", { style: { width: 7, height: 7, background: T.yellow, borderRadius: "50%" } })
+        item.alert && /*#__PURE__*/React.createElement("span", { style: { width: 7, height: 7, background: T.yellow, borderRadius: "50%", flexShrink: 0 } })
       );
-    }),
-    /*#__PURE__*/React.createElement("div", { style: { borderTop: "1px solid ".concat(T.border), marginTop: 6, paddingTop: 6 } },
+    })),
+
+    /*#__PURE__*/React.createElement("div", {
+      style: { borderTop: "1px solid ".concat(T.border), padding: 10, display: "flex", flexDirection: "column", gap: 8, position: "relative", flexShrink: 0 }
+    },
       /*#__PURE__*/React.createElement("button", {
-        onClick: function () { setStartMenuOpen(false); openCatalog(); },
+        onClick: function () { setSidebarOpen(false); openCatalog(); },
         style: {
-          display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-          padding: "10px 12px", border: "none", borderRadius: 8, cursor: "pointer",
-          background: "transparent", color: T.accent, fontWeight: 600, fontSize: 14, fontFamily: "inherit", minHeight: 42
+          display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+          padding: "9px 10px", border: "1px solid ".concat(T.border), borderRadius: 8, cursor: "pointer",
+          background: "transparent", color: T.accent, fontWeight: 600, fontSize: 13, fontFamily: "inherit"
         }
-      }, /*#__PURE__*/React.createElement(ExternalLink, { size: 16 }), "Abrir Catálogo Público"),
+      }, /*#__PURE__*/React.createElement(ExternalLink, { size: 15 }), "Catálogo Público"),
+
+      profileMenuOpen && /*#__PURE__*/React.createElement("div", {
+        onClick: function () { return setProfileMenuOpen(false); },
+        style: { position: "fixed", inset: 0, zIndex: 205 }
+      }),
+      profileMenuOpen && /*#__PURE__*/React.createElement("div", {
+        style: {
+          position: "absolute", left: 10, right: 10, bottom: "calc(100% + 4px)", zIndex: 206,
+          background: T.surface, border: "1px solid ".concat(T.border), borderRadius: 10,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.35)", overflow: "hidden"
+        }
+      },
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function () { setProfileMenuOpen(false); setView("settings"); if (isMobile) setSidebarOpen(false); },
+          style: {
+            display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+            padding: "10px 12px", border: "none", cursor: "pointer",
+            background: "transparent", color: T.text, fontWeight: 500, fontSize: 13, fontFamily: "inherit"
+          }
+        }, /*#__PURE__*/React.createElement(CheckCircle, { size: 14 }), "Configuración"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function () { setProfileMenuOpen(false); handleLogoutFromMenu(); },
+          style: {
+            display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+            padding: "10px 12px", border: "none", cursor: "pointer",
+            background: "transparent", color: T.red, fontWeight: 500, fontSize: 13, fontFamily: "inherit"
+          }
+        }, /*#__PURE__*/React.createElement(LogOut, { size: 14 }), "Cerrar sesión")
+      ),
+
       /*#__PURE__*/React.createElement("button", {
-        onClick: function () { setStartMenuOpen(false); handleLogoutFromMenu(); },
+        onClick: function () { return setProfileMenuOpen(function (o) { return !o; }); },
         style: {
-          display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-          padding: "10px 12px", border: "none", borderRadius: 8, cursor: "pointer",
-          background: "transparent", color: T.red, fontWeight: 600, fontSize: 14, fontFamily: "inherit", minHeight: 42
+          display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+          padding: "8px 10px", border: "none", borderRadius: 8, cursor: "pointer",
+          background: profileMenuOpen ? T.accentDim : "transparent", fontFamily: "inherit"
         }
-      }, /*#__PURE__*/React.createElement(LogOut, { size: 16 }), "Cerrar sesión")
+      },
+        /*#__PURE__*/React.createElement("span", {
+          style: { width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#10E08A,#4F8EFF)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#fff", fontWeight: 800, fontSize: 12 }
+        }, (settings.storeName || "A").charAt(0).toUpperCase()),
+        /*#__PURE__*/React.createElement("span", { style: { flex: 1, fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, settings.storeName || "Mi Taller"),
+        /*#__PURE__*/React.createElement(MoreVertical, { size: 15, color: T.muted })
+      )
     )
   ),
 
-  // ─── BARRA DE TAREAS (estilo Windows) ───────────────────
   /*#__PURE__*/React.createElement("div", {
-    className: "win-taskbar",
-    style: {
-      height: isMobile ? 52 : 50,
-      display: "flex", alignItems: "center", gap: 8,
-      padding: "0 10px",
-      background: T.card,
-      borderTop: "1px solid ".concat(T.border),
-      flexShrink: 0, zIndex: 60
-    }
+    style: { display: "flex", flexDirection: "column", flex: 1, minWidth: 0, height: "100dvh" }
   },
-    /*#__PURE__*/React.createElement("button", {
-      onClick: function () { setStartMenuOpen(function (o) { return !o; }); },
+    /*#__PURE__*/React.createElement("header", {
       style: {
-        display: "flex", alignItems: "center", gap: 8,
-        padding: isMobile ? "8px 12px" : "8px 16px",
-        background: startMenuOpen ? T.accentDim : "transparent",
-        border: "none", borderRadius: 6, cursor: "pointer",
-        color: startMenuOpen ? T.accent : T.text, fontWeight: 700, fontSize: 14, fontFamily: "inherit", minHeight: 40
+        height: isMobile ? 52 : 58,
+        display: "flex",
+        alignItems: "center",
+        gap: isMobile ? 8 : 12,
+        padding: isMobile ? "0 14px" : "0 22px",
+        borderBottom: "1px solid ".concat(T.border),
+        background: T.surface,
+        flexShrink: 0
       }
     },
-      /*#__PURE__*/React.createElement("span", {
-        style: { width: 20, height: 20, borderRadius: 4, background: "linear-gradient(135deg,#10E08A,#4F8EFF)", display: "flex", alignItems: "center", justifyContent: "center" }
-      }, /*#__PURE__*/React.createElement(LayoutDashboard, { size: 12, color: "#fff" })),
-      !isMobile && "Inicio"
+      (isMobile || !sidebarOpen) && /*#__PURE__*/React.createElement("button", {
+        onClick: function () { return setSidebarOpen(function (o) { return !o; }); },
+        style: { display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, border: "none", borderRadius: 8, background: "transparent", color: T.text, cursor: "pointer", flexShrink: 0 }
+      }, /*#__PURE__*/React.createElement(Menu, { size: 19 })),
+      /*#__PURE__*/React.createElement("h1", {
+        style: { margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.03em" }
+      }, (_activeNavItem && _activeNavItem.label) || "Dashboard"),
+      /*#__PURE__*/React.createElement("div", { style: { flex: 1 } }),
+      !isMobile && lowStock.length > 0 && /*#__PURE__*/React.createElement("div", {
+        onClick: function onClick() { return setView("inventory"); },
+        style: { display: "flex", alignItems: "center", gap: 6, background: "rgba(255,211,42,0.1)", border: "1px solid rgba(157,93,0,0.3)", borderRadius: 4, padding: "5px 12px", fontSize: 14, color: T.yellow, cursor: "pointer" }
+      }, /*#__PURE__*/React.createElement(AlertTriangle, { size: 13 }), " ", lowStock.length, " bajo stock"),
+      !isMobile && readyRepairs.length > 0 && /*#__PURE__*/React.createElement("div", {
+        onClick: function onClick() { return setView("repairs"); },
+        style: { display: "flex", alignItems: "center", gap: 6, background: "rgba(16,124,16,0.1)", border: "1px solid rgba(16,124,16,0.3)", borderRadius: 4, padding: "5px 12px", fontSize: 14, color: T.green, cursor: "pointer" }
+      }, /*#__PURE__*/React.createElement(CheckCircle, { size: 13 }), " ", readyRepairs.length, " lista", readyRepairs.length > 1 ? "s" : "", " para entregar"),
+      isMobile && lowStock.length > 0 && /*#__PURE__*/React.createElement("div", {
+        onClick: function onClick() { return setView("inventory"); },
+        title: "Bajo stock",
+        style: { width: 10, height: 10, borderRadius: "50%", background: T.yellow, flexShrink: 0, cursor: "pointer" }
+      }),
+      isMobile && readyRepairs.length > 0 && /*#__PURE__*/React.createElement("div", {
+        onClick: function onClick() { return setView("repairs"); },
+        title: "Listas para entregar",
+        style: { width: 10, height: 10, borderRadius: "50%", background: T.green, flexShrink: 0, cursor: "pointer" }
+      })
     ),
-    /*#__PURE__*/React.createElement("div", {
-      style: { display: "flex", alignItems: "center", gap: 6, overflowX: "auto", flex: 1, minWidth: 0, height: "100%" }
-    }, openViews.map(function (id) {
-      var ovItem = navItems.find(function (n) { return n.id === id; });
-      if (!ovItem) return null;
-      var isActive = view === id;
-      return /*#__PURE__*/React.createElement("div", {
-        key: id,
-        onClick: function () { setView(id); },
+
+    /*#__PURE__*/React.createElement("main", {
+      className: "trp-scroll",
+      style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24, paddingBottom: isMobile ? 78 : 24 }
+    },
+    view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings }),
+    view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
+    view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
+    view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
+    view === "celulares" && /*#__PURE__*/React.createElement(CelularesView, { data: data, save: save, notify: notify }),
+    view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
+    view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
+    view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
+    view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
+    view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data }),
+    view === "proveedores" && /*#__PURE__*/React.createElement(ProveedoresView, { data: data, save: save, notify: notify })
+    ),
+
+    isMobile && /*#__PURE__*/React.createElement("nav", {
+      className: "trp-bottom-nav",
+      style: {
+        position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 90,
+        display: "flex", alignItems: "center", justifyContent: "space-around",
+        background: "rgba(20,20,20,0.001)".concat(""), backgroundColor: T.surface,
+        borderTop: "1px solid ".concat(T.border),
+        padding: "6px 4px", height: 58
+      }
+    }, [navItems[0], navItems[1], navItems[2], navItems[6], navItems[10]].map(function (item) {
+      var active = view === item.id;
+      return /*#__PURE__*/React.createElement("button", {
+        key: item.id,
+        onClick: function () { return setView(item.id); },
         style: {
-          display: "flex", alignItems: "center", gap: 7, flexShrink: 0,
-          padding: isMobile ? "7px 10px" : "7px 12px", borderRadius: 6, cursor: "pointer",
-          background: isActive ? T.accentDim : "transparent",
-          color: isActive ? T.accent : T.muted, fontWeight: isActive ? 700 : 500, fontSize: 13,
-          borderBottom: isActive ? "2px solid ".concat(T.accent) : "2px solid transparent"
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+          flex: 1, height: "100%", border: "none", background: "transparent", cursor: "pointer",
+          color: active ? T.accent : T.muted, position: "relative"
         }
       },
-        /*#__PURE__*/React.createElement("span", { style: { display: "flex" } }, ovItem.icon),
-        !isMobile && ovItem.label,
-        openViews.length > 1 && /*#__PURE__*/React.createElement("span", {
-          onClick: function (e) { closeOpenView(id, e); },
-          title: "Cerrar",
-          style: {
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 15, height: 15, borderRadius: "50%", marginLeft: 2,
-            color: isActive ? T.accent : T.muted, fontSize: 12, lineHeight: 1
-          }
-        }, "×")
+        item.icon,
+        /*#__PURE__*/React.createElement("span", { style: { fontSize: 10, fontWeight: active ? 700 : 500 } }, item.label),
+        item.badge > 0 && /*#__PURE__*/React.createElement("span", {
+          style: { position: "absolute", top: 2, right: "28%", background: T.orange, color: "#fff", borderRadius: 10, padding: "0 4px", fontSize: 9, fontWeight: 800 }
+        }, item.badge),
+        item.alert && /*#__PURE__*/React.createElement("span", { style: { position: "absolute", top: 4, right: "30%", width: 6, height: 6, background: T.yellow, borderRadius: "50%" } })
       );
-    })),
-    /*#__PURE__*/React.createElement("div", {
-      style: { textAlign: "right", padding: "4px 10px", borderRadius: 6, color: T.muted, fontSize: isMobile ? 11 : 12, lineHeight: 1.3, cursor: "default" }
-    },
-      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, color: T.text } }, clockNow.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })),
-      !isMobile && /*#__PURE__*/React.createElement("div", null, clockNow.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }))
-    )
+    }))
   ),
 
   // ─── Aviso de inactividad ───────────────────────────────
@@ -10413,6 +10385,11 @@ function TrackingLoader(_ref) {
   var _tk3 = useState(""), _tka3 = _slicedToArray(_tk3, 2), errorMsg = _tka3[0], setErrorMsg = _tka3[1];
   var _tk4 = useState(null), _tka4 = _slicedToArray(_tk4, 2), store = _tka4[0], setStore = _tka4[1];
   var _tk5 = useState(null), _tka5 = _slicedToArray(_tk5, 2), lightboxSrc = _tka5[0], setLightboxSrc = _tka5[1];
+  var _tk6 = useState(null), _tka6 = _slicedToArray(_tk6, 2), existingRating = _tka6[0], setExistingRating = _tka6[1];
+  var _tk7 = useState(0), _tka7 = _slicedToArray(_tk7, 2), myRating = _tka7[0], setMyRating = _tka7[1];
+  var _tk8 = useState(0), _tka8 = _slicedToArray(_tk8, 2), hoverRating = _tka8[0], setHoverRating = _tka8[1];
+  var _tk9 = useState(""), _tka9 = _slicedToArray(_tk9, 2), myComment = _tka9[0], setMyComment = _tka9[1];
+  var _tk10 = useState(false), _tka10 = _slicedToArray(_tk10, 2), submittingRating = _tka10[0], setSubmittingRating = _tka10[1];
 
   var loadTrack = function(retries) {
     if (!clientId || !repairId) { setLoading(false); setErrorMsg("Enlace de seguimiento no válido."); return; }
@@ -10429,7 +10406,15 @@ function TrackingLoader(_ref) {
             var st = {};
             if (doc.data().settingsData) { try { st = JSON.parse(doc.data().settingsData); } catch(e2){} }
             setStore(st);
-            if (found) { setRepair(found); setLoading(false); }
+            if (found) {
+              setRepair(found);
+              setLoading(false);
+              try {
+                db.collection("calificaciones").doc(clientId + "_" + found.id).get().then(function(rdoc) {
+                  if (rdoc.exists) setExistingRating(rdoc.data());
+                }).catch(function(){});
+              } catch(e3) {}
+            }
             else { setLoading(false); setErrorMsg("No encontramos una reparación con este código."); }
           } catch(e) { setLoading(false); setErrorMsg("Error al leer los datos."); }
         } else { setLoading(false); setErrorMsg("No encontramos información de este taller."); }
@@ -10441,6 +10426,21 @@ function TrackingLoader(_ref) {
   };
 
   useEffect(function() { loadTrack(3); }, [clientId, repairId]);
+
+  var submitRating = function() {
+    if (!myRating) return;
+    var db = window.__firebaseDB;
+    if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0) db = firebase.apps[0].firestore();
+    if (!db) return;
+    setSubmittingRating(true);
+    var payload = { clientId: clientId, repairId: repair.id, rating: myRating, comment: myComment.trim(), date: new Date().toISOString() };
+    db.collection("calificaciones").doc(clientId + "_" + repair.id).set(payload).then(function() {
+      setExistingRating(payload);
+      setSubmittingRating(false);
+    }).catch(function() {
+      setSubmittingRating(false);
+    });
+  };
 
   var fmt = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
   var storeName = (store && store.storeName) ? store.storeName : "ACCE PRO";
@@ -10595,6 +10595,48 @@ function TrackingLoader(_ref) {
           })
         )
       ),
+      r.status === "Entregado" && /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:20, padding:"26px 24px", boxShadow:"0 4px 20px rgba(20,15,30,0.06)", marginBottom:16, border:"1px solid rgba(20,15,30,0.05)", textAlign:"center" }
+      },
+        existingRating
+          ? /*#__PURE__*/React.createElement(React.Fragment, null,
+              /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"center", gap:4, marginBottom:10 } },
+                [1,2,3,4,5].map(function(n){
+                  return /*#__PURE__*/React.createElement(Star, { key:n, size:26, color:"#F59E0B", fill: n<=existingRating.rating ? "#F59E0B" : "none" });
+                })
+              ),
+              /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:"#15101D", marginBottom:4 } }, "¡Gracias por tu calificación!"),
+              existingRating.comment && /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, color:"#8A8398", fontStyle:"italic", marginTop:6 } }, "“" + existingRating.comment + "”")
+            )
+          : /*#__PURE__*/React.createElement(React.Fragment, null,
+              /*#__PURE__*/React.createElement("div", { style:{ fontSize:15, fontWeight:700, color:"#15101D", marginBottom:4 } }, "\xBFC\xF3mo calificar\xEDas nuestro servicio?"),
+              /*#__PURE__*/React.createElement("div", { style:{ fontSize:13, color:"#8A8398", marginBottom:14 } }, "Tu opini\xF3n nos ayuda a mejorar"),
+              /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"center", gap:6, marginBottom:16 } },
+                [1,2,3,4,5].map(function(n){
+                  var active = n <= (hoverRating || myRating);
+                  return /*#__PURE__*/React.createElement("button", {
+                    key:n,
+                    onClick:function(){ setMyRating(n); },
+                    onMouseEnter:function(){ setHoverRating(n); },
+                    onMouseLeave:function(){ setHoverRating(0); },
+                    style:{ background:"none", border:"none", cursor:"pointer", padding:4, display:"flex" }
+                  }, /*#__PURE__*/React.createElement(Star, { size:34, color: active ? "#F59E0B" : "#D9D5E0", fill: active ? "#F59E0B" : "none" }));
+                })
+              ),
+              myRating > 0 && /*#__PURE__*/React.createElement("textarea", {
+                value: myComment,
+                onChange: function(e){ setMyComment(e.target.value); },
+                placeholder: "Cu\xE9ntanos m\xE1s (opcional)",
+                rows: 3,
+                style: { width:"100%", padding:"10px 12px", border:"1px solid #E5E1EC", borderRadius:10, fontSize:13, fontFamily:"inherit", resize:"vertical", boxSizing:"border-box", marginBottom:12, outline:"none" }
+              }),
+              myRating > 0 && /*#__PURE__*/React.createElement("button", {
+                onClick: submitRating,
+                disabled: submittingRating,
+                style:{ padding:"11px 28px", background:"linear-gradient(135deg,#E8540F,#FF6A2B)", color:"#fff", border:"none", borderRadius:12, fontWeight:700, fontSize:14, cursor:"pointer", opacity: submittingRating?0.6:1 }
+              }, submittingRating ? "Enviando..." : "Enviar calificaci\xF3n")
+            )
+      ),
       lightboxSrc && /*#__PURE__*/React.createElement("div", {
         onClick: function() { setLightboxSrc(null); },
         style:{
@@ -10629,6 +10671,20 @@ function PublicCatalogLoader(_ref) {
   var _pc1 = useState(null), _pca1 = _slicedToArray(_pc1, 2), pubData = _pca1[0], setPubData = _pca1[1];
   var _pc2 = useState(true), _pca2 = _slicedToArray(_pc2, 2), loading = _pca2[0], setLoading = _pca2[1];
   var _pc3 = useState(""), _pca3 = _slicedToArray(_pc3, 2), errorMsg = _pca3[0], setErrorMsg = _pca3[1];
+  var _pc4 = useState(null), _pca4 = _slicedToArray(_pc4, 2), ratingsSummary = _pca4[0], setRatingsSummary = _pca4[1];
+
+  useEffect(function() {
+    if (!clientId) return;
+    var db = window.__firebaseDB;
+    if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0) db = firebase.apps[0].firestore();
+    if (!db) return;
+    db.collection("calificaciones").where("clientId", "==", clientId).get().then(function(snap) {
+      var all = snap.docs.map(function(d) { return d.data(); });
+      if (all.length === 0) return;
+      var avg = all.reduce(function(s, r) { return s + (r.rating || 0); }, 0) / all.length;
+      setRatingsSummary({ avg: avg, count: all.length });
+    }).catch(function(){});
+  }, [clientId]);
 
   var loadFromFirebase = function(retries) {
     if (!clientId) { setLoading(false); setErrorMsg("ID de catálogo no válido."); return; }
@@ -10693,6 +10749,7 @@ function PublicCatalogLoader(_ref) {
   return /*#__PURE__*/React.createElement(PublicView, {
     data: pubData,
     settings: pubData.settings || _objectSpread({}, DEFAULT_SETTINGS),
+    ratingsSummary: ratingsSummary,
     onBack: function() { window.location.hash = ""; window.location.reload(); }
   });
 }
