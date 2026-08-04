@@ -9752,7 +9752,8 @@ function App(_appProps) {
   // propio por cada visita cuando el link no trae "&r=...".
   var copyRatingLink = function copyRatingLink() {
     var url = "https://edier27.github.io/Acce7/calificar/?client=" + encodeURIComponent(clientId);
-    var msg = "¡Nos encantaría conocer tu opinión! ¿Nos regalas 30 segundos para calificar nuestro servicio?\n\n" + url + "\n\n¡Gracias!";
+    var tienda = (settings && settings.storeName) || "nosotros";
+    var msg = "📌 ¿Nos has visitado antes? Ayúdanos calificando tu experiencia con " + tienda + ":\n\n⭐ " + url + "\n\nToma 30 segundos y significa mucho para nosotros.";
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(msg)
         .then(function () { notify("Mensaje copiado. Pégalo en WhatsApp"); })
