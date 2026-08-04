@@ -9746,6 +9746,21 @@ function App(_appProps) {
       window.open(url, "_blank");
     }
   };
+  // Link general de calificación: el mismo para todos los clientes (registrados o
+  // no), pensado para publicar en el estado de WhatsApp, grupos, redes, etc.
+  // No depende de una reparación puntual: la página de calificar genera un ID
+  // propio por cada visita cuando el link no trae "&r=...".
+  var copyRatingLink = function copyRatingLink() {
+    var url = "https://edier27.github.io/Acce7/calificar/?client=" + encodeURIComponent(clientId);
+    var msg = "¡Nos encantaría conocer tu opinión! ¿Nos regalas 30 segundos para calificar nuestro servicio?\n\n" + url + "\n\n¡Gracias!";
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg)
+        .then(function () { notify("Mensaje copiado. Pégalo en WhatsApp"); })
+        .catch(function () { notify("No se pudo copiar el link", "error"); });
+    } else {
+      notify("No se pudo copiar el link", "error");
+    }
+  };
   var notify = function notify(msg) {
     var type = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "success";
     setToast({
@@ -9945,6 +9960,15 @@ function App(_appProps) {
           background: "transparent", color: T.accent, fontWeight: 600, fontSize: 13, fontFamily: "inherit"
         }
       }, /*#__PURE__*/React.createElement(ExternalLink, { size: 15 }), "Catálogo Público"),
+
+      /*#__PURE__*/React.createElement("button", {
+        onClick: function () { setSidebarOpen(false); copyRatingLink(); },
+        style: {
+          display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+          padding: "9px 10px", border: "1px solid ".concat(T.border), borderRadius: 8, cursor: "pointer",
+          background: "transparent", color: T.accent, fontWeight: 600, fontSize: 13, fontFamily: "inherit"
+        }
+      }, /*#__PURE__*/React.createElement(Star, { size: 15 }), "Link para Calificar"),
 
       profileMenuOpen && /*#__PURE__*/React.createElement("div", {
         onClick: function () { return setProfileMenuOpen(false); },
