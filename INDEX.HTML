@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Califica tu experiencia</title>
+<meta name="description" content="Cuéntanos cómo te fue con tu reparación." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⭐</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+<style>
+  :root{
+    --grad1:#6D28D9; --grad2:#DB2777; --grad3:#F59E0B;
+    --ink:#1A1220; --muted:#7a7189; --card:#ffffff;
+    --star:#F59E0B; --star-off:#e4dfe9;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%;}
+  body{
+    font-family:'DM Sans', system-ui, sans-serif;
+    min-height:100dvh;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(219,39,119,.55), transparent 60%),
+      radial-gradient(1000px 700px at 110% 10%, rgba(245,158,11,.45), transparent 55%),
+      linear-gradient(160deg, #4C1D95 0%, #6D28D9 35%, #A21CAF 70%, #DB2777 100%);
+    background-attachment:fixed;
+    display:flex; align-items:center; justify-content:center;
+    padding:24px 16px;
+    overflow-x:hidden;
+  }
+  .blob{position:fixed; border-radius:50%; filter:blur(60px); opacity:.35; z-index:0; pointer-events:none;}
+  .blob1{width:320px; height:320px; background:#F59E0B; top:-100px; left:-100px; animation:float1 14s ease-in-out infinite;}
+  .blob2{width:280px; height:280px; background:#DB2777; bottom:-90px; right:-90px; animation:float2 16s ease-in-out infinite;}
+  @keyframes float1{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,40px)}}
+  @keyframes float2{0%,100%{transform:translate(0,0)}50%{transform:translate(-30px,-30px)}}
+
+  .card{
+    position:relative; z-index:1;
+    width:100%; max-width:440px;
+    background:var(--card);
+    border-radius:28px;
+    box-shadow:0 30px 80px rgba(30,10,50,.45), 0 2px 0 rgba(255,255,255,.6) inset;
+    overflow:hidden;
+    animation:pop .5s cubic-bezier(.2,1.4,.4,1) both;
+  }
+  @keyframes pop{from{opacity:0; transform:translateY(18px) scale(.97)} to{opacity:1; transform:translateY(0) scale(1)}}
+
+  .hero{
+    padding:34px 26px 26px;
+    text-align:center;
+    background:linear-gradient(135deg, var(--grad1), var(--grad2) 60%, var(--grad3));
+    color:#fff;
+    position:relative;
+  }
+  .hero::after{
+    content:""; position:absolute; left:0; right:0; bottom:-1px; height:28px;
+    background:var(--card);
+    border-radius:28px 28px 0 0;
+  }
+  .logo{
+    width:64px; height:64px; border-radius:18px; margin:0 auto 12px;
+    background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35);
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    backdrop-filter:blur(6px); font-size:28px;
+  }
+  .logo img{width:100%; height:100%; object-fit:cover;}
+  .store-name{font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; opacity:.9;}
+  .hero h1{font-size:22px; font-weight:800; margin:8px 0 0; letter-spacing:-.3px;}
+
+  .body-pad{padding:26px 26px 30px; text-align:center; position:relative;}
+  .subtitle{color:var(--muted); font-size:14.5px; font-weight:500; margin:0 0 22px; line-height:1.5;}
+  .subtitle b{color:var(--ink);}
+
+  .stars{display:flex; justify-content:center; gap:6px; margin-bottom:10px;}
+  .star-btn{
+    background:none; border:none; cursor:pointer; padding:4px;
+    transform:scale(1); transition:transform .15s ease;
+  }
+  .star-btn:active{transform:scale(.85);}
+  .star-btn svg{display:block; transition:transform .2s ease, filter .2s ease;}
+  .star-btn.active svg{transform:scale(1.08);}
+
+  .feeling{
+    min-height:26px; font-size:15px; font-weight:700; margin-bottom:18px;
+    transition:all .2s ease; color:var(--ink);
+  }
+
+  textarea{
+    width:100%; border:1.5px solid #ece7f2; border-radius:16px; padding:13px 14px;
+    font-family:inherit; font-size:14px; resize:vertical; min-height:78px;
+    outline:none; transition:border-color .2s, opacity .3s, max-height .3s;
+    background:#faf9fc; color:var(--ink);
+  }
+  textarea:focus{border-color:#c7a9f7;}
+  textarea::placeholder{color:#a79cb8;}
+
+  .hidden-collapse{max-height:0; opacity:0; overflow:hidden; margin-bottom:0; pointer-events:none;}
+  .shown-collapse{max-height:200px; opacity:1; margin-bottom:16px;}
+
+  .submit-btn{
+    width:100%; margin-top:6px; padding:15px; border:none; border-radius:16px;
+    background:linear-gradient(135deg, var(--grad1), var(--grad2));
+    color:#fff; font-family:inherit; font-weight:800; font-size:15px; cursor:pointer;
+    box-shadow:0 10px 24px rgba(109,40,217,.35);
+    transition:transform .15s ease, opacity .2s ease, max-height .3s, margin .3s;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .submit-btn:active{transform:scale(.98);}
+  .submit-btn:disabled{opacity:.55; cursor:default;}
+
+  .spinner{width:16px; height:16px; border:2.5px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .state{padding:52px 26px; text-align:center;}
+  .state .icon{font-size:46px; margin-bottom:14px; display:block;}
+  .state h2{font-size:19px; font-weight:800; margin:0 0 8px;}
+  .state p{color:var(--muted); font-size:14px; font-weight:500; margin:0; line-height:1.5;}
+  .retry-btn{
+    margin-top:18px; padding:11px 22px; border:none; border-radius:12px;
+    background:var(--ink); color:#fff; font-family:inherit; font-weight:700; font-size:13.5px; cursor:pointer;
+  }
+
+  .thanks-stars{display:flex; justify-content:center; gap:4px; margin:6px 0 4px;}
+  .thanks-quote{
+    margin-top:14px; padding:12px 16px; background:#faf9fc; border-radius:14px;
+    color:var(--muted); font-size:13.5px; font-style:italic; line-height:1.5;
+  }
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; margin-top:16px;
+    padding:8px 16px; border-radius:30px; background:#f3edfb; color:#6D28D9;
+    font-size:12px; font-weight:700;
+  }
+
+  footer{
+    text-align:center; margin-top:18px; color:rgba(255,255,255,.75); font-size:12px; font-weight:500;
+    position:relative; z-index:1;
+  }
+  .wrap{display:flex; flex-direction:column; align-items:center; width:100%;}
+
+  @media (max-width:380px){
+    .star-btn svg{width:34px; height:34px;}
+  }
+</style>
+</head>
+<body>
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+  <div class="wrap">
+    <div class="card" id="card">
+      <div class="state">
+        <span class="icon">✨</span>
+        <h2>Cargando…</h2>
+        <p>Un momento, estamos preparando todo.</p>
+      </div>
+    </div>
+    <footer>Powered by ACCE PRO</footer>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  var firebaseConfig = {
+    apiKey: "AIzaSyAzOoK99y6L95sFAKZFZ0wY42Ljw2YEOM8",
+    authDomain: "globalacce-37997.firebaseapp.com",
+    projectId: "globalacce-37997",
+    storageBucket: "globalacce-37997.firebasestorage.app",
+    messagingSenderId: "779307465490",
+    appId: "1:779307465490:web:848a554272501bbaf251cb"
+  };
+  var app = firebase.initializeApp(firebaseConfig);
+  var db = app.firestore();
+
+  var cardEl = document.getElementById("card");
+  var params = new URLSearchParams(window.location.search);
+  var clientId = (params.get("client") || "").trim();
+  var rParam = (params.get("r") || "").trim();
+
+  var FEELINGS = ["", "Lamentamos la mala experiencia 😞", "Podemos mejorar 😕", "Gracias por tu opinión 🙂", "¡Nos alegra saberlo! 😃", "¡Excelente! Gracias 🤩"];
+
+  function starIcon(filled){
+    var color = filled ? "#F59E0B" : "#e4dfe9";
+    var fill = filled ? "#F59E0B" : "none";
+    return '<svg width="38" height="38" viewBox="0 0 24 24" fill="'+fill+'" stroke="'+color+'" stroke-width="1.6" stroke-linejoin="round"><polygon points="12 2 15.09 8.63 22 9.24 16.5 14.14 18.18 21 12 17.27 5.82 21 7.5 14.14 2 9.24 8.91 8.63 12 2"/></svg>';
+  }
+
+  function renderState(icon, title, msg, showRetry){
+    cardEl.innerHTML =
+      '<div class="state">' +
+        '<span class="icon">'+icon+'</span>' +
+        '<h2>'+title+'</h2>' +
+        '<p>'+msg+'</p>' +
+        (showRetry ? '<button class="retry-btn" id="retryBtn">Reintentar</button>' : '') +
+      '</div>';
+    var btn = document.getElementById("retryBtn");
+    if (btn) btn.onclick = function(){ boot(); };
+  }
+
+  function escapeHtml(s){
+    return String(s || "").replace(/[&<>"']/g, function(c){
+      return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+    });
+  }
+
+  function renderThanks(storeName, logo, rating, comment){
+    var starsHtml = "";
+    for (var i = 1; i <= 5; i++) starsHtml += starIcon(i <= rating);
+    cardEl.innerHTML =
+      '<div class="hero">' +
+        '<div class="logo">'+(logo ? '<img src="'+logo+'">' : '🎉')+'</div>' +
+        '<div class="store-name">'+escapeHtml(storeName)+'</div>' +
+        '<h1>¡Gracias por tu opinión!</h1>' +
+      '</div>' +
+      '<div class="body-pad">' +
+        '<div class="thanks-stars">'+starsHtml+'</div>' +
+        '<div class="feeling">'+FEELINGS[rating]+'</div>' +
+        (comment ? '<div class="thanks-quote">“'+escapeHtml(comment)+'”</div>' : '') +
+        '<div class="badge">✔️ Calificación registrada</div>' +
+      '</div>';
+    if (rating >= 4) {
+      setTimeout(function(){
+        if (window.confetti) {
+          confetti({ particleCount: 90, spread: 75, origin: { y: 0.4 }, colors: ["#F59E0B","#DB2777","#6D28D9","#fff"] });
+        }
+      }, 200);
+    }
+  }
+
+  function renderForm(ctx){
+    var storeName = ctx.storeName, logo = ctx.logo, device = ctx.device;
+    var myRating = 0, myComment = "";
+
+    var subtitleText = device
+      ? 'Tu <b>' + escapeHtml(device) + '</b> ya está contigo. ¿Cómo fue tu experiencia con nosotros?'
+      : '¿Cómo calificarías el servicio que recibiste?';
+
+    cardEl.innerHTML =
+      '<div class="hero">' +
+        '<div class="logo">'+(logo ? '<img src="'+logo+'">' : '⭐')+'</div>' +
+        '<div class="store-name">'+escapeHtml(storeName)+'</div>' +
+        '<h1>Cuéntanos qué tal</h1>' +
+      '</div>' +
+      '<div class="body-pad">' +
+        '<p class="subtitle">'+subtitleText+'</p>' +
+        '<div class="stars" id="starsRow"></div>' +
+        '<div class="feeling" id="feelingText">&nbsp;</div>' +
+        '<div id="commentWrap" class="hidden-collapse">' +
+          '<textarea id="commentBox" placeholder="Cuéntanos más (opcional)"></textarea>' +
+        '</div>' +
+        '<button class="submit-btn" id="submitBtn" disabled>Enviar calificación</button>' +
+      '</div>';
+
+    var starsRow = document.getElementById("starsRow");
+    var feelingText = document.getElementById("feelingText");
+    var commentWrap = document.getElementById("commentWrap");
+    var commentBox = document.getElementById("commentBox");
+    var submitBtn = document.getElementById("submitBtn");
+
+    function paint(hoverVal){
+      var v = hoverVal || myRating;
+      starsRow.innerHTML = "";
+      for (var i = 1; i <= 5; i++) {
+        (function(n){
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "star-btn" + (n <= v ? " active" : "");
+          btn.innerHTML = starIcon(n <= v);
+          btn.addEventListener("click", function(){ myRating = n; onRatingChange(); });
+          btn.addEventListener("mouseenter", function(){ paint(n); });
+          btn.addEventListener("mouseleave", function(){ paint(); });
+          starsRow.appendChild(btn);
+        })(i);
+      }
+      feelingText.textContent = v ? FEELINGS[v] : " ";
+    }
+
+    function onRatingChange(){
+      paint();
+      submitBtn.disabled = myRating === 0;
+      if (myRating > 0) commentWrap.className = "shown-collapse";
+    }
+
+    commentBox && commentBox.addEventListener("input", function(){ myComment = commentBox.value; });
+    paint();
+
+    submitBtn.addEventListener("click", function(){
+      if (!myRating || submitBtn.disabled) return;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span> Enviando...';
+      var payload = {
+        clientId: clientId,
+        repairId: ctx.repairId,
+        rating: myRating,
+        comment: (myComment || "").trim(),
+        date: new Date().toISOString(),
+        customer: ctx.customer || "",
+        device: ctx.device || ""
+      };
+      db.collection("calificaciones").doc(clientId + "_" + ctx.repairId).set(payload)
+        .then(function(){ renderThanks(storeName, logo, myRating, payload.comment); })
+        .catch(function(){
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = "Enviar calificación";
+          feelingText.textContent = "No se pudo enviar, intenta de nuevo.";
+        });
+    });
+  }
+
+  function boot(){
+    renderState("✨", "Cargando…", "Un momento, estamos preparando todo.", false);
+
+    if (!clientId || !rParam) {
+      renderState("🔗", "Enlace no válido", "Este enlace de calificación parece incompleto. Pide a tu taller que te reenvíe el link.", false);
+      return;
+    }
+
+    db.collection("catalogos_publicos").doc(clientId).get().then(function(doc){
+      if (!doc.exists) {
+        renderState("🔍", "No encontramos el taller", "Verifica el enlace o contacta directamente a tu taller.", true);
+        return;
+      }
+      var data = doc.data() || {};
+      var storeName = "Nuestro Taller", logo = "";
+      if (data.settingsData) {
+        try {
+          var s = JSON.parse(data.settingsData);
+          storeName = s.storeName || storeName;
+          logo = s.logo || "";
+        } catch(e){}
+      }
+
+      var repairId = rParam, customer = "", device = "";
+      if (data.appData) {
+        try {
+          var d = JSON.parse(data.appData);
+          var found = (d.repairs || []).find(function(x){
+            return (x.id || "").slice(-6).toUpperCase() === rParam.toUpperCase() || x.id === rParam;
+          });
+          if (found) {
+            repairId = found.id;
+            customer = found.customer || "";
+            device = found.device || "";
+          }
+        } catch(e){}
+      }
+
+      db.collection("calificaciones").doc(clientId + "_" + repairId).get().then(function(rdoc){
+        if (rdoc.exists) {
+          var rd = rdoc.data();
+          renderThanks(storeName, logo, rd.rating || 0, rd.comment || "");
+        } else {
+          renderForm({ storeName: storeName, logo: logo, repairId: repairId, customer: customer, device: device });
+        }
+      }).catch(function(){
+        renderState("📡", "Sin conexión", "No pudimos conectarnos. Revisa tu internet e intenta de nuevo.", true);
+      });
+    }).catch(function(){
+      renderState("📡", "Sin conexión", "No pudimos conectarnos. Revisa tu internet e intenta de nuevo.", true);
+    });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
