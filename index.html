@@ -9390,9 +9390,11 @@ function App(_appProps) {
     var db = window.__firebaseDB;
     if (!db && typeof firebase !== "undefined" && firebase.apps && firebase.apps.length > 0) db = firebase.apps[0].firestore();
     if (!db) return;
-    db.collection("calificaciones").where("clientId", "==", clientId).get().then(function (snap) {
-      setRatings(snap.docs.map(function (d) { return d.data(); }));
-    }).catch(function () {});
+    var unsub = db.collection("calificaciones").where("clientId", "==", clientId)
+      .onSnapshot(function (snap) {
+        setRatings(snap.docs.map(function (d) { return d.data(); }));
+      }, function () {});
+    return function () { try { unsub(); } catch(e) {} };
   }, [clientId]);
   var _notifOpen = useState(false), _notifOpenA = _slicedToArray(_notifOpen, 2), notifOpen = _notifOpenA[0], setNotifOpen = _notifOpenA[1];
   var _seenAt = useState(function () {
