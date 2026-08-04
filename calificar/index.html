@@ -333,10 +333,14 @@
   function boot(){
     renderState('<div class="spinner-lg"></div>', "Cargando…", "Un momento, estamos preparando todo.", false);
 
-    if (!clientId || !rParam) {
+    if (!clientId) {
       renderState(ICON_LINK_OFF, "Enlace no válido", "Este enlace de calificación parece incompleto. Pide a tu taller que te reenvíe el link.", false);
       return;
     }
+    // Sin "r" en la URL = link general (el mismo para cualquier cliente, publicado
+    // en WhatsApp/redes). Cada visita genera su propio ID de calificación, así que
+    // el mismo link sirve para muchas personas distintas, no solo para una reparación.
+    var isGeneral = !rParam;
 
     db.collection("catalogos_publicos").doc(clientId).get().then(function(doc){
       if (!doc.exists) {
@@ -351,6 +355,12 @@
           storeName = s.storeName || storeName;
           logo = s.logo || "";
         } catch(e){}
+      }
+
+      if (isGeneral) {
+        var genId = "gen_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+        renderForm({ storeName: storeName, logo: logo, repairId: genId, customer: "", device: "" });
+        return;
       }
 
       var repairId = rParam, customer = "", device = "";
