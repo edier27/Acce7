@@ -9145,10 +9145,10 @@ function _compressImageFile(file, maxS, quality) {
 }
 
 // ── DOCUMENTOS: facturas de compra + evidencias de aviso a clientes ──
-// Los archivos (imagen o PDF) se suben a Firebase Storage (documentos/{uid}/{clientId}/...)
+// Las fotos se comprimen y se suben a Firebase Storage (documentos/{uid}/{clientId}/...)
 // y solo se guarda su URL + metadatos en los datos del taller (no ocupan espacio en Firestore).
 var DOC_TABS = [
-  { id: "facturas", label: "Facturas de compra", icon: Receipt, empty: "Aún no has guardado facturas de compra.", help: "Guarda aquí las facturas o comprobantes de compra de tus productos y repuestos (foto, captura o PDF)." },
+  { id: "facturas", label: "Facturas de compra", icon: Receipt, empty: "Aún no has guardado facturas de compra.", help: "Guarda aquí las facturas o comprobantes de compra de tus productos y repuestos (foto o captura de pantalla)." },
   { id: "evidencias", label: "Avisos a clientes", icon: ShieldAlert, empty: "Aún no has guardado evidencias de aviso a clientes.", help: "Guarda aquí las capturas de los recordatorios/requerimientos que le envíes por WhatsApp a un cliente que no reclama su equipo. Te sirven como respaldo ante un caso de abandono (Ley 1480 de 2011)." }
 ];
 function DocumentosView(_ref) {
@@ -9167,8 +9167,7 @@ function DocumentosView(_ref) {
 
   var uploadFile = function (file) {
     var isImg = /^image\//.test(file.type);
-    var isPdf = file.type === "application/pdf";
-    if (!isImg && !isPdf) { notify("Solo se permiten imágenes o archivos PDF", "error"); return; }
+    if (!isImg) { notify("Solo se permiten imágenes (foto o captura de pantalla)", "error"); return; }
     if (file.size > 15 * 1024 * 1024) { notify("El archivo pesa más de 15MB", "error"); return; }
     if (!window.__storage) { notify("Almacenamiento no disponible. Revisa tu conexión e inténtalo de nuevo.", "error"); return; }
     var ownerUid = window.__uid || _currentUid();
@@ -9203,15 +9202,11 @@ function DocumentosView(_ref) {
       });
     };
 
-    if (isImg) {
-      _compressImageFile(file, 1600, 0.82).then(function (blob) {
-        finishUpload(blob, "image/jpeg", "foto.jpg");
-      }).catch(function () {
-        finishUpload(file, file.type, (file.name || "imagen").replace(/[^a-zA-Z0-9._-]/g, "_"));
-      });
-    } else {
-      finishUpload(file, "application/pdf", (file.name || "documento.pdf").replace(/[^a-zA-Z0-9._-]/g, "_"));
-    }
+    _compressImageFile(file, 1600, 0.82).then(function (blob) {
+      finishUpload(blob, "image/jpeg", "foto.jpg");
+    }).catch(function () {
+      finishUpload(file, file.type, (file.name || "imagen").replace(/[^a-zA-Z0-9._-]/g, "_"));
+    });
   };
 
   var handlePick = function (e) {
@@ -9258,14 +9253,14 @@ function DocumentosView(_ref) {
         })
       ),
       /*#__PURE__*/React.createElement("input", {
-        ref: fileInputRef, type: "file", accept: "image/*,application/pdf",
+        ref: fileInputRef, type: "file", accept: "image/*",
         style: { display: "none" }, onChange: handlePick
       }),
       /*#__PURE__*/React.createElement(Btn, {
         icon: uploading ? /*#__PURE__*/React.createElement(Loader2, { size: 15, className: "trp-spin" }) : /*#__PURE__*/React.createElement(UploadCloud, { size: 15 }),
         disabled: uploading,
         onClick: function () { fileInputRef.current && fileInputRef.current.click(); }
-      }, uploading ? "Subiendo... " + progress + "%" : "Subir foto, captura o PDF")
+      }, uploading ? "Subiendo... " + progress + "%" : "Subir foto o captura")
     ),
     docs.length === 0
       ? /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: "40px 20px", color: T.muted, fontSize: 14 } }, cfg.empty)
