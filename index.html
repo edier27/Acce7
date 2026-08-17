@@ -1535,20 +1535,20 @@ function ResumenDia(_props) {
       if(adv.date===hoy) _abonosHoyItems.push({ repair:r, adv:adv });
     });
   });
-  var totalAbonosHoy = _abonosHoyItems.reduce(function(s,x){ return s+(x.adv.amount||0); }, 0);
+  var totalAbonosHoy = _abonosHoyItems.reduce(function(s,x){ return s+(Number(x.adv.amount)||0); }, 0);
 
-  var totalVentas   = ventasHoy.reduce(function(a,s){ return a+(s.total||0); },0);
-  var totalReps     = repsHoy.reduce(function(a,r){ return a+(r.cost||0); },0);
-  var totalIngresos = ingresosHoy.reduce(function(a,e){ return a+(e.amount||0); },0);
-  var totalEgresos  = egresosHoy.reduce(function(a,e){ return a+(e.amount||0); },0);
+  var totalVentas   = ventasHoy.reduce(function(a,s){ return a+(Number(s.total)||0); },0);
+  var totalReps     = repsHoy.reduce(function(a,r){ return a+(Number(r.cost)||0); },0);
+  var totalIngresos = ingresosHoy.reduce(function(a,e){ return a+(Number(e.amount)||0); },0);
+  var totalEgresos  = egresosHoy.reduce(function(a,e){ return a+(Number(e.amount)||0); },0);
   var totalEntradas = totalVentas + totalReps + totalAbonosHoy + totalIngresos;
   var balanceDia    = totalEntradas - totalEgresos;
 
   // ── TOTAL EN CAJA ACUMULADO (todo el histórico) ──
-  var cajaVentas    = (data.sales||[]).reduce(function(a,s){ return a+(s.total||0); },0);
-  var cajaReps      = (data.repairs||[]).filter(function(r){ return r.paid; }).reduce(function(a,r){ return a+(r.cost||0); },0);
-  var cajaIngresos  = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso"; }).reduce(function(a,e){ return a+(e.amount||0); },0);
-  var cajaEgresos   = (data.cashflow||[]).filter(function(e){ return e.type==="egreso"; }).reduce(function(a,e){ return a+(e.amount||0); },0);
+  var cajaVentas    = (data.sales||[]).reduce(function(a,s){ return a+(Number(s.total)||0); },0);
+  var cajaReps      = (data.repairs||[]).filter(function(r){ return r.paid; }).reduce(function(a,r){ return a+(Number(r.cost)||0); },0);
+  var cajaIngresos  = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso"; }).reduce(function(a,e){ return a+(Number(e.amount)||0); },0);
+  var cajaEgresos   = (data.cashflow||[]).filter(function(e){ return e.type==="egreso"; }).reduce(function(a,e){ return a+(Number(e.amount)||0); },0);
   var totalEnCaja   = cajaVentas + cajaReps + cajaIngresos - cajaEgresos;
 
   var movimientos = [
@@ -1655,17 +1655,17 @@ function DashboardView(_ref8) {
   var paid = (data.repairs || []).filter(function (r) {
     return r.paid;
   }).reduce(function (a, r) {
-    return a + r.cost;
+    return a + (Number(r.cost) || 0);
   }, 0);
   // Agregar abonos de reparaciones no completamente pagadas
   var totalAbonos = (data.repairs || []).filter(function(r) { return !r.paid && r.advances && r.advances.length > 0; })
-    .reduce(function(a, r) { return a + (r.advances||[]).reduce(function(s,adv){ return s+(adv.amount||0); }, 0); }, 0);
+    .reduce(function(a, r) { return a + (r.advances||[]).reduce(function(s,adv){ return s+(Number(adv.amount)||0); }, 0); }, 0);
   var paidTotal = paid + totalAbonos;
   var pending = (data.repairs || []).filter(function (r) {
     return !r.paid && r.status !== "Cancelado";
   }).reduce(function (a, r) {
-    var advSum = (r.advances||[]).reduce(function(s,adv){ return s+(adv.amount||0); }, 0);
-    return a + Math.max(0, r.cost - advSum);
+    var advSum = (r.advances||[]).reduce(function(s,adv){ return s+(Number(adv.amount)||0); }, 0);
+    return a + Math.max(0, (Number(r.cost)||0) - advSum);
   }, 0);
   var active = (data.repairs || []).filter(function (r) {
     return !["Entregado", "Cancelado"].includes(r.status);
@@ -1684,8 +1684,8 @@ function DashboardView(_ref8) {
     _stD.setDate(_stD.getDate() - _sti);
     var _stDK = _stD.getFullYear() + "-" + String(_stD.getMonth() + 1).padStart(2, "0") + "-" + String(_stD.getDate()).padStart(2, "0");
     var _stReps = (data.repairs || []).filter(function (r) { return r.date === _stDK; }).length;
-    var _stIng = (data.repairs || []).filter(function (r) { return r.date === _stDK && r.paid; }).reduce(function (a, r) { return a + (r.cost || 0); }, 0)
-      + (data.sales || []).filter(function (s) { return s.date === _stDK; }).reduce(function (a, s) { return a + (s.total || 0); }, 0);
+    var _stIng = (data.repairs || []).filter(function (r) { return r.date === _stDK && r.paid; }).reduce(function (a, r) { return a + (Number(r.cost) || 0); }, 0)
+      + (data.sales || []).filter(function (s) { return s.date === _stDK; }).reduce(function (a, s) { return a + (Number(s.total) || 0); }, 0);
     _serieActivasTop.push(_stReps);
     _serieIngresosTop.push(_stIng);
   }
@@ -1801,10 +1801,10 @@ function DashboardView(_ref8) {
     var _mesAnterior = _mesAntDate.getFullYear() + "-" + String(_mesAntDate.getMonth() + 1).padStart(2, "0");
 
     var _ingresoDia = function(day) {
-      var _r = (data.repairs || []).filter(function(x) { return x.date === day && x.paid; }).reduce(function(a, x) { return a + (x.cost || 0); }, 0);
-      var _adv = (data.repairs || []).reduce(function(a, x) { return a + (x.advances || []).filter(function(ad) { return ad.date === day; }).reduce(function(s, ad) { return s + (ad.amount || 0); }, 0); }, 0);
-      var _ventas = (data.sales || []).filter(function(s) { return s.date === day; }).reduce(function(a, s) { return a + (s.total || 0); }, 0);
-      var _ing = (data.cashflow || []).filter(function(e) { return e.date === day && e.type === "ingreso"; }).reduce(function(a, e) { return a + (e.amount || 0); }, 0);
+      var _r = (data.repairs || []).filter(function(x) { return x.date === day && x.paid; }).reduce(function(a, x) { return a + (Number(x.cost) || 0); }, 0);
+      var _adv = (data.repairs || []).reduce(function(a, x) { return a + (x.advances || []).filter(function(ad) { return ad.date === day; }).reduce(function(s, ad) { return s + (Number(ad.amount) || 0); }, 0); }, 0);
+      var _ventas = (data.sales || []).filter(function(s) { return s.date === day; }).reduce(function(a, s) { return a + (Number(s.total) || 0); }, 0);
+      var _ing = (data.cashflow || []).filter(function(e) { return e.date === day && e.type === "ingreso"; }).reduce(function(a, e) { return a + (Number(e.amount) || 0); }, 0);
       return _r + _adv + _ventas + _ing;
     };
     var _completadasDia = function(day) {
@@ -1826,10 +1826,10 @@ function DashboardView(_ref8) {
     }
 
     var _totalMes = function(mesKey) {
-      var _ingR = (data.repairs || []).filter(function(x) { return x.date && x.date.indexOf(mesKey) === 0 && x.paid; }).reduce(function(a, x) { return a + (x.cost || 0); }, 0);
-      var _advR = (data.repairs || []).reduce(function(a, x) { return a + (x.advances || []).filter(function(ad) { return ad.date && ad.date.indexOf(mesKey) === 0; }).reduce(function(s, ad) { return s + (ad.amount || 0); }, 0); }, 0);
-      var _ventasM = (data.sales || []).filter(function(s) { return s.date && s.date.indexOf(mesKey) === 0; }).reduce(function(a, s) { return a + (s.total || 0); }, 0);
-      var _ingM = (data.cashflow || []).filter(function(e) { return e.date && e.date.indexOf(mesKey) === 0 && e.type === "ingreso"; }).reduce(function(a, e) { return a + (e.amount || 0); }, 0);
+      var _ingR = (data.repairs || []).filter(function(x) { return x.date && x.date.indexOf(mesKey) === 0 && x.paid; }).reduce(function(a, x) { return a + (Number(x.cost) || 0); }, 0);
+      var _advR = (data.repairs || []).reduce(function(a, x) { return a + (x.advances || []).filter(function(ad) { return ad.date && ad.date.indexOf(mesKey) === 0; }).reduce(function(s, ad) { return s + (Number(ad.amount) || 0); }, 0); }, 0);
+      var _ventasM = (data.sales || []).filter(function(s) { return s.date && s.date.indexOf(mesKey) === 0; }).reduce(function(a, s) { return a + (Number(s.total) || 0); }, 0);
+      var _ingM = (data.cashflow || []).filter(function(e) { return e.date && e.date.indexOf(mesKey) === 0 && e.type === "ingreso"; }).reduce(function(a, e) { return a + (Number(e.amount) || 0); }, 0);
       var _completadasM = (data.repairs || []).filter(function(x) { var _fd = x.deliveryDate || x.date; return x.status === "Entregado" && _fd && _fd.indexOf(mesKey) === 0; }).length;
       var _ingresoTotal = _ingR + _advR + _ventasM + _ingM;
       return { ingresos: _ingresoTotal, completadas: _completadasM, ticket: _completadasM > 0 ? _ingresoTotal / _completadasM : 0 };
@@ -2267,8 +2267,8 @@ function RepairsView(_ref9) {
       style: { padding: "11px 14px", whiteSpace: "nowrap" }
     }, (function(){
       var advs = r.advances || [];
-      var total = advs.reduce(function(s,a){ return s+(a.amount||0); }, 0);
-      var saldo = Math.max(0, (r.cost||0) - total);
+      var total = advs.reduce(function(s,a){ return s+(Number(a.amount)||0); }, 0);
+      var saldo = Math.max(0, (Number(r.cost)||0) - total);
       if(!advs.length && !r.paid) return /*#__PURE__*/React.createElement("span", { style:{ color:T.muted, fontSize:13 } }, "—");
       if(!advs.length && r.paid) return /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { style:{ fontWeight:700, fontSize:14, color:T.text } }, fmt(r.cost)),
@@ -2520,7 +2520,7 @@ function RepairModal(_ref0) {
 
   var advances = form.advances || [];
   var totalAbonos = advances.reduce(function(s, a) { return s + (Number(a.amount)||0); }, 0);
-  var pendiente = (form.cost || 0) - totalAbonos;
+  var pendiente = (Number(form.cost) || 0) - totalAbonos;
 
   // Repuestos usados en la reparación
   var usedParts = form.parts || [];
@@ -2554,7 +2554,7 @@ function RepairModal(_ref0) {
     set("advances", [].concat(advances, [newAdv]));
     setAbonoMonto(""); setAbonoNota("");
     // Si el total cubre el costo, marcar como pagado
-    if (totalAbonos + Number(abonoMonto) >= (form.cost || 0)) {
+    if (totalAbonos + Number(abonoMonto) >= (Number(form.cost) || 0)) {
       set("paid", true);
       set("deliveryDate", getHoyColombia());
     }
@@ -2904,7 +2904,7 @@ function RepairModal(_ref0) {
             set("paid", nowPaid);
             if(nowPaid){
               set("deliveryDate", getHoyColombia());
-              var saldo = Math.max(0, (form.cost||0) - totalAbonos);
+              var saldo = Math.max(0, (Number(form.cost)||0) - totalAbonos);
               if(saldo > 0){
                 var finalAdv = { id: uid(), amount: saldo, date: getHoyColombia(), note: "Pago final" };
                 set("advances", [].concat(advances, [finalAdv]));
@@ -8374,10 +8374,10 @@ function ReporteView(_props) {
     return {
       ventas: ventas, reps: repEntregas,
       ingresos: ingresos, egresos: egresos,
-      tv: ventas.reduce(function(a,s){return a+(s.total||0);},0),
-      tr: repEntregas.filter(function(r){return r.paid;}).reduce(function(a,r){return a+(r.cost||0);},0),
-      ti: ingresos.reduce(function(a,e){return a+(e.amount||0);},0),
-      te: egresos.reduce(function(a,e){return a+(e.amount||0);},0)
+      tv: ventas.reduce(function(a,s){return a+(Number(s.total)||0);},0),
+      tr: repEntregas.filter(function(r){return r.paid;}).reduce(function(a,r){return a+(Number(r.cost)||0);},0),
+      ti: ingresos.reduce(function(a,e){return a+(Number(e.amount)||0);},0),
+      te: egresos.reduce(function(a,e){return a+(Number(e.amount)||0);},0)
     };
   };
 
@@ -10924,7 +10924,7 @@ function TrackingLoader(_ref) {
   var isCancelled = r.status === "Cancelado";
   var statusColor = isCancelled ? "#1A1A1A" : (r.status==="Entregado" ? "#404040" : (r.status==="Listo" ? "#1A1A1A" : (r.status==="En Reparación" ? "#1A1A1A" : "#1A1A1A")));
   var totalAbonos = (r.advances||[]).reduce(function(s,a){ return s+(Number(a.amount)||0); }, 0);
-  var saldo = (r.cost||0) - totalAbonos;
+  var saldo = (Number(r.cost)||0) - totalAbonos;
 
   return /*#__PURE__*/React.createElement("div", {
     style:{ minHeight:"100dvh", height:"auto", background:"#f7f7f7", fontFamily:"'DM Sans',system-ui,sans-serif", paddingBottom:60, overflowY:"auto", WebkitOverflowScrolling:"touch" }
