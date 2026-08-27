@@ -7839,6 +7839,15 @@ function FacturasView(_refF) {
     updateFactura(f.id, { estado: "Anulada", anuladaEl: getNowColombiaISO() }, "Factura " + f.numero + " anulada");
   };
 
+  var reactivar = function (f) {
+    if (!confirm("¿Reactivar la factura " + f.numero + "? Volverá a contar en los totales y en la cartera.")) return;
+    var abonado = Number(f.abonado) || 0;
+    updateFactura(f.id, {
+      estado: abonado >= (f.total || 0) ? "Pagada" : "Pendiente",
+      anuladaEl: ""
+    }, "Factura " + f.numero + " reactivada");
+  };
+
   var eliminar = function (f) {
     if (!confirm("¿Eliminar definitivamente la factura " + f.numero + "? Esta acción no se puede deshacer y el stock NO se restaura.")) return;
     save(_objectSpread(_objectSpread({}, data), {}, {
@@ -7862,6 +7871,13 @@ function FacturasView(_refF) {
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: color } }, valor),
       /*#__PURE__*/React.createElement("div", { style: { position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: color, opacity: 0.6 } })
     );
+  };
+
+  var accionBtn = function (key, titulo, color, icono, onClick) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: key, onClick: onClick, title: titulo,
+      style: { background: "none", border: "none", color: color, cursor: "pointer", padding: 5, display: "flex" }
+    }, icono);
   };
 
   return /*#__PURE__*/React.createElement("div", null,
@@ -7964,26 +7980,28 @@ function FacturasView(_refF) {
                   /*#__PURE__*/React.createElement(Badge, { label: f.estado, color: ESTADO_COLOR[f.estado] || T.muted, bg: T.bg })),
                 /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px" } },
                   /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 2 } },
-                    /*#__PURE__*/React.createElement("button", {
-                      onClick: function () { imprimir(f); }, title: "Imprimir / PDF",
-                      style: { background: "none", border: "none", color: T.accent, cursor: "pointer", padding: 5, display: "flex" }
-                    }, /*#__PURE__*/React.createElement(Printer, { size: 14 })),
-                    /*#__PURE__*/React.createElement("button", {
-                      onClick: function () { shareFacturaWA(f, cfg, notify); }, title: "Enviar por WhatsApp",
-                      style: { background: "none", border: "none", color: T.green, cursor: "pointer", padding: 5, display: "flex" }
-                    }, /*#__PURE__*/React.createElement(MessageCircle, { size: 14 })),
-                    saldo > 0 && /*#__PURE__*/React.createElement("button", {
-                      onClick: function () { setAbonoFor(f); }, title: "Registrar abono",
-                      style: { background: "none", border: "none", color: T.yellow, cursor: "pointer", padding: 5, display: "flex" }
-                    }, /*#__PURE__*/React.createElement(Banknote, { size: 14 })),
-                    !anulada && /*#__PURE__*/React.createElement("button", {
-                      onClick: function () { anular(f); }, title: "Anular factura",
-                      style: { background: "none", border: "none", color: T.muted, cursor: "pointer", padding: 5, display: "flex" }
-                    }, /*#__PURE__*/React.createElement(XCircle, { size: 14 })),
-                    /*#__PURE__*/React.createElement("button", {
-                      onClick: function () { eliminar(f); }, title: "Eliminar",
-                      style: { background: "none", border: "none", color: T.red, cursor: "pointer", padding: 5, display: "flex" }
-                    }, /*#__PURE__*/React.createElement(Trash2, { size: 14 }))
+                    !anulada && accionBtn("edit", "Editar factura", T.text,
+                      /*#__PURE__*/React.createElement(Edit2, { size: 14 }),
+                      function () { setModal({ mode: "edit", factura: f }); }),
+                    accionBtn("print", "Imprimir / PDF", T.accent,
+                      /*#__PURE__*/React.createElement(Printer, { size: 14 }),
+                      function () { imprimir(f); }),
+                    accionBtn("wa", "Enviar por WhatsApp", T.green,
+                      /*#__PURE__*/React.createElement(MessageCircle, { size: 14 }),
+                      function () { shareFacturaWA(f, cfg, notify); }),
+                    saldo > 0 && accionBtn("abono", "Registrar abono", T.yellow,
+                      /*#__PURE__*/React.createElement(Banknote, { size: 14 }),
+                      function () { setAbonoFor(f); }),
+                    anulada
+                      ? accionBtn("react", "Reactivar factura", T.green,
+                          /*#__PURE__*/React.createElement(RefreshCw, { size: 14 }),
+                          function () { reactivar(f); })
+                      : accionBtn("anular", "Anular factura", T.muted,
+                          /*#__PURE__*/React.createElement(XCircle, { size: 14 }),
+                          function () { anular(f); }),
+                    accionBtn("del", "Eliminar", T.red,
+                      /*#__PURE__*/React.createElement(Trash2, { size: 14 }),
+                      function () { eliminar(f); })
                   )
                 )
               );
@@ -8000,7 +8018,8 @@ function FacturasView(_refF) {
     ),
 
     modal && /*#__PURE__*/React.createElement(FacturaModal, {
-      setModal: setModal, data: data, save: save, notify: notify, settings: cfg
+      key: modal.mode + "_" + ((modal.factura && modal.factura.id) || "nueva"),
+      modal: modal, setModal: setModal, data: data, save: save, notify: notify, settings: cfg
     }),
 
     abonoFor && /*#__PURE__*/React.createElement(AbonoFacturaModal, {
@@ -8049,7 +8068,8 @@ function AbonoFacturaModal(_refA) {
         category: "Abono cliente",
         date: today(),
         notes: "Registrado desde Facturación",
-        facturaId: factura.id
+        facturaId: factura.id,
+        origen: "abono"
       }].concat(data.cashflow || []);
     }
     save(payload);
@@ -8078,9 +8098,10 @@ function AbonoFacturaModal(_refA) {
   );
 }
 
-// ── MODAL: NUEVA FACTURA ──────────────────────────────
+// ── MODAL: NUEVA FACTURA / EDITAR FACTURA ─────────────
 function FacturaModal(_refFM) {
-  var setModal = _refFM.setModal,
+  var modalRef = _refFM.modal,
+    setModal = _refFM.setModal,
     data = _refFM.data,
     save = _refFM.save,
     notify = _refFM.notify,
@@ -8088,22 +8109,84 @@ function FacturaModal(_refFM) {
 
   var isMob = typeof window !== "undefined" && window.innerWidth < 720;
   var facturas = data.facturas || [];
+  var editando = !!(modalRef && modalRef.mode === "edit" && modalRef.factura);
+  var original = editando ? modalRef.factura : null;
 
-  var _m1 = useState(_facturaNextNumero(facturas)), _ma1 = _slicedToArray(_m1, 2), numero = _ma1[0], setNumero = _ma1[1];
-  var _m2 = useState({ nombre: "", tipoDoc: "CC", documento: "", telefono: "", email: "", direccion: "", ciudad: "" }),
+  // Cantidades que esta factura ya tiene descontadas del stock (solo en edición)
+  var _yaEnFactura = {};
+  if (editando) {
+    (original.items || []).forEach(function (it) {
+      if (it.src && it.src !== "manual" && it.refId) {
+        var k = it.src + "|" + it.refId;
+        _yaEnFactura[k] = (_yaEnFactura[k] || 0) + (Number(it.qty) || 0);
+      }
+    });
+  }
+
+  // Stock realmente disponible para esta factura = stock actual + lo que ella ya tomó
+  var _stockDisponible = function (src, refId) {
+    var base = 0;
+    if (src === "inventory") {
+      var i = (data.inventory || []).find(function (x) { return x.id === refId; });
+      base = i ? (Number(i.qty) || 0) : 0;
+    } else if (src === "products") {
+      var p = (data.products || []).find(function (x) { return x.id === refId; });
+      base = p ? (Number(p.stock) || 0) : 0;
+    } else if (src === "celulares") {
+      return 1;
+    } else {
+      return 9999;
+    }
+    return base + (_yaEnFactura[src + "|" + refId] || 0);
+  };
+
+  var _keyLinea = function (it, idx) {
+    if (it.src === "inventory") return "inv_" + it.refId;
+    if (it.src === "products") return "prod_" + it.refId;
+    if (it.src === "celulares") return "cel_" + it.refId;
+    return "man_edit_" + idx;
+  };
+
+  var _abonadoPrev = editando ? (Number(original.abonado) || 0) : 0;
+
+  var _m1 = useState(editando ? original.numero : _facturaNextNumero(facturas)),
+    _ma1 = _slicedToArray(_m1, 2), numero = _ma1[0], setNumero = _ma1[1];
+  var _m2 = useState(Object.assign(
+      { nombre: "", tipoDoc: "CC", documento: "", telefono: "", email: "", direccion: "", ciudad: "" },
+      editando ? (original.cliente || {}) : {}
+    )),
     _ma2 = _slicedToArray(_m2, 2), cliente = _ma2[0], setCliente = _ma2[1];
-  var _m3 = useState([]), _ma3 = _slicedToArray(_m3, 2), items = _ma3[0], setItems = _ma3[1];
-  var _m4 = useState(""), _ma4 = _slicedToArray(_m4, 2), descGlobal = _ma4[0], setDescGlobal = _ma4[1];
-  var _m5 = useState("Efectivo"), _ma5 = _slicedToArray(_m5, 2), payment = _ma5[0], setPayment = _ma5[1];
-  var _m6 = useState("Pagada"), _ma6 = _slicedToArray(_m6, 2), estado = _ma6[0], setEstado = _ma6[1];
-  var _m7 = useState(""), _ma7 = _slicedToArray(_m7, 2), abonado = _ma7[0], setAbonado = _ma7[1];
-  var _m8 = useState(today()), _ma8 = _slicedToArray(_m8, 2), fecha = _ma8[0], setFecha = _ma8[1];
-  var _m9 = useState(""), _ma9 = _slicedToArray(_m9, 2), vence = _ma9[0], setVence = _ma9[1];
-  var _m10 = useState(""), _ma10 = _slicedToArray(_m10, 2), garantia = _ma10[0], setGarantia = _ma10[1];
-  var _m11 = useState(""), _ma11 = _slicedToArray(_m11, 2), vendedor = _ma11[0], setVendedor = _ma11[1];
-  var _m12 = useState(""), _ma12 = _slicedToArray(_m12, 2), notas = _ma12[0], setNotas = _ma12[1];
+  var _m3 = useState(editando
+      ? (original.items || []).map(function (it, idx) {
+          return {
+            key: _keyLinea(it, idx), src: it.src || "manual", refId: it.refId || null,
+            name: it.name || "", detalle: it.detalle || "",
+            qty: Number(it.qty) || 1, maxQty: _stockDisponible(it.src || "manual", it.refId),
+            unitPrice: Number(it.unitPrice) || 0, discount: Number(it.discount) || 0, ivaPct: Number(it.ivaPct) || 0
+          };
+        })
+      : []),
+    _ma3 = _slicedToArray(_m3, 2), items = _ma3[0], setItems = _ma3[1];
+  var _m4 = useState(editando ? String(original.descGlobal || "") : ""),
+    _ma4 = _slicedToArray(_m4, 2), descGlobal = _ma4[0], setDescGlobal = _ma4[1];
+  var _m5 = useState(editando ? (original.payment || "Efectivo") : "Efectivo"),
+    _ma5 = _slicedToArray(_m5, 2), payment = _ma5[0], setPayment = _ma5[1];
+  var _m6 = useState(editando ? (original.estado === "Pagada" ? "Pagada" : "Pendiente") : "Pagada"),
+    _ma6 = _slicedToArray(_m6, 2), estado = _ma6[0], setEstado = _ma6[1];
+  var _m7 = useState(editando && _abonadoPrev > 0 ? String(_abonadoPrev) : ""),
+    _ma7 = _slicedToArray(_m7, 2), abonado = _ma7[0], setAbonado = _ma7[1];
+  var _m8 = useState(editando ? (original.date || today()) : today()),
+    _ma8 = _slicedToArray(_m8, 2), fecha = _ma8[0], setFecha = _ma8[1];
+  var _m9 = useState(editando ? (original.dueDate || "") : ""),
+    _ma9 = _slicedToArray(_m9, 2), vence = _ma9[0], setVence = _ma9[1];
+  var _m10 = useState(editando && original.garantiaDias ? String(original.garantiaDias) : ""),
+    _ma10 = _slicedToArray(_m10, 2), garantia = _ma10[0], setGarantia = _ma10[1];
+  var _m11 = useState(editando ? (original.vendedor || "") : ""),
+    _ma11 = _slicedToArray(_m11, 2), vendedor = _ma11[0], setVendedor = _ma11[1];
+  var _m12 = useState(editando ? (original.notes || "") : ""),
+    _ma12 = _slicedToArray(_m12, 2), notas = _ma12[0], setNotas = _ma12[1];
   var _m13 = useState(true), _ma13 = _slicedToArray(_m13, 2), enCaja = _ma13[0], setEnCaja = _ma13[1];
-  var _m14 = useState(true), _ma14 = _slicedToArray(_m14, 2), guardarCliente = _ma14[0], setGuardarCliente = _ma14[1];
+  var _m14 = useState(!editando), _ma14 = _slicedToArray(_m14, 2), guardarCliente = _ma14[0], setGuardarCliente = _ma14[1];
   var _m15 = useState(""), _ma15 = _slicedToArray(_m15, 2), busqCliente = _ma15[0], setBusqCliente = _ma15[1];
   var _m16 = useState(false), _ma16 = _slicedToArray(_m16, 2), showPicker = _ma16[0], setShowPicker = _ma16[1];
   var _m17 = useState(""), _ma17 = _slicedToArray(_m17, 2), busqItem = _ma17[0], setBusqItem = _ma17[1];
@@ -8113,16 +8196,19 @@ function FacturaModal(_refFM) {
   };
 
   // ── Catálogo unificado: repuestos + productos + celulares ──
+  // En edición también aparecen los artículos que esta factura ya tomó.
   var catalogo = []
-    .concat((data.inventory || []).filter(function (i) { return (i.qty || 0) > 0; }).map(function (i) {
+    .concat((data.inventory || []).map(function (i) {
       return { key: "inv_" + i.id, src: "inventory", refId: i.id, name: i.name, price: Number(i.price) || 0,
-        stock: i.qty, detalle: [i.brand, i.category].filter(Boolean).join(" · "), tipo: "Repuesto" };
-    }))
-    .concat((data.products || []).filter(function (p) { return (p.stock || 0) > 0; }).map(function (p) {
+        stock: _stockDisponible("inventory", i.id), detalle: [i.brand, i.category].filter(Boolean).join(" · "), tipo: "Repuesto" };
+    }).filter(function (c) { return c.stock > 0; }))
+    .concat((data.products || []).map(function (p) {
       return { key: "prod_" + p.id, src: "products", refId: p.id, name: p.name, price: Number(p.price) || 0,
-        stock: p.stock, detalle: p.category || "", tipo: "Producto" };
-    }))
-    .concat((data.celulares || []).filter(function (c) { return c.estado !== "Vendido"; }).map(function (c) {
+        stock: _stockDisponible("products", p.id), detalle: p.category || "", tipo: "Producto" };
+    }).filter(function (c) { return c.stock > 0; }))
+    .concat((data.celulares || []).filter(function (c) {
+      return c.estado !== "Vendido" || _yaEnFactura["celulares|" + c.id];
+    }).map(function (c) {
       return { key: "cel_" + c.id, src: "celulares", refId: c.id,
         name: [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" "),
         price: Number(c.precio) || 0, stock: 1,
@@ -8195,7 +8281,7 @@ function FacturaModal(_refFM) {
       return !String(it.name || "").trim() || !(Number(it.qty) > 0) || !(Number(it.unitPrice) >= 0) || it.unitPrice === "";
     });
     if (invalida.length > 0) { notify("Completa descripción, cantidad y precio en todas las líneas", "error"); return; }
-    if (facturas.some(function (f) { return f.numero === numero; })) {
+    if (facturas.some(function (f) { return f.numero === numero && (!editando || f.id !== original.id); })) {
       notify("Ya existe una factura con el número " + numero, "error"); return;
     }
 
@@ -8212,8 +8298,18 @@ function FacturaModal(_refFM) {
       };
     });
 
+    // Historial de abonos: se conserva salvo que el monto cobrado haya cambiado
+    var abonos;
+    if (editando && abonoNum === _abonadoPrev) {
+      abonos = (original.abonos || []).slice();
+    } else if (abonoNum > 0) {
+      abonos = [{ fecha: fecha, monto: abonoNum, medio: payment, nota: editando ? "Ajustado al editar la factura" : "" }];
+    } else {
+      abonos = [];
+    }
+
     var factura = {
-      id: uid(),
+      id: editando ? original.id : uid(),
       numero: numero,
       date: fecha,
       dueDate: vence,
@@ -8227,47 +8323,81 @@ function FacturaModal(_refFM) {
       subtotal: tot.subtotal, descuento: tot.descuento, base: tot.base, iva: tot.iva, total: tot.total,
       payment: payment,
       abonado: abonoNum,
-      abonos: abonoNum > 0 ? [{ fecha: fecha, monto: abonoNum, medio: payment }] : [],
+      abonos: abonos,
       estado: abonoNum >= tot.total ? "Pagada" : "Pendiente",
       garantiaDias: Number(garantia) || 0,
       vendedor: vendedor.trim(),
       notes: notas.trim(),
-      createdAt: getNowColombiaISO()
+      createdAt: editando ? (original.createdAt || getNowColombiaISO()) : getNowColombiaISO()
     };
+    if (editando) factura.updatedAt = getNowColombiaISO();
 
-    // ── Descontar stock según el origen de cada línea ──
+    // ── Ajuste de stock por diferencia entre lo que había y lo que queda ──
+    var deltas = {};
+    var acumular = function (arr, signo) {
+      (arr || []).forEach(function (it) {
+        if (!it.src || it.src === "manual" || !it.refId) return;
+        var k = it.src + "|" + it.refId;
+        deltas[k] = (deltas[k] || 0) + signo * (Number(it.qty) || 0);
+      });
+    };
+    if (editando) acumular(original.items, -1);   // devolver lo que la factura tenía
+    acumular(lineas, 1);                          // descontar lo que ahora lleva
+
     var inventory = (data.inventory || []).slice();
     var products = (data.products || []).slice();
     var celulares = (data.celulares || []).slice();
-    items.forEach(function (it) {
-      var q = Number(it.qty) || 0;
-      if (it.src === "inventory") {
+
+    Object.keys(deltas).forEach(function (k) {
+      var partes = k.split("|"), src = partes[0], refId = partes[1], d = deltas[k];
+      if (d === 0) return;
+      if (src === "inventory") {
         inventory = inventory.map(function (i) {
-          return i.id === it.refId ? Object.assign({}, i, { qty: Math.max(0, (i.qty || 0) - q) }) : i;
+          return i.id === refId ? Object.assign({}, i, { qty: Math.max(0, (Number(i.qty) || 0) - d) }) : i;
         });
-        var invItem = inventory.find(function (i) { return i.id === it.refId; });
+        var invItem = inventory.find(function (i) { return i.id === refId; });
         if (invItem && invItem.productId) {
           products = products.map(function (p) {
-            return p.id === invItem.productId ? Object.assign({}, p, { stock: Math.max(0, (p.stock || 0) - q) }) : p;
+            return p.id === invItem.productId ? Object.assign({}, p, { stock: Math.max(0, (Number(p.stock) || 0) - d) }) : p;
           });
         }
-      } else if (it.src === "products") {
+      } else if (src === "products") {
         products = products.map(function (p) {
-          return p.id === it.refId ? Object.assign({}, p, { stock: Math.max(0, (p.stock || 0) - q) }) : p;
+          return p.id === refId ? Object.assign({}, p, { stock: Math.max(0, (Number(p.stock) || 0) - d) }) : p;
         });
-      } else if (it.src === "celulares") {
+      } else if (src === "celulares") {
         celulares = celulares.map(function (c) {
-          return c.id === it.refId ? Object.assign({}, c, {
-            estado: "Vendido",
-            vendidoA: factura.cliente.nombre,
-            vendidoTel: factura.cliente.telefono,
-            precioVenta: Number(it.unitPrice) || 0,
-            medioPago: payment,
-            garantiaDias: Number(garantia) || 0,
-            fechaVenta: fecha
-          }) : c;
+          if (c.id !== refId) return c;
+          if (d > 0) {
+            var lin = lineas.find(function (l) { return l.refId === refId && l.src === "celulares"; });
+            return Object.assign({}, c, {
+              estado: "Vendido",
+              vendidoA: factura.cliente.nombre,
+              vendidoTel: factura.cliente.telefono,
+              precioVenta: lin ? lin.unitPrice : (Number(c.precio) || 0),
+              medioPago: payment,
+              garantiaDias: Number(garantia) || 0,
+              fechaVenta: fecha
+            });
+          }
+          // se quitó de la factura → vuelve a quedar disponible
+          return Object.assign({}, c, {
+            estado: "Disponible", vendidoA: "", vendidoTel: "", precioVenta: "", fechaVenta: ""
+          });
         });
       }
+    });
+
+    // Si el celular sigue en la factura, refrescar los datos de la venta
+    lineas.forEach(function (l) {
+      if (l.src !== "celulares" || !l.refId || deltas[l.src + "|" + l.refId]) return;
+      celulares = celulares.map(function (c) {
+        return c.id === l.refId ? Object.assign({}, c, {
+          vendidoA: factura.cliente.nombre, vendidoTel: factura.cliente.telefono,
+          precioVenta: l.unitPrice, medioPago: payment,
+          garantiaDias: Number(garantia) || 0, fechaVenta: fecha
+        }) : c;
+      });
     });
 
     // ── Guardar el cliente en la agenda si es nuevo ──
@@ -8286,32 +8416,48 @@ function FacturaModal(_refFM) {
       }
     }
 
-    // ── Ingreso en Caja por lo efectivamente cobrado ──
+    // ── Ingreso en Caja: se recalcula para que Caja siempre cuadre con lo cobrado ──
     var cashflow = (data.cashflow || []).slice();
-    if (enCaja && abonoNum > 0) {
-      cashflow.unshift({
-        id: "ing_" + Date.now(),
-        type: "ingreso",
-        amount: abonoNum,
-        description: "Factura " + numero + " — " + factura.cliente.nombre,
-        category: "Ventas",
-        date: fecha,
-        notes: "Generado automáticamente desde Facturación",
-        facturaId: factura.id
+    if (editando) {
+      cashflow = cashflow.filter(function (c) {
+        return !(c.facturaId === factura.id && (c.origen === "factura" || (!c.origen && c.category === "Ventas")));
       });
+    }
+    if (enCaja && abonoNum > 0) {
+      var yaRegistrado = cashflow.filter(function (c) {
+        return c.facturaId === factura.id && c.type === "ingreso";
+      }).reduce(function (a, c) { return a + (Number(c.amount) || 0); }, 0);
+      var montoCaja = abonoNum - yaRegistrado;
+      if (montoCaja > 0) {
+        cashflow.unshift({
+          id: "ing_" + Date.now(),
+          type: "ingreso",
+          amount: montoCaja,
+          description: "Factura " + numero + " — " + factura.cliente.nombre,
+          category: "Ventas",
+          date: fecha,
+          notes: "Generado automáticamente desde Facturación",
+          facturaId: factura.id,
+          origen: "factura"
+        });
+      }
     }
 
     save(_objectSpread(_objectSpread({}, data), {}, {
-      facturas: facturas.concat([factura]),
+      facturas: editando
+        ? facturas.map(function (f) { return f.id === factura.id ? factura : f; })
+        : facturas.concat([factura]),
       inventory: inventory,
       products: products,
       celulares: celulares,
       customers: customers,
       cashflow: cashflow
     }));
-    notify("Factura " + numero + " creada");
+    notify(editando ? "Factura " + numero + " actualizada" : "Factura " + numero + " creada");
     setModal(null);
-    showPrintModal(function (type, tw) { printFactura(factura, settings, type, tw); });
+    if (!editando) {
+      showPrintModal(function (type, tw) { printFactura(factura, settings, type, tw); });
+    }
   };
 
   var LB = { fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4, display: "block" };
@@ -8323,11 +8469,18 @@ function FacturaModal(_refFM) {
   var secTitle = { fontWeight: 700, fontSize: 12, color: T.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 };
 
   return /*#__PURE__*/React.createElement(ModalWrap, {
-    title: "Nueva Factura " + numero,
+    title: (editando ? "Editar factura " : "Nueva Factura ") + numero,
     onClose: function () { setModal(null); },
     wide: true
   },
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 22 } },
+
+      editando && /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: T.bg, border: "1px solid " + T.border, borderLeft: "3px solid " + T.yellow,
+          borderRadius: "0 10px 10px 0", padding: "10px 14px", fontSize: 12, color: T.dim
+        }
+      }, "Al guardar se recalcula el stock (se devuelve lo que quites y se descuenta lo que agregues) y el ingreso registrado en Caja para esta factura."),
 
       // ── DATOS DE LA FACTURA ──
       /*#__PURE__*/React.createElement("div", null,
@@ -8369,10 +8522,11 @@ function FacturaModal(_refFM) {
             return /*#__PURE__*/React.createElement("button", {
               key: c.id,
               onClick: function () {
-                setCliente({
-                  nombre: c.name || "", tipoDoc: "CC", documento: "",
-                  telefono: String(c.phone || ""), email: c.email || "",
-                  direccion: "", ciudad: c.city || ""
+                setCliente(function (prev) {
+                  return Object.assign({}, prev, {
+                    nombre: c.name || "", telefono: String(c.phone || ""),
+                    email: c.email || "", ciudad: c.city || ""
+                  });
                 });
                 setBusqCliente("");
               },
@@ -8565,8 +8719,10 @@ function FacturaModal(_refFM) {
               }, ["Pagada", "Pendiente"].map(function (p) { return /*#__PURE__*/React.createElement("option", { key: p, value: p }, p === "Pagada" ? "Pagada de contado" : "Pendiente / crédito"); })))
           ),
           estado === "Pendiente" && /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
-            /*#__PURE__*/React.createElement("label", { style: LB }, "Abono inicial (opcional)"),
-            miniInput({ type: "number", value: abonado, onChange: function (e) { setAbonado(e.target.value); }, placeholder: "0" })),
+            /*#__PURE__*/React.createElement("label", { style: LB }, editando ? "Total abonado" : "Abono inicial (opcional)"),
+            miniInput({ type: "number", value: abonado, onChange: function (e) { setAbonado(e.target.value); }, placeholder: "0" }),
+            editando && _abonadoPrev > 0 && /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, marginTop: 4 } },
+              "Cobrado hasta ahora: " + fmt(_abonadoPrev) + ". Si cambias este valor se reemplaza el historial de abonos.")),
           /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
             /*#__PURE__*/React.createElement("div", null,
               /*#__PURE__*/React.createElement("label", { style: LB }, "Descuento global $"),
@@ -8619,8 +8775,26 @@ function FacturaModal(_refFM) {
       // ── ACCIONES ──
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
         /*#__PURE__*/React.createElement(Btn, {
-          onClick: guardar, variant: "success", icon: /*#__PURE__*/React.createElement(Receipt, { size: 15 })
-        }, "Emitir factura e imprimir"),
+          onClick: guardar, variant: "success",
+          icon: /*#__PURE__*/React.createElement(editando ? Check : Receipt, { size: 15 })
+        }, editando ? "Guardar cambios" : "Emitir factura e imprimir"),
+        editando && /*#__PURE__*/React.createElement(Btn, {
+          variant: "ghost", icon: /*#__PURE__*/React.createElement(Printer, { size: 15 }),
+          onClick: function () {
+            showPrintModal(function (type, tw) {
+              printFactura(Object.assign({}, original, {
+                numero: numero, date: fecha, dueDate: vence, payment: payment,
+                cliente: cliente, vendedor: vendedor, notes: notas,
+                garantiaDias: Number(garantia) || 0,
+                items: items.map(function (it) {
+                  return Object.assign({}, it, { qty: Number(it.qty) || 0, unitPrice: Number(it.unitPrice) || 0, total: _facturaLineaNeto(it) });
+                }),
+                subtotal: tot.subtotal, descuento: tot.descuento, base: tot.base, iva: tot.iva, total: tot.total,
+                abonado: abonoNum, estado: abonoNum >= tot.total ? "Pagada" : "Pendiente"
+              }), settings, type, tw);
+            });
+          }
+        }, "Vista previa"),
         /*#__PURE__*/React.createElement(Btn, {
           variant: "ghost", onClick: function () { setModal(null); }
         }, "Cancelar")
@@ -8628,7 +8802,6 @@ function FacturaModal(_refFM) {
     )
   );
 }
-
 function SettingsView(_ref20) {
   var settings = _ref20.settings,
     saveSettings = _ref20.saveSettings,
