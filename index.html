@@ -895,6 +895,7 @@ var DEFAULT_SETTINGS = {
   storeName: "ACCE PRO",
   storeSubtitle: "GESTIÓN TALLER",
   logo: "",
+  nit: "",
   address: "",
   email: "",
   whatsapp: "",
@@ -1190,7 +1191,8 @@ var INIT = {
   sales: [],
   cashflow: [],
   celulares: [],
-  documentos: []
+  documentos: [],
+  facturas: []
 };
 var IS = {
   background: T.surface,
@@ -6655,6 +6657,289 @@ function printCelularReceipt(cel) {
 }
 
 // ── VENTAS VIEW ──────────────────────────────────
+// ── FACTURACIÓN — helpers, cálculo e impresión ────────────────────────────────
+var FACT_PAGOS   = ["Efectivo", "Transferencia", "Nequi", "Daviplata", "Tarjeta débito", "Tarjeta crédito", "Crédito", "Otro"];
+var FACT_TIPODOC = ["CC", "NIT", "CE", "TI", "Pasaporte"];
+var FACT_IVAS    = [0, 5, 19];
+
+// Consecutivo automático: FV-0001, FV-0002...
+function _facturaNextNumero(facturas) {
+  var max = 0;
+  (facturas || []).forEach(function (f) {
+    var m = /(\d+)\s*$/.exec(String(f.numero || ""));
+    if (m) { var n = parseInt(m[1], 10); if (!isNaN(n) && n > max) max = n; }
+  });
+  var next = String(max + 1);
+  while (next.length < 4) next = "0" + next;
+  return "FV-" + next;
+}
+
+// Totales de una factura: subtotal bruto, descuentos, base gravable, IVA y total.
+// El descuento global reduce el IVA proporcionalmente.
+function _facturaTotales(items, descGlobal) {
+  var subtotal = 0, descLineas = 0, ivaBruto = 0;
+  (items || []).forEach(function (it) {
+    var qty   = Number(it.qty) || 0;
+    var pu    = Number(it.unitPrice) || 0;
+    var bruto = qty * pu;
+    var d     = Math.min(Number(it.discount) || 0, bruto);
+    subtotal   += bruto;
+    descLineas += d;
+    ivaBruto   += (bruto - d) * ((Number(it.ivaPct) || 0) / 100);
+  });
+  var baseTrasLineas = subtotal - descLineas;
+  var dg     = Math.min(Number(descGlobal) || 0, baseTrasLineas);
+  var factor = baseTrasLineas > 0 ? (baseTrasLineas - dg) / baseTrasLineas : 0;
+  var base   = baseTrasLineas - dg;
+  var iva    = Math.round(ivaBruto * factor);
+  return {
+    subtotal:  Math.round(subtotal),
+    descuento: Math.round(descLineas + dg),
+    base:      Math.round(base),
+    iva:       iva,
+    total:     Math.round(base + iva)
+  };
+}
+
+// Total de una línea (sin IVA) — usado en la tabla del modal y en la impresión
+function _facturaLineaNeto(it) {
+  var bruto = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
+  return Math.max(0, bruto - Math.min(Number(it.discount) || 0, bruto));
+}
+
+function _facturaSaldo(f) {
+  if (!f || f.estado === "Anulada") return 0;
+  return Math.max(0, (Number(f.total) || 0) - (Number(f.abonado) || 0));
+}
+
+// ── IMPRESIÓN DE FACTURA ─────────────────────────────────────────────────────
+function printFactura(f) {
+  var cfg       = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+  var forceType = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+  var forceTw   = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : null;
+  cfg = cfg || _getCurrentSettings() || {};
+
+  var fmtCOP = function (n) {
+    return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(n || 0);
+  };
+  var ptype     = forceType || _getPrinterType();
+  var storeName = cfg.storeName || "ACCE PRO";
+  var cli       = f.cliente || {};
+  var items     = f.items || [];
+  var saldo     = _facturaSaldo(f);
+  var anulada   = f.estado === "Anulada";
+
+  if (ptype === "termica") {
+    // ── FACTURA TÉRMICA (rollo 58/80mm) ──
+    var tw        = forceTw || _getThermalWidth();
+    var baseFont  = tw === "80" ? "12px" : "11px";
+    var bigFont   = tw === "80" ? "15px" : "13px";
+    var storeFont = tw === "80" ? "17px" : "15px";
+
+    var lineasT = items.map(function (i) {
+      var neto = _facturaLineaNeto(i);
+      return "<div style=\"margin-bottom:5px;font-size:" + baseFont + "\">" +
+        "<div style=\"font-weight:bold\">" + _escHtml(i.name) + "</div>" +
+        (i.detalle ? "<div style=\"font-size:9px\">" + _escHtml(i.detalle) + "</div>" : "") +
+        "<div style=\"display:flex;justify-content:space-between\"><span>" + _escHtml(i.qty) + " x " + fmtCOP(i.unitPrice) +
+          (Number(i.ivaPct) ? " (IVA " + _escHtml(i.ivaPct) + "%)" : "") +
+        "</span><span style=\"font-weight:bold\">" + fmtCOP(neto) + "</span></div>" +
+      "</div>";
+    }).join("");
+
+    var filaT = function (lbl, val, fuerte) {
+      return "<div style=\"display:flex;justify-content:space-between;font-size:" + (fuerte ? bigFont : baseFont) + "\">" +
+        "<span>" + _escHtml(lbl) + "</span><span>" + val + "</span></div>";
+    };
+
+    _printHTML(
+      "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Factura " + _escHtml(f.numero) + "</title>" +
+      "<style>*{margin:0;padding:0;box-sizing:border-box}" +
+      "body{font-family:'Arial',sans-serif;font-size:" + baseFont + ";line-height:1.4;color:#000;padding:2px;width:100%;font-weight:bold;-webkit-font-smoothing:none}" +
+      "*{font-weight:bold!important}" +
+      ".c{text-align:center}" +
+      ".store{font-size:" + storeFont + ";font-weight:900;letter-spacing:0.5px}" +
+      ".small{font-size:10px;font-weight:bold}" +
+      ".dash{border-top:2px solid #000;margin:6px 0;height:1px}" +
+      ".big{font-size:" + bigFont + ";font-weight:900}" +
+      ".total-row{display:flex;justify-content:space-between;font-weight:bold;font-size:" + bigFont + ";border-top:1px solid #000;padding-top:5px;margin-top:5px}" +
+      "@media print{.no-print{display:none}}</style></head><body>" +
+      "<div class=\"c store\">" + _escHtml(storeName) + "</div>" +
+      (cfg.nit ? "<div class=\"c small\">NIT " + _escHtml(cfg.nit) + "</div>" : "") +
+      (cfg.address ? "<div class=\"c small\">" + _escHtml(cfg.address) + "</div>" : "") +
+      (cfg.whatsapp ? "<div class=\"c small\">Tel " + _escHtml(cfg.whatsapp) + "</div>" : "") +
+      "<div class=\"dash\"></div>" +
+      "<div class=\"c small\">FACTURA DE VENTA" + (anulada ? " — ANULADA" : "") + "</div>" +
+      "<div class=\"c\"><span class=\"big\">" + _escHtml(f.numero) + "</span><br>" +
+        "<span class=\"small\">" + _escHtml(f.date) + " | " + _escHtml(f.payment) + "</span></div>" +
+      "<div class=\"dash\"></div>" +
+      "<div style=\"font-size:10px\">" +
+        "<div><b>Cliente:</b> " + _escHtml(cli.nombre || "Consumidor final") + "</div>" +
+        (cli.documento ? "<div><b>" + _escHtml(cli.tipoDoc || "CC") + ":</b> " + _escHtml(cli.documento) + "</div>" : "") +
+        (cli.telefono ? "<div><b>Tel:</b> " + _escHtml(cli.telefono) + "</div>" : "") +
+        (cli.direccion ? "<div><b>Dir:</b> " + _escHtml(cli.direccion) + "</div>" : "") +
+      "</div>" +
+      "<div class=\"dash\"></div>" +
+      lineasT +
+      "<div class=\"dash\"></div>" +
+      filaT("Subtotal", fmtCOP(f.subtotal)) +
+      ((f.descuento || 0) > 0 ? filaT("Descuento", "-" + fmtCOP(f.descuento)) : "") +
+      ((f.iva || 0) > 0 ? filaT("Base gravable", fmtCOP(f.base)) + filaT("IVA", fmtCOP(f.iva)) : "") +
+      "<div class=\"total-row\"><span>TOTAL</span><span>" + fmtCOP(f.total) + "</span></div>" +
+      ((f.abonado || 0) > 0 && saldo > 0 ? filaT("Abonado", fmtCOP(f.abonado)) + filaT("SALDO", fmtCOP(saldo), true) : "") +
+      (saldo === 0 && !anulada ? "<div class=\"c small\" style=\"margin-top:4px\">*** PAGADA ***</div>" : "") +
+      (f.garantiaDias ? "<div class=\"small\" style=\"margin-top:6px\">Garantía: " + _escHtml(f.garantiaDias) + " días</div>" : "") +
+      (f.notes ? "<div class=\"small\" style=\"margin-top:4px\">" + _escHtml(f.notes) + "</div>" : "") +
+      "<div class=\"dash\"></div>" +
+      "<div class=\"c small\">Gracias por su compra</div>" +
+      "<div class=\"c no-print\" style=\"margin-top:12px\"><button onclick=\"window.print()\" style=\"padding:8px 20px;background:#000;color:#fff;border:none;cursor:pointer;font-family:inherit;font-size:13px\">Imprimir</button></div>" +
+      "</body></html>",
+      ptype
+    );
+    return;
+  }
+
+  // ── FACTURA CARTA (documento profesional) ──
+  var filas = items.map(function (i, idx) {
+    var neto = _facturaLineaNeto(i);
+    return "<tr>" +
+      "<td class=\"it-c\">" + (idx + 1) + "</td>" +
+      "<td><div class=\"it-name\">" + _escHtml(i.name) + "</div>" +
+        (i.detalle ? "<div class=\"it-sub\">" + _escHtml(i.detalle) + "</div>" : "") + "</td>" +
+      "<td class=\"it-c\">" + _escHtml(i.qty) + "</td>" +
+      "<td class=\"it-r\">" + fmtCOP(i.unitPrice) + "</td>" +
+      "<td class=\"it-r\">" + ((Number(i.discount) || 0) > 0 ? "-" + fmtCOP(i.discount) : "—") + "</td>" +
+      "<td class=\"it-c\">" + (Number(i.ivaPct) || 0) + "%</td>" +
+      "<td class=\"it-r\" style=\"font-weight:700\">" + fmtCOP(neto) + "</td>" +
+    "</tr>";
+  }).join("");
+
+  var estadoColor = anulada ? "#B91C1C" : (saldo === 0 ? "#15803D" : "#B45309");
+  var estadoTexto = anulada ? "ANULADA" : (saldo === 0 ? "PAGADA" : "PENDIENTE DE PAGO");
+
+  _printHTML(
+    "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Factura " + _escHtml(f.numero) + "</title><style>" +
+    "*{margin:0;padding:0;box-sizing:border-box}" +
+    "body{font-family:'Segoe UI',Arial,sans-serif;color:#1A1A1A;padding:36px 44px;line-height:1.5;position:relative}" +
+    ".header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1A1A1A;padding-bottom:18px;margin-bottom:22px;gap:24px}" +
+    ".brand{display:flex;gap:14px;align-items:flex-start}" +
+    ".brand img{width:64px;height:64px;object-fit:contain;border-radius:8px}" +
+    ".brand h1{font-size:26px;font-weight:800;color:#0A0A0A;letter-spacing:-0.5px}" +
+    ".brand .line{font-size:12px;color:#777;margin-top:2px}" +
+    ".inv-box{text-align:right;min-width:200px}" +
+    ".inv-box .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.4px;color:#fff;background:#1A1A1A;padding:4px 12px;border-radius:4px}" +
+    ".inv-box .num{font-size:26px;font-weight:800;color:#1A1A1A;margin-top:8px}" +
+    ".inv-box .meta{font-size:12px;color:#777;margin-top:4px}" +
+    ".estado{display:inline-block;margin-top:8px;font-size:11px;font-weight:800;letter-spacing:1px;padding:4px 12px;border-radius:20px;border:1.5px solid " + estadoColor + ";color:" + estadoColor + "}" +
+    ".party{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px}" +
+    ".party .box{border:1px solid #E4E4E4;border-radius:10px;padding:14px 16px;background:#FAFAFA}" +
+    ".party .box h3{font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#888;margin-bottom:7px}" +
+    ".party .box .n{font-size:15px;font-weight:700;color:#1A1A1A}" +
+    ".party .box .d{font-size:12px;color:#555;margin-top:2px}" +
+    "table.items{width:100%;border-collapse:collapse;margin-bottom:20px}" +
+    "table.items th{background:#0A0A0A;color:#fff;padding:10px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}" +
+    "table.items td{padding:10px 12px;border-bottom:1px solid #EEE;font-size:13px;vertical-align:top}" +
+    "table.items tbody tr:nth-child(even){background:#FBFBFB}" +
+    ".it-name{font-weight:600}.it-sub{font-size:11px;color:#888;margin-top:2px}" +
+    ".it-c{text-align:center}.it-r{text-align:right;white-space:nowrap}" +
+    "th.it-c{text-align:center}th.it-r{text-align:right}" +
+    ".bottom{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:26px}" +
+    ".pay{flex:1;font-size:12px;color:#555}" +
+    ".pay .row{display:flex;gap:6px;margin-bottom:4px}.pay .row span{color:#999;min-width:110px}" +
+    ".totals{min-width:280px;border:1px solid #DADADA;border-radius:12px;overflow:hidden}" +
+    ".totals .r{display:flex;justify-content:space-between;padding:9px 18px;font-size:13px;color:#555;border-bottom:1px solid #EFEFEF}" +
+    ".totals .r b{color:#1A1A1A}" +
+    ".totals .grand{background:#1A1A1A;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;font-size:19px;font-weight:800}" +
+    ".totals .saldo{display:flex;justify-content:space-between;padding:10px 18px;font-size:14px;font-weight:800;color:" + estadoColor + ";background:#FAFAFA}" +
+    ".note{font-size:12px;color:#666;background:#FAFAFA;border-left:3px solid #DADADA;padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:14px}" +
+    ".firmas{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:44px}" +
+    ".firmas div{border-top:1px solid #BBB;padding-top:6px;font-size:11px;color:#888;text-align:center}" +
+    ".footer{text-align:center;margin-top:26px;padding-top:16px;border-top:1px solid #EEE;font-size:11px;color:#999}" +
+    (anulada ? ".wm{position:fixed;top:42%;left:50%;transform:translate(-50%,-50%) rotate(-24deg);font-size:110px;font-weight:900;color:rgba(185,28,28,0.13);letter-spacing:6px;pointer-events:none}" : "") +
+    "@media print{button{display:none}body{padding:22px 26px}}" +
+    "</style></head><body>" +
+    (anulada ? "<div class=\"wm\">ANULADA</div>" : "") +
+    "<div class=\"header\"><div class=\"brand\">" +
+      (cfg.logo ? "<img src=\"" + _escHtml(cfg.logo) + "\" alt=\"\">" : "") +
+      "<div><h1>" + _escHtml(storeName) + "</h1>" +
+      (cfg.nit ? "<div class=\"line\">NIT " + _escHtml(cfg.nit) + "</div>" : "") +
+      (cfg.address ? "<div class=\"line\">" + _escHtml(cfg.address) + "</div>" : "") +
+      ((cfg.whatsapp || cfg.email) ? "<div class=\"line\">" + _escHtml([cfg.whatsapp, cfg.email].filter(Boolean).join("  ·  ")) + "</div>" : "") +
+      "</div></div>" +
+      "<div class=\"inv-box\"><span class=\"tag\">FACTURA DE VENTA</span>" +
+      "<div class=\"num\">" + _escHtml(f.numero) + "</div>" +
+      "<div class=\"meta\">Fecha: " + _escHtml(f.date) + "</div>" +
+      (f.dueDate ? "<div class=\"meta\">Vence: " + _escHtml(f.dueDate) + "</div>" : "") +
+      "<div class=\"estado\">" + estadoTexto + "</div>" +
+      "</div></div>" +
+    "<div class=\"party\">" +
+      "<div class=\"box\"><h3>Facturado a</h3>" +
+        "<div class=\"n\">" + _escHtml(cli.nombre || "Consumidor final") + "</div>" +
+        (cli.documento ? "<div class=\"d\">" + _escHtml(cli.tipoDoc || "CC") + " " + _escHtml(cli.documento) + "</div>" : "") +
+        (cli.telefono ? "<div class=\"d\">Tel: " + _escHtml(cli.telefono) + "</div>" : "") +
+        (cli.email ? "<div class=\"d\">" + _escHtml(cli.email) + "</div>" : "") +
+        (cli.direccion ? "<div class=\"d\">" + _escHtml(cli.direccion) + (cli.ciudad ? ", " + _escHtml(cli.ciudad) : "") + "</div>" : "") +
+      "</div>" +
+      "<div class=\"box\"><h3>Detalles</h3>" +
+        "<div class=\"d\"><b>Forma de pago:</b> " + _escHtml(f.payment) + "</div>" +
+        (f.vendedor ? "<div class=\"d\"><b>Vendedor:</b> " + _escHtml(f.vendedor) + "</div>" : "") +
+        (f.garantiaDias ? "<div class=\"d\"><b>Garantía:</b> " + _escHtml(f.garantiaDias) + " días</div>" : "") +
+        "<div class=\"d\"><b>Artículos:</b> " + items.length + "</div>" +
+      "</div>" +
+    "</div>" +
+    "<table class=\"items\"><thead><tr>" +
+      "<th class=\"it-c\">#</th><th>Descripción</th><th class=\"it-c\">Cant</th>" +
+      "<th class=\"it-r\">V. Unit</th><th class=\"it-r\">Desc</th><th class=\"it-c\">IVA</th><th class=\"it-r\">Total</th>" +
+    "</tr></thead><tbody>" + filas + "</tbody></table>" +
+    "<div class=\"bottom\">" +
+      "<div class=\"pay\">" +
+        "<div class=\"row\"><span>Forma de pago</span><b>" + _escHtml(f.payment) + "</b></div>" +
+        "<div class=\"row\"><span>Estado</span><b>" + estadoTexto + "</b></div>" +
+        ((f.abonado || 0) > 0 ? "<div class=\"row\"><span>Abonado</span><b>" + fmtCOP(f.abonado) + "</b></div>" : "") +
+      "</div>" +
+      "<div class=\"totals\">" +
+        "<div class=\"r\"><span>Subtotal</span><b>" + fmtCOP(f.subtotal) + "</b></div>" +
+        ((f.descuento || 0) > 0 ? "<div class=\"r\"><span>Descuento</span><b>-" + fmtCOP(f.descuento) + "</b></div>" : "") +
+        ((f.iva || 0) > 0 ? "<div class=\"r\"><span>Base gravable</span><b>" + fmtCOP(f.base) + "</b></div>" +
+                            "<div class=\"r\"><span>IVA</span><b>" + fmtCOP(f.iva) + "</b></div>" : "") +
+        "<div class=\"grand\"><span>TOTAL</span><span>" + fmtCOP(f.total) + "</span></div>" +
+        (saldo > 0 && !anulada ? "<div class=\"saldo\"><span>SALDO PENDIENTE</span><span>" + fmtCOP(saldo) + "</span></div>" : "") +
+      "</div>" +
+    "</div>" +
+    (f.notes ? "<div class=\"note\"><b>Observaciones:</b> " + _escHtml(f.notes) + "</div>" : "") +
+    (f.garantiaDias ? "<div class=\"note\">Esta factura ampara una garantía de <b>" + _escHtml(f.garantiaDias) + " días</b> contados desde la fecha de expedición, por defectos de fabricación. No cubre daños por humedad, golpes ni manipulación de terceros.</div>" : "") +
+    "<div class=\"firmas\"><div>Firma y sello — " + _escHtml(storeName) + "</div><div>Recibido conforme — Cliente</div></div>" +
+    "<div class=\"footer\">Documento generado por " + _escHtml(storeName) + " · " + new Date().toLocaleString("es-CO") + "</div>" +
+    "<div style=\"text-align:center;margin-top:22px\"><button onclick=\"window.print()\" style=\"padding:12px 32px;background:#1A1A1A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">Imprimir / Guardar PDF</button></div>" +
+    "</body></html>",
+    ptype
+  );
+}
+
+// Enviar el resumen de la factura al cliente por WhatsApp
+function shareFacturaWA(f, cfg, notify) {
+  cfg = cfg || _getCurrentSettings() || {};
+  var cli = f.cliente || {};
+  var tel = String(cli.telefono || "").replace(/\D/g, "");
+  if (!tel) { if (notify) notify("El cliente no tiene teléfono registrado", "error"); return; }
+  var saldo = _facturaSaldo(f);
+  var lineas = (f.items || []).map(function (i) {
+    return "• " + i.name + " x" + i.qty + " — " + fmt(_facturaLineaNeto(i));
+  }).join("\n");
+  var msg = "*" + (cfg.storeName || "ACCE PRO") + "*\n" +
+    "Factura de venta *" + f.numero + "*\n" +
+    "Fecha: " + f.date + "\n\n" +
+    "Hola " + (cli.nombre ? cli.nombre.split(" ")[0] : "cliente") + ", este es el detalle de tu compra:\n\n" +
+    lineas + "\n\n" +
+    ((f.descuento || 0) > 0 ? "Descuento: -" + fmt(f.descuento) + "\n" : "") +
+    ((f.iva || 0) > 0 ? "IVA: " + fmt(f.iva) + "\n" : "") +
+    "*TOTAL: " + fmt(f.total) + "*\n" +
+    (saldo > 0 ? "Abonado: " + fmt(f.abonado || 0) + "\n*Saldo pendiente: " + fmt(saldo) + "*\n" : "Estado: PAGADA\n") +
+    (f.garantiaDias ? "\nGarantía: " + f.garantiaDias + " días\n" : "") +
+    "\n¡Gracias por tu compra!";
+  window.open("https://wa.me/" + (tel.length === 10 ? "57" + tel : tel) + "?text=" + encodeURIComponent(msg), "_blank");
+}
+
 function VentasView(_ref18) {
   var data = _ref18.data,
     save = _ref18.save,
@@ -7504,6 +7789,846 @@ function SaleModal(_ref19) {
 }
 
 // ── SETTINGS VIEW ─────────────────────────────────────
+// ── FACTURAS VIEW ─────────────────────────────────────
+function FacturasView(_refF) {
+  var data = _refF.data,
+    save = _refF.save,
+    notify = _refF.notify,
+    settings = _refF.settings;
+
+  var _fv1 = useState(null), _fva1 = _slicedToArray(_fv1, 2), modal = _fva1[0], setModal = _fva1[1];
+  var _fv2 = useState(""), _fva2 = _slicedToArray(_fv2, 2), search = _fva2[0], setSearch = _fva2[1];
+  var _fv3 = useState("Todas"), _fva3 = _slicedToArray(_fv3, 2), filtroEstado = _fva3[0], setFiltroEstado = _fva3[1];
+  var _fv4 = useState(""), _fva4 = _slicedToArray(_fv4, 2), dateFilter = _fva4[0], setDateFilter = _fva4[1];
+  var _fv5 = useState(null), _fva5 = _slicedToArray(_fv5, 2), abonoFor = _fva5[0], setAbonoFor = _fva5[1];
+
+  var isMob = typeof window !== "undefined" && window.innerWidth < 720;
+  var facturas = data.facturas || [];
+  var cfg = settings || _getCurrentSettings() || {};
+  var mesActual = getMesColombia();
+
+  var facturadoMes = facturas.filter(function (f) {
+    return f.estado !== "Anulada" && (f.date || "").slice(0, 7) === mesActual;
+  }).reduce(function (a, f) { return a + (f.total || 0); }, 0);
+
+  var porCobrar = facturas.reduce(function (a, f) { return a + _facturaSaldo(f); }, 0);
+
+  var filtradas = facturas.filter(function (f) {
+    if (dateFilter && f.date !== dateFilter) return false;
+    if (filtroEstado !== "Todas" && f.estado !== filtroEstado) return false;
+    if (!search) return true;
+    var q = search.toLowerCase();
+    return String(f.numero || "").toLowerCase().indexOf(q) >= 0 ||
+      String((f.cliente && f.cliente.nombre) || "").toLowerCase().indexOf(q) >= 0 ||
+      String((f.cliente && f.cliente.documento) || "").indexOf(search) >= 0 ||
+      (f.items || []).some(function (it) { return String(it.name || "").toLowerCase().indexOf(q) >= 0; });
+  }).sort(function (a, b) {
+    return (b.date || "").localeCompare(a.date || "") || String(b.numero || "").localeCompare(String(a.numero || ""));
+  });
+
+  var updateFactura = function (id, patch, msg) {
+    save(_objectSpread(_objectSpread({}, data), {}, {
+      facturas: facturas.map(function (f) { return f.id === id ? Object.assign({}, f, patch) : f; })
+    }));
+    if (msg) notify(msg);
+  };
+
+  var anular = function (f) {
+    if (f.estado === "Anulada") return;
+    if (!confirm("¿Anular la factura " + f.numero + "? Quedará registrada como anulada y su saldo dejará de contar como cartera. El stock NO se devuelve automáticamente.")) return;
+    updateFactura(f.id, { estado: "Anulada", anuladaEl: getNowColombiaISO() }, "Factura " + f.numero + " anulada");
+  };
+
+  var eliminar = function (f) {
+    if (!confirm("¿Eliminar definitivamente la factura " + f.numero + "? Esta acción no se puede deshacer y el stock NO se restaura.")) return;
+    save(_objectSpread(_objectSpread({}, data), {}, {
+      facturas: facturas.filter(function (x) { return x.id !== f.id; })
+    }));
+    notify("Factura eliminada");
+  };
+
+  var imprimir = function (f) {
+    showPrintModal(function (type, tw) { printFactura(f, cfg, type, tw); });
+  };
+
+  var ESTADO_COLOR = { "Pagada": T.green, "Pendiente": T.yellow, "Anulada": T.red };
+
+  var statCard = function (label, valor, color) {
+    return /*#__PURE__*/React.createElement(Card, {
+      key: label,
+      style: { padding: "14px 18px", position: "relative", overflow: "hidden" }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, color: T.muted, marginBottom: 4 } }, label),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: color } }, valor),
+      /*#__PURE__*/React.createElement("div", { style: { position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: color, opacity: 0.6 } })
+    );
+  };
+
+  return /*#__PURE__*/React.createElement("div", null,
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(3,1fr)", gap: 12, marginBottom: 20 }
+    },
+      statCard("Facturado este mes", fmt(facturadoMes), T.green),
+      statCard("Por cobrar (cartera)", fmt(porCobrar), porCobrar > 0 ? T.yellow : T.muted),
+      statCard("Facturas emitidas", String(facturas.length), T.blue)
+    ),
+
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { position: "relative", flex: isMob ? "1 1 100%" : "0 1 280px" } },
+        /*#__PURE__*/React.createElement(Search, { size: 14, style: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.muted } }),
+        /*#__PURE__*/React.createElement("input", {
+          value: search,
+          onChange: function (e) { setSearch(e.target.value); },
+          placeholder: "Buscar N°, cliente, documento o artículo...",
+          style: _objectSpread(_objectSpread({}, IS), {}, { paddingLeft: 34 })
+        })
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+        ["Todas", "Pendiente", "Pagada", "Anulada"].map(function (e) {
+          var activo = filtroEstado === e;
+          return /*#__PURE__*/React.createElement("button", {
+            key: e,
+            onClick: function () { setFiltroEstado(e); },
+            style: {
+              padding: "8px 14px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+              background: activo ? T.accent : T.surface, color: activo ? "#fff" : T.muted,
+              border: "1px solid " + (activo ? T.accent : T.border)
+            }
+          }, e);
+        })
+      ),
+      /*#__PURE__*/React.createElement("input", {
+        type: "date",
+        value: dateFilter,
+        onChange: function (e) { setDateFilter(e.target.value); },
+        style: _objectSpread(_objectSpread({}, IS), {}, { width: "auto", padding: "9px 14px" })
+      }),
+      dateFilter && /*#__PURE__*/React.createElement(Btn, {
+        variant: "ghost", small: true, icon: /*#__PURE__*/React.createElement(X, { size: 13 }),
+        onClick: function () { setDateFilter(""); }
+      }, "Limpiar"),
+      /*#__PURE__*/React.createElement("div", { style: { flex: 1 } }),
+      /*#__PURE__*/React.createElement(Btn, {
+        icon: /*#__PURE__*/React.createElement(Plus, { size: 15 }),
+        onClick: function () { setModal({ mode: "new" }); }
+      }, "Nueva Factura")
+    ),
+
+    /*#__PURE__*/React.createElement(Card, { style: { padding: 0, overflow: "hidden" } },
+      /*#__PURE__*/React.createElement("div", { style: { overflowX: "auto", WebkitOverflowScrolling: "touch" } },
+        /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } },
+          /*#__PURE__*/React.createElement("thead", null,
+            /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid " + T.border } },
+              ["N°", "Fecha", "Cliente", "Artículos", "Total", "Saldo", "Estado", "Acciones"].map(function (h) {
+                return /*#__PURE__*/React.createElement("th", {
+                  key: h,
+                  style: {
+                    padding: "11px 14px", textAlign: "left", color: T.muted, fontSize: 10, fontWeight: 700,
+                    textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap"
+                  }
+                }, h);
+              })
+            )
+          ),
+          /*#__PURE__*/React.createElement("tbody", null,
+            filtradas.map(function (f, i) {
+              var saldo = _facturaSaldo(f);
+              var anulada = f.estado === "Anulada";
+              return /*#__PURE__*/React.createElement("tr", {
+                key: f.id,
+                style: {
+                  borderBottom: "1px solid " + T.border,
+                  background: i % 2 === 1 ? T.bg : "transparent",
+                  opacity: anulada ? 0.55 : 1
+                }
+              },
+                /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px", fontWeight: 700, color: T.text, whiteSpace: "nowrap" } }, f.numero),
+                /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px", color: T.dim, whiteSpace: "nowrap" } }, f.date),
+                /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px", color: T.text, fontWeight: 500 } },
+                  (f.cliente && f.cliente.nombre) || "Consumidor final",
+                  f.cliente && f.cliente.documento && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted } },
+                    (f.cliente.tipoDoc || "CC") + " " + f.cliente.documento)
+                ),
+                /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px", color: T.dim, fontSize: 12 } },
+                  (f.items || []).slice(0, 2).map(function (it, idx) {
+                    return /*#__PURE__*/React.createElement("div", { key: idx }, it.qty + "× " + it.name);
+                  }),
+                  (f.items || []).length > 2 && /*#__PURE__*/React.createElement("div", { style: { color: T.muted } }, "+" + ((f.items || []).length - 2) + " más")
+                ),
+                /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px", fontWeight: 800, color: T.text, fontSize: 15, whiteSpace: "nowrap" } }, fmt(f.total)),
+                /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px", fontWeight: 700, color: saldo > 0 ? T.yellow : T.muted, whiteSpace: "nowrap" } },
+                  saldo > 0 ? fmt(saldo) : "—"),
+                /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px" } },
+                  /*#__PURE__*/React.createElement(Badge, { label: f.estado, color: ESTADO_COLOR[f.estado] || T.muted, bg: T.bg })),
+                /*#__PURE__*/React.createElement("td", { style: { padding: "11px 14px" } },
+                  /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 2 } },
+                    /*#__PURE__*/React.createElement("button", {
+                      onClick: function () { imprimir(f); }, title: "Imprimir / PDF",
+                      style: { background: "none", border: "none", color: T.accent, cursor: "pointer", padding: 5, display: "flex" }
+                    }, /*#__PURE__*/React.createElement(Printer, { size: 14 })),
+                    /*#__PURE__*/React.createElement("button", {
+                      onClick: function () { shareFacturaWA(f, cfg, notify); }, title: "Enviar por WhatsApp",
+                      style: { background: "none", border: "none", color: T.green, cursor: "pointer", padding: 5, display: "flex" }
+                    }, /*#__PURE__*/React.createElement(MessageCircle, { size: 14 })),
+                    saldo > 0 && /*#__PURE__*/React.createElement("button", {
+                      onClick: function () { setAbonoFor(f); }, title: "Registrar abono",
+                      style: { background: "none", border: "none", color: T.yellow, cursor: "pointer", padding: 5, display: "flex" }
+                    }, /*#__PURE__*/React.createElement(Banknote, { size: 14 })),
+                    !anulada && /*#__PURE__*/React.createElement("button", {
+                      onClick: function () { anular(f); }, title: "Anular factura",
+                      style: { background: "none", border: "none", color: T.muted, cursor: "pointer", padding: 5, display: "flex" }
+                    }, /*#__PURE__*/React.createElement(XCircle, { size: 14 })),
+                    /*#__PURE__*/React.createElement("button", {
+                      onClick: function () { eliminar(f); }, title: "Eliminar",
+                      style: { background: "none", border: "none", color: T.red, cursor: "pointer", padding: 5, display: "flex" }
+                    }, /*#__PURE__*/React.createElement(Trash2, { size: 14 }))
+                  )
+                )
+              );
+            }),
+            filtradas.length === 0 && /*#__PURE__*/React.createElement("tr", null,
+              /*#__PURE__*/React.createElement("td", { colSpan: 8, style: { padding: 40, textAlign: "center", color: T.muted } },
+                facturas.length === 0
+                  ? "Aún no has emitido facturas. Crea la primera con “Nueva Factura”."
+                  : "Ninguna factura coincide con el filtro")
+            )
+          )
+        )
+      )
+    ),
+
+    modal && /*#__PURE__*/React.createElement(FacturaModal, {
+      setModal: setModal, data: data, save: save, notify: notify, settings: cfg
+    }),
+
+    abonoFor && /*#__PURE__*/React.createElement(AbonoFacturaModal, {
+      factura: abonoFor,
+      onClose: function () { setAbonoFor(null); },
+      data: data, save: save, notify: notify
+    })
+  );
+}
+
+// ── MODAL DE ABONO A UNA FACTURA ──────────────────────
+function AbonoFacturaModal(_refA) {
+  var factura = _refA.factura,
+    onClose = _refA.onClose,
+    data = _refA.data,
+    save = _refA.save,
+    notify = _refA.notify;
+
+  var saldo = _facturaSaldo(factura);
+  var _a1 = useState(String(saldo)), _aa1 = _slicedToArray(_a1, 2), monto = _aa1[0], setMonto = _aa1[1];
+  var _a2 = useState("Efectivo"), _aa2 = _slicedToArray(_a2, 2), medio = _aa2[0], setMedio = _aa2[1];
+  var _a3 = useState(true), _aa3 = _slicedToArray(_a3, 2), enCaja = _aa3[0], setEnCaja = _aa3[1];
+
+  var registrar = function () {
+    var m = Number(monto) || 0;
+    if (m <= 0) { notify("Ingresa un monto válido", "error"); return; }
+    if (m > saldo) { notify("El abono no puede superar el saldo (" + fmt(saldo) + ")", "error"); return; }
+    var nuevoAbonado = (Number(factura.abonado) || 0) + m;
+    var abonos = (factura.abonos || []).concat([{ fecha: today(), monto: m, medio: medio }]);
+    var facturas = (data.facturas || []).map(function (f) {
+      return f.id === factura.id
+        ? Object.assign({}, f, {
+            abonado: nuevoAbonado,
+            abonos: abonos,
+            estado: nuevoAbonado >= (f.total || 0) ? "Pagada" : "Pendiente"
+          })
+        : f;
+    });
+    var payload = _objectSpread(_objectSpread({}, data), {}, { facturas: facturas });
+    if (enCaja) {
+      payload.cashflow = [{
+        id: "ing_" + Date.now(),
+        type: "ingreso",
+        amount: m,
+        description: "Abono factura " + factura.numero + " — " + ((factura.cliente && factura.cliente.nombre) || "Cliente"),
+        category: "Abono cliente",
+        date: today(),
+        notes: "Registrado desde Facturación",
+        facturaId: factura.id
+      }].concat(data.cashflow || []);
+    }
+    save(payload);
+    notify("Abono de " + fmt(m) + " registrado");
+    onClose();
+  };
+
+  return /*#__PURE__*/React.createElement(ModalWrap, { title: "Abono a factura " + factura.numero, onClose: onClose },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+      /*#__PURE__*/React.createElement("div", { style: { background: T.bg, borderRadius: 8, padding: "12px 14px", fontSize: 13, color: T.text } },
+        /*#__PURE__*/React.createElement("div", null, "Cliente: ", /*#__PURE__*/React.createElement("b", null, (factura.cliente && factura.cliente.nombre) || "Consumidor final")),
+        /*#__PURE__*/React.createElement("div", null, "Total: ", /*#__PURE__*/React.createElement("b", null, fmt(factura.total))),
+        /*#__PURE__*/React.createElement("div", { style: { color: T.yellow, fontWeight: 800, marginTop: 4 } }, "Saldo pendiente: " + fmt(saldo))
+      ),
+      /*#__PURE__*/React.createElement(Field, { label: "Monto del abono", value: monto, onChange: setMonto, type: "number" }),
+      /*#__PURE__*/React.createElement(Field, { label: "Medio de pago", value: medio, onChange: setMedio, options: FACT_PAGOS }),
+      /*#__PURE__*/React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.dim, cursor: "pointer" } },
+        /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: enCaja, onChange: function (e) { setEnCaja(e.target.checked); } }),
+        "Registrar también como ingreso en Caja"
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8 } },
+        /*#__PURE__*/React.createElement(Btn, { onClick: registrar, variant: "success", icon: /*#__PURE__*/React.createElement(Check, { size: 15 }) }, "Registrar abono"),
+        /*#__PURE__*/React.createElement(Btn, { variant: "ghost", onClick: onClose }, "Cancelar")
+      )
+    )
+  );
+}
+
+// ── MODAL: NUEVA FACTURA ──────────────────────────────
+function FacturaModal(_refFM) {
+  var setModal = _refFM.setModal,
+    data = _refFM.data,
+    save = _refFM.save,
+    notify = _refFM.notify,
+    settings = _refFM.settings;
+
+  var isMob = typeof window !== "undefined" && window.innerWidth < 720;
+  var facturas = data.facturas || [];
+
+  var _m1 = useState(_facturaNextNumero(facturas)), _ma1 = _slicedToArray(_m1, 2), numero = _ma1[0], setNumero = _ma1[1];
+  var _m2 = useState({ nombre: "", tipoDoc: "CC", documento: "", telefono: "", email: "", direccion: "", ciudad: "" }),
+    _ma2 = _slicedToArray(_m2, 2), cliente = _ma2[0], setCliente = _ma2[1];
+  var _m3 = useState([]), _ma3 = _slicedToArray(_m3, 2), items = _ma3[0], setItems = _ma3[1];
+  var _m4 = useState(""), _ma4 = _slicedToArray(_m4, 2), descGlobal = _ma4[0], setDescGlobal = _ma4[1];
+  var _m5 = useState("Efectivo"), _ma5 = _slicedToArray(_m5, 2), payment = _ma5[0], setPayment = _ma5[1];
+  var _m6 = useState("Pagada"), _ma6 = _slicedToArray(_m6, 2), estado = _ma6[0], setEstado = _ma6[1];
+  var _m7 = useState(""), _ma7 = _slicedToArray(_m7, 2), abonado = _ma7[0], setAbonado = _ma7[1];
+  var _m8 = useState(today()), _ma8 = _slicedToArray(_m8, 2), fecha = _ma8[0], setFecha = _ma8[1];
+  var _m9 = useState(""), _ma9 = _slicedToArray(_m9, 2), vence = _ma9[0], setVence = _ma9[1];
+  var _m10 = useState(""), _ma10 = _slicedToArray(_m10, 2), garantia = _ma10[0], setGarantia = _ma10[1];
+  var _m11 = useState(""), _ma11 = _slicedToArray(_m11, 2), vendedor = _ma11[0], setVendedor = _ma11[1];
+  var _m12 = useState(""), _ma12 = _slicedToArray(_m12, 2), notas = _ma12[0], setNotas = _ma12[1];
+  var _m13 = useState(true), _ma13 = _slicedToArray(_m13, 2), enCaja = _ma13[0], setEnCaja = _ma13[1];
+  var _m14 = useState(true), _ma14 = _slicedToArray(_m14, 2), guardarCliente = _ma14[0], setGuardarCliente = _ma14[1];
+  var _m15 = useState(""), _ma15 = _slicedToArray(_m15, 2), busqCliente = _ma15[0], setBusqCliente = _ma15[1];
+  var _m16 = useState(false), _ma16 = _slicedToArray(_m16, 2), showPicker = _ma16[0], setShowPicker = _ma16[1];
+  var _m17 = useState(""), _ma17 = _slicedToArray(_m17, 2), busqItem = _ma17[0], setBusqItem = _ma17[1];
+
+  var setCli = function (k, v) {
+    setCliente(function (c) { var o = Object.assign({}, c); o[k] = v; return o; });
+  };
+
+  // ── Catálogo unificado: repuestos + productos + celulares ──
+  var catalogo = []
+    .concat((data.inventory || []).filter(function (i) { return (i.qty || 0) > 0; }).map(function (i) {
+      return { key: "inv_" + i.id, src: "inventory", refId: i.id, name: i.name, price: Number(i.price) || 0,
+        stock: i.qty, detalle: [i.brand, i.category].filter(Boolean).join(" · "), tipo: "Repuesto" };
+    }))
+    .concat((data.products || []).filter(function (p) { return (p.stock || 0) > 0; }).map(function (p) {
+      return { key: "prod_" + p.id, src: "products", refId: p.id, name: p.name, price: Number(p.price) || 0,
+        stock: p.stock, detalle: p.category || "", tipo: "Producto" };
+    }))
+    .concat((data.celulares || []).filter(function (c) { return c.estado !== "Vendido"; }).map(function (c) {
+      return { key: "cel_" + c.id, src: "celulares", refId: c.id,
+        name: [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" "),
+        price: Number(c.precio) || 0, stock: 1,
+        detalle: [c.condicion, c.color, c.imei ? "IMEI " + c.imei : ""].filter(Boolean).join(" · "), tipo: "Celular" };
+    }));
+
+  var catFiltrado = catalogo.filter(function (c) {
+    if (!busqItem) return true;
+    var q = busqItem.toLowerCase();
+    return c.name.toLowerCase().indexOf(q) >= 0 || (c.detalle || "").toLowerCase().indexOf(q) >= 0;
+  });
+
+  var clientesSug = (data.customers || []).filter(function (c) {
+    if (!busqCliente) return false;
+    var q = busqCliente.toLowerCase();
+    return (c.name || "").toLowerCase().indexOf(q) >= 0 || String(c.phone || "").indexOf(busqCliente) >= 0;
+  }).slice(0, 6);
+
+  var addDelCatalogo = function (c) {
+    var existente = items.find(function (it) { return it.key === c.key; });
+    if (existente) {
+      if (c.src === "celulares") { notify("Ese celular ya está en la factura", "error"); return; }
+      setItems(items.map(function (it) {
+        return it.key === c.key
+          ? Object.assign({}, it, { qty: Math.min((Number(it.qty) || 0) + 1, it.maxQty || 9999) })
+          : it;
+      }));
+    } else {
+      setItems(items.concat([{
+        key: c.key, src: c.src, refId: c.refId, name: c.name, detalle: c.detalle,
+        qty: 1, maxQty: c.stock, unitPrice: c.price, discount: 0, ivaPct: 0
+      }]));
+    }
+    setBusqItem("");
+    setShowPicker(false);
+  };
+
+  var addManual = function () {
+    setItems(items.concat([{
+      key: "man_" + uid(), src: "manual", refId: null, name: "", detalle: "",
+      qty: 1, maxQty: 9999, unitPrice: "", discount: 0, ivaPct: 0
+    }]));
+    setShowPicker(false);
+  };
+
+  var setLinea = function (key, campo, valor) {
+    setItems(function (arr) {
+      return arr.map(function (it) {
+        if (it.key !== key) return it;
+        var o = Object.assign({}, it);
+        o[campo] = valor;
+        if (campo === "qty" && it.src !== "manual" && it.maxQty && Number(valor) > it.maxQty) o.qty = it.maxQty;
+        return o;
+      });
+    });
+  };
+
+  var quitarLinea = function (key) {
+    setItems(function (arr) { return arr.filter(function (it) { return it.key !== key; }); });
+  };
+
+  var tot = _facturaTotales(items, descGlobal);
+  var abonoNum = estado === "Pagada" ? tot.total : Math.min(Number(abonado) || 0, tot.total);
+  var saldoPrev = Math.max(0, tot.total - abonoNum);
+
+  var guardar = function () {
+    if (!cliente.nombre.trim()) { notify("Ingresa el nombre del cliente", "error"); return; }
+    if (items.length === 0) { notify("Agrega al menos un artículo a la factura", "error"); return; }
+    var invalida = items.filter(function (it) {
+      return !String(it.name || "").trim() || !(Number(it.qty) > 0) || !(Number(it.unitPrice) >= 0) || it.unitPrice === "";
+    });
+    if (invalida.length > 0) { notify("Completa descripción, cantidad y precio en todas las líneas", "error"); return; }
+    if (facturas.some(function (f) { return f.numero === numero; })) {
+      notify("Ya existe una factura con el número " + numero, "error"); return;
+    }
+
+    var lineas = items.map(function (it) {
+      return {
+        src: it.src, refId: it.refId,
+        name: String(it.name).trim(),
+        detalle: String(it.detalle || "").trim(),
+        qty: Number(it.qty) || 0,
+        unitPrice: Number(it.unitPrice) || 0,
+        discount: Number(it.discount) || 0,
+        ivaPct: Number(it.ivaPct) || 0,
+        total: _facturaLineaNeto(it)
+      };
+    });
+
+    var factura = {
+      id: uid(),
+      numero: numero,
+      date: fecha,
+      dueDate: vence,
+      cliente: {
+        nombre: cliente.nombre.trim(), tipoDoc: cliente.tipoDoc, documento: cliente.documento.trim(),
+        telefono: cliente.telefono.trim(), email: cliente.email.trim(),
+        direccion: cliente.direccion.trim(), ciudad: cliente.ciudad.trim()
+      },
+      items: lineas,
+      descGlobal: Number(descGlobal) || 0,
+      subtotal: tot.subtotal, descuento: tot.descuento, base: tot.base, iva: tot.iva, total: tot.total,
+      payment: payment,
+      abonado: abonoNum,
+      abonos: abonoNum > 0 ? [{ fecha: fecha, monto: abonoNum, medio: payment }] : [],
+      estado: abonoNum >= tot.total ? "Pagada" : "Pendiente",
+      garantiaDias: Number(garantia) || 0,
+      vendedor: vendedor.trim(),
+      notes: notas.trim(),
+      createdAt: getNowColombiaISO()
+    };
+
+    // ── Descontar stock según el origen de cada línea ──
+    var inventory = (data.inventory || []).slice();
+    var products = (data.products || []).slice();
+    var celulares = (data.celulares || []).slice();
+    items.forEach(function (it) {
+      var q = Number(it.qty) || 0;
+      if (it.src === "inventory") {
+        inventory = inventory.map(function (i) {
+          return i.id === it.refId ? Object.assign({}, i, { qty: Math.max(0, (i.qty || 0) - q) }) : i;
+        });
+        var invItem = inventory.find(function (i) { return i.id === it.refId; });
+        if (invItem && invItem.productId) {
+          products = products.map(function (p) {
+            return p.id === invItem.productId ? Object.assign({}, p, { stock: Math.max(0, (p.stock || 0) - q) }) : p;
+          });
+        }
+      } else if (it.src === "products") {
+        products = products.map(function (p) {
+          return p.id === it.refId ? Object.assign({}, p, { stock: Math.max(0, (p.stock || 0) - q) }) : p;
+        });
+      } else if (it.src === "celulares") {
+        celulares = celulares.map(function (c) {
+          return c.id === it.refId ? Object.assign({}, c, {
+            estado: "Vendido",
+            vendidoA: factura.cliente.nombre,
+            vendidoTel: factura.cliente.telefono,
+            precioVenta: Number(it.unitPrice) || 0,
+            medioPago: payment,
+            garantiaDias: Number(garantia) || 0,
+            fechaVenta: fecha
+          }) : c;
+        });
+      }
+    });
+
+    // ── Guardar el cliente en la agenda si es nuevo ──
+    var customers = (data.customers || []).slice();
+    if (guardarCliente) {
+      var yaExiste = customers.some(function (c) {
+        return (c.name || "").toLowerCase() === factura.cliente.nombre.toLowerCase() ||
+          (factura.cliente.telefono && String(c.phone || "") === factura.cliente.telefono);
+      });
+      if (!yaExiste) {
+        customers = customers.concat([{
+          id: uid(), name: factura.cliente.nombre, phone: factura.cliente.telefono,
+          email: factura.cliente.email, city: factura.cliente.ciudad,
+          notes: factura.cliente.documento ? factura.cliente.tipoDoc + " " + factura.cliente.documento : ""
+        }]);
+      }
+    }
+
+    // ── Ingreso en Caja por lo efectivamente cobrado ──
+    var cashflow = (data.cashflow || []).slice();
+    if (enCaja && abonoNum > 0) {
+      cashflow.unshift({
+        id: "ing_" + Date.now(),
+        type: "ingreso",
+        amount: abonoNum,
+        description: "Factura " + numero + " — " + factura.cliente.nombre,
+        category: "Ventas",
+        date: fecha,
+        notes: "Generado automáticamente desde Facturación",
+        facturaId: factura.id
+      });
+    }
+
+    save(_objectSpread(_objectSpread({}, data), {}, {
+      facturas: facturas.concat([factura]),
+      inventory: inventory,
+      products: products,
+      celulares: celulares,
+      customers: customers,
+      cashflow: cashflow
+    }));
+    notify("Factura " + numero + " creada");
+    setModal(null);
+    showPrintModal(function (type, tw) { printFactura(factura, settings, type, tw); });
+  };
+
+  var LB = { fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4, display: "block" };
+  var miniInput = function (props) {
+    return /*#__PURE__*/React.createElement("input", Object.assign({}, props, {
+      style: _objectSpread(_objectSpread({}, IS), {}, { padding: "8px 10px", fontSize: 13, borderRadius: 8 }, props.style || {})
+    }));
+  };
+  var secTitle = { fontWeight: 700, fontSize: 12, color: T.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 };
+
+  return /*#__PURE__*/React.createElement(ModalWrap, {
+    title: "Nueva Factura " + numero,
+    onClose: function () { setModal(null); },
+    wide: true
+  },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 22 } },
+
+      // ── DATOS DE LA FACTURA ──
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: secTitle }, "Datos de la factura"),
+        /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: isMob ? "1fr 1fr" : "repeat(4,1fr)", gap: 10 } },
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "N° factura"),
+            miniInput({ value: numero, onChange: function (e) { setNumero(e.target.value); } })),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Fecha"),
+            miniInput({ type: "date", value: fecha, onChange: function (e) { setFecha(e.target.value); } })),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Vence (opcional)"),
+            miniInput({ type: "date", value: vence, onChange: function (e) { setVence(e.target.value); } })),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Vendedor"),
+            miniInput({ value: vendedor, onChange: function (e) { setVendedor(e.target.value); }, placeholder: "Opcional" }))
+        )
+      ),
+
+      // ── CLIENTE ──
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: secTitle }, "Cliente"),
+        /*#__PURE__*/React.createElement("div", { style: { position: "relative", marginBottom: 10 } },
+          /*#__PURE__*/React.createElement(Search, { size: 14, style: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.muted } }),
+          /*#__PURE__*/React.createElement("input", {
+            value: busqCliente,
+            onChange: function (e) { setBusqCliente(e.target.value); },
+            placeholder: "Buscar cliente guardado por nombre o teléfono...",
+            style: _objectSpread(_objectSpread({}, IS), {}, { paddingLeft: 34, padding: "9px 12px 9px 34px", fontSize: 13 })
+          }),
+          clientesSug.length > 0 && /*#__PURE__*/React.createElement("div", {
+            style: {
+              position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: T.surface,
+              border: "1px solid " + T.border, borderRadius: 10, zIndex: 20, maxHeight: 210, overflowY: "auto",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.18)"
+            }
+          }, clientesSug.map(function (c) {
+            return /*#__PURE__*/React.createElement("button", {
+              key: c.id,
+              onClick: function () {
+                setCliente({
+                  nombre: c.name || "", tipoDoc: "CC", documento: "",
+                  telefono: String(c.phone || ""), email: c.email || "",
+                  direccion: "", ciudad: c.city || ""
+                });
+                setBusqCliente("");
+              },
+              style: {
+                display: "block", width: "100%", textAlign: "left", padding: "10px 14px", background: "none",
+                border: "none", borderBottom: "1px solid " + T.border, cursor: "pointer", fontFamily: "inherit", color: T.text
+              }
+            },
+              /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 13 } }, c.name),
+              /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted } },
+                [c.phone, c.city].filter(Boolean).join(" · "))
+            );
+          }))
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: isMob ? "1fr" : "2fr 1fr 1.4fr", gap: 10, marginBottom: 10 } },
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Nombre / Razón social *"),
+            miniInput({ value: cliente.nombre, onChange: function (e) { setCli("nombre", e.target.value); }, placeholder: "Nombre completo" })),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Tipo doc."),
+            /*#__PURE__*/React.createElement("select", {
+              value: cliente.tipoDoc,
+              onChange: function (e) { setCli("tipoDoc", e.target.value); },
+              style: _objectSpread(_objectSpread({}, IS), {}, { padding: "8px 10px", fontSize: 13, borderRadius: 8 })
+            }, FACT_TIPODOC.map(function (d) { return /*#__PURE__*/React.createElement("option", { key: d, value: d }, d); }))),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Número de documento"),
+            miniInput({ value: cliente.documento, onChange: function (e) { setCli("documento", e.target.value); }, placeholder: "1075..." }))
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: isMob ? "1fr 1fr" : "repeat(4,1fr)", gap: 10 } },
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Teléfono"),
+            miniInput({ value: cliente.telefono, onChange: function (e) { setCli("telefono", e.target.value); }, placeholder: "3000000000" })),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Correo"),
+            miniInput({ value: cliente.email, onChange: function (e) { setCli("email", e.target.value); }, placeholder: "correo@mail.com" })),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Dirección"),
+            miniInput({ value: cliente.direccion, onChange: function (e) { setCli("direccion", e.target.value); }, placeholder: "Calle 10 #5-23" })),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Ciudad"),
+            miniInput({ value: cliente.ciudad, onChange: function (e) { setCli("ciudad", e.target.value); }, placeholder: "Neiva" }))
+        ),
+        /*#__PURE__*/React.createElement("label", {
+          style: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 10 }
+        },
+          /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: guardarCliente, onChange: function (e) { setGuardarCliente(e.target.checked); } }),
+          "Guardar este cliente en la agenda si aún no existe"
+        )
+      ),
+
+      // ── ARTÍCULOS ──
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" } },
+          /*#__PURE__*/React.createElement("div", { style: Object.assign({}, secTitle, { marginBottom: 0 }) }, "Artículos facturados"),
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8 } },
+            /*#__PURE__*/React.createElement(Btn, {
+              small: true, variant: "ghost", icon: /*#__PURE__*/React.createElement(Package, { size: 13 }),
+              onClick: function () { setShowPicker(!showPicker); }
+            }, "Del catálogo"),
+            /*#__PURE__*/React.createElement(Btn, {
+              small: true, icon: /*#__PURE__*/React.createElement(Plus, { size: 13 }), onClick: addManual
+            }, "Línea libre")
+          )
+        ),
+
+        showPicker && /*#__PURE__*/React.createElement("div", {
+          style: { border: "1px solid " + T.border, borderRadius: 12, padding: 12, marginBottom: 12, background: T.bg }
+        },
+          /*#__PURE__*/React.createElement("input", {
+            value: busqItem,
+            onChange: function (e) { setBusqItem(e.target.value); },
+            placeholder: "Buscar en repuestos, productos y celulares...",
+            autoFocus: true,
+            style: _objectSpread(_objectSpread({}, IS), {}, { padding: "9px 12px", fontSize: 13, marginBottom: 8 })
+          }),
+          /*#__PURE__*/React.createElement("div", { style: { maxHeight: 230, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 } },
+            catFiltrado.length === 0 && /*#__PURE__*/React.createElement("div", { style: { padding: 16, textAlign: "center", color: T.muted, fontSize: 13 } },
+              "Sin resultados. Usa “Línea libre” para facturar un artículo que no esté en el catálogo."),
+            catFiltrado.slice(0, 60).map(function (c) {
+              return /*#__PURE__*/React.createElement("button", {
+                key: c.key,
+                onClick: function () { addDelCatalogo(c); },
+                style: {
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%",
+                  padding: "9px 12px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8,
+                  cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: T.text
+                }
+              },
+                /*#__PURE__*/React.createElement("span", null,
+                  /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 13 } }, c.name),
+                  /*#__PURE__*/React.createElement("span", {
+                    style: { fontSize: 10, fontWeight: 700, marginLeft: 8, padding: "2px 7px", borderRadius: 10, background: T.bg, color: T.muted }
+                  }, c.tipo),
+                  /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginTop: 2 } },
+                    [c.detalle, "Disp: " + c.stock].filter(Boolean).join(" · "))
+                ),
+                /*#__PURE__*/React.createElement("span", { style: { fontWeight: 800, fontSize: 13, color: T.green, whiteSpace: "nowrap" } }, fmt(c.price))
+              );
+            })
+          )
+        ),
+
+        items.length === 0 && /*#__PURE__*/React.createElement("div", {
+          style: { padding: 26, textAlign: "center", color: T.muted, fontSize: 13, border: "1px dashed " + T.border, borderRadius: 12 }
+        }, "Todavía no has agregado artículos. Elige del catálogo o crea una línea libre (por ejemplo: televisor, nevera, accesorio suelto)."),
+
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+          items.map(function (it, idx) {
+            var neto = _facturaLineaNeto(it);
+            var ivaLinea = Math.round(neto * ((Number(it.ivaPct) || 0) / 100));
+            return /*#__PURE__*/React.createElement("div", {
+              key: it.key,
+              style: { border: "1px solid " + T.border, borderRadius: 12, padding: 12, background: T.surface }
+            },
+              /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 } },
+                /*#__PURE__*/React.createElement("span", {
+                  style: { fontSize: 11, fontWeight: 800, color: T.muted, paddingTop: 9, minWidth: 16 }
+                }, idx + 1),
+                /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+                  miniInput({
+                    value: it.name,
+                    onChange: function (e) { setLinea(it.key, "name", e.target.value); },
+                    placeholder: "Descripción del artículo (ej: Televisor Samsung 55\" 4K)"
+                  }),
+                  /*#__PURE__*/React.createElement("input", {
+                    value: it.detalle || "",
+                    onChange: function (e) { setLinea(it.key, "detalle", e.target.value); },
+                    placeholder: "Detalle opcional: marca, serial, IMEI, color...",
+                    style: _objectSpread(_objectSpread({}, IS), {}, { padding: "7px 10px", fontSize: 12, borderRadius: 8, marginTop: 6, color: T.dim })
+                  })
+                ),
+                /*#__PURE__*/React.createElement("button", {
+                  onClick: function () { quitarLinea(it.key); },
+                  title: "Quitar línea",
+                  style: { background: "none", border: "none", color: T.red, cursor: "pointer", padding: 6, display: "flex" }
+                }, /*#__PURE__*/React.createElement(Trash2, { size: 15 }))
+              ),
+              /*#__PURE__*/React.createElement("div", {
+                style: { display: "grid", gridTemplateColumns: isMob ? "1fr 1fr" : "90px 1fr 1fr 100px 1fr", gap: 8, alignItems: "end" }
+              },
+                /*#__PURE__*/React.createElement("div", null,
+                  /*#__PURE__*/React.createElement("label", { style: LB }, "Cant"),
+                  miniInput({ type: "number", min: 1, value: it.qty, onChange: function (e) { setLinea(it.key, "qty", e.target.value); } })),
+                /*#__PURE__*/React.createElement("div", null,
+                  /*#__PURE__*/React.createElement("label", { style: LB }, "V. unitario"),
+                  miniInput({ type: "number", value: it.unitPrice, onChange: function (e) { setLinea(it.key, "unitPrice", e.target.value); }, placeholder: "0" })),
+                /*#__PURE__*/React.createElement("div", null,
+                  /*#__PURE__*/React.createElement("label", { style: LB }, "Descuento $"),
+                  miniInput({ type: "number", value: it.discount, onChange: function (e) { setLinea(it.key, "discount", e.target.value); }, placeholder: "0" })),
+                /*#__PURE__*/React.createElement("div", null,
+                  /*#__PURE__*/React.createElement("label", { style: LB }, "IVA"),
+                  /*#__PURE__*/React.createElement("select", {
+                    value: it.ivaPct,
+                    onChange: function (e) { setLinea(it.key, "ivaPct", Number(e.target.value)); },
+                    style: _objectSpread(_objectSpread({}, IS), {}, { padding: "8px 10px", fontSize: 13, borderRadius: 8 })
+                  }, FACT_IVAS.map(function (v) { return /*#__PURE__*/React.createElement("option", { key: v, value: v }, v + "%"); }))),
+                /*#__PURE__*/React.createElement("div", { style: { textAlign: isMob ? "left" : "right" } },
+                  /*#__PURE__*/React.createElement("label", { style: LB }, "Total línea"),
+                  /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: T.text, padding: "8px 0" } },
+                    fmt(neto),
+                    ivaLinea > 0 && /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, fontWeight: 600, color: T.muted } }, "+ IVA " + fmt(ivaLinea))
+                  ))
+              ),
+              it.src !== "manual" && it.maxQty && /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, marginTop: 6 } },
+                "Disponible en stock: " + it.maxQty + (it.src === "celulares" ? " · se marcará como Vendido al facturar" : ""))
+            );
+          })
+        )
+      ),
+
+      // ── PAGO Y TOTALES ──
+      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 320px", gap: 18 } },
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("div", { style: secTitle }, "Pago"),
+          /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 } },
+            /*#__PURE__*/React.createElement("div", null,
+              /*#__PURE__*/React.createElement("label", { style: LB }, "Forma de pago"),
+              /*#__PURE__*/React.createElement("select", {
+                value: payment,
+                onChange: function (e) { setPayment(e.target.value); },
+                style: _objectSpread(_objectSpread({}, IS), {}, { padding: "8px 10px", fontSize: 13, borderRadius: 8 })
+              }, FACT_PAGOS.map(function (p) { return /*#__PURE__*/React.createElement("option", { key: p, value: p }, p); }))),
+            /*#__PURE__*/React.createElement("div", null,
+              /*#__PURE__*/React.createElement("label", { style: LB }, "Estado"),
+              /*#__PURE__*/React.createElement("select", {
+                value: estado,
+                onChange: function (e) { setEstado(e.target.value); },
+                style: _objectSpread(_objectSpread({}, IS), {}, { padding: "8px 10px", fontSize: 13, borderRadius: 8 })
+              }, ["Pagada", "Pendiente"].map(function (p) { return /*#__PURE__*/React.createElement("option", { key: p, value: p }, p === "Pagada" ? "Pagada de contado" : "Pendiente / crédito"); })))
+          ),
+          estado === "Pendiente" && /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Abono inicial (opcional)"),
+            miniInput({ type: "number", value: abonado, onChange: function (e) { setAbonado(e.target.value); }, placeholder: "0" })),
+          /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+            /*#__PURE__*/React.createElement("div", null,
+              /*#__PURE__*/React.createElement("label", { style: LB }, "Descuento global $"),
+              miniInput({ type: "number", value: descGlobal, onChange: function (e) { setDescGlobal(e.target.value); }, placeholder: "0" })),
+            /*#__PURE__*/React.createElement("div", null,
+              /*#__PURE__*/React.createElement("label", { style: LB }, "Garantía (días)"),
+              miniInput({ type: "number", value: garantia, onChange: function (e) { setGarantia(e.target.value); }, placeholder: "30" }))
+          ),
+          /*#__PURE__*/React.createElement("div", { style: { marginTop: 10 } },
+            /*#__PURE__*/React.createElement("label", { style: LB }, "Observaciones"),
+            /*#__PURE__*/React.createElement("textarea", {
+              value: notas,
+              onChange: function (e) { setNotas(e.target.value); },
+              rows: 2,
+              placeholder: "Condiciones, seriales, acuerdos de pago...",
+              style: _objectSpread(_objectSpread({}, IS), {}, { padding: "9px 12px", fontSize: 13, borderRadius: 8, resize: "vertical" })
+            })
+          ),
+          /*#__PURE__*/React.createElement("label", {
+            style: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 10 }
+          },
+            /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: enCaja, onChange: function (e) { setEnCaja(e.target.checked); } }),
+            "Registrar el dinero cobrado como ingreso en Caja"
+          )
+        ),
+
+        /*#__PURE__*/React.createElement("div", {
+          style: { border: "1px solid " + T.border, borderRadius: 14, overflow: "hidden", alignSelf: "start" }
+        },
+          [
+            ["Subtotal", fmt(tot.subtotal)],
+            tot.descuento > 0 ? ["Descuento", "-" + fmt(tot.descuento)] : null,
+            tot.iva > 0 ? ["Base gravable", fmt(tot.base)] : null,
+            tot.iva > 0 ? ["IVA", fmt(tot.iva)] : null
+          ].filter(Boolean).map(function (r) {
+            return /*#__PURE__*/React.createElement("div", {
+              key: r[0],
+              style: { display: "flex", justifyContent: "space-between", padding: "10px 16px", fontSize: 13, color: T.muted, borderBottom: "1px solid " + T.border }
+            }, /*#__PURE__*/React.createElement("span", null, r[0]), /*#__PURE__*/React.createElement("b", { style: { color: T.text } }, r[1]));
+          }),
+          /*#__PURE__*/React.createElement("div", {
+            style: { display: "flex", justifyContent: "space-between", padding: "14px 16px", background: T.accent, color: "#fff", fontSize: 18, fontWeight: 800 }
+          }, /*#__PURE__*/React.createElement("span", null, "TOTAL"), /*#__PURE__*/React.createElement("span", null, fmt(tot.total))),
+          saldoPrev > 0 && /*#__PURE__*/React.createElement("div", {
+            style: { display: "flex", justifyContent: "space-between", padding: "11px 16px", background: T.bg, color: T.yellow, fontSize: 14, fontWeight: 800 }
+          }, /*#__PURE__*/React.createElement("span", null, "Saldo pendiente"), /*#__PURE__*/React.createElement("span", null, fmt(saldoPrev)))
+        )
+      ),
+
+      // ── ACCIONES ──
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
+        /*#__PURE__*/React.createElement(Btn, {
+          onClick: guardar, variant: "success", icon: /*#__PURE__*/React.createElement(Receipt, { size: 15 })
+        }, "Emitir factura e imprimir"),
+        /*#__PURE__*/React.createElement(Btn, {
+          variant: "ghost", onClick: function () { setModal(null); }
+        }, "Cancelar")
+      )
+    )
+  );
+}
+
 function SettingsView(_ref20) {
   var settings = _ref20.settings,
     saveSettings = _ref20.saveSettings,
@@ -7688,6 +8813,13 @@ function SettingsView(_ref20) {
       return set("storeSubtitle", v);
     },
     placeholder: "GESTI\xD3N TALLER"
+  }), /*#__PURE__*/React.createElement(Field, {
+    label: "NIT / C\xE9dula (aparece en las facturas)",
+    value: form.nit || "",
+    onChange: function onChange(v) {
+      return set("nit", v);
+    },
+    placeholder: "901.234.567-8"
   }), /*#__PURE__*/React.createElement(Field, {
     label: "Direcci\xF3n",
     value: form.address,
@@ -9840,6 +10972,13 @@ function App(_appProps) {
       size: 17
     })
   }, {
+    id: "facturas",
+    label: "Facturas",
+    icon: /*#__PURE__*/React.createElement(Receipt, {
+      size: 17
+    }),
+    badge: (data.facturas || []).filter(function (f) { return _facturaSaldo(f) > 0; }).length
+  }, {
     id: "caja",
     label: "Caja",
     icon: /*#__PURE__*/React.createElement(TrendingUp, {
@@ -10137,6 +11276,7 @@ function App(_appProps) {
     view === "celulares" && /*#__PURE__*/React.createElement(CelularesView, { data: data, save: save, notify: notify }),
     view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
     view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
+    view === "facturas" && /*#__PURE__*/React.createElement(FacturasView, { data: data, save: save, notify: notify, settings: settings }),
     view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
     view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
     view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data }),
@@ -10153,7 +11293,9 @@ function App(_appProps) {
         borderTop: "1px solid ".concat(T.border),
         padding: "6px 4px", height: 58
       }
-    }, [navItems[0], navItems[1], navItems[2], navItems[6], navItems[10]].map(function (item) {
+    }, ["dashboard", "repairs", "inventory", "sales", "documentos"].map(function (_id) {
+      return navItems.find(function (n) { return n.id === _id; });
+    }).filter(Boolean).map(function (item) {
       var active = view === item.id;
       return /*#__PURE__*/React.createElement("button", {
         key: item.id,
