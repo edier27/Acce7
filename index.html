@@ -14090,7 +14090,7 @@ function AIKeySettingsCard(props) {
   var _b = useState(""), busy = _b[0], setBusy = _b[1];
   useEffect(function () { _aiKeySync().then(function () { var k = _iaKey(); setKey(k); if (k) setEditing(false); }); }, []);
   var guardar = function () {
-    var k = input.trim();
+    var k = input.replace(/\s+/g, "");
     if (k.length < 20) { notify("Esa clave parece incompleta. Cópiela completa desde Google AI Studio.", "error"); return; }
     setBusy("guardar");
     _aiKeyTest(k).then(function () {
@@ -17294,6 +17294,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
       Obténla gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>
     </div>
     <button class="ai-key-save" id="acce-ai-key-save">Guardar y continuar →</button>
+    <div id="acce-ai-key-err" style="display:none;color:#FCA5A5;font-size:12px;line-height:1.5"></div>
   </div>
 
   <div id="acce-ai-chat-section" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
@@ -17520,17 +17521,30 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   });
   closeBtn.addEventListener("click", closePanel);
 
+  // Se verifica con Google ANTES de guardar: una clave mal copiada nunca llega a la cuenta
+  var keyErr = document.getElementById("acce-ai-key-err");
   keySave.addEventListener("click", function() {
-    var k = keyInput.value.trim();
-    if (!k || k.length < 10) {
+    var k = keyInput.value.replace(/\s+/g, ""); // al copiar desde WhatsApp/notas a veces se cuelan espacios o saltos
+    var fail = function (msg) {
       keyInput.style.borderColor = "#EF4444";
-      setTimeout(function(){ keyInput.style.borderColor = ""; }, 1500);
-      return;
-    }
-    if (typeof _aiKeySave === "function") _aiKeySave(k); else localStorage.setItem(KEY_STORE, k);
-    keySection.style.display = "none";
-    chatSection.style.display = "flex";
-    setTimeout(function(){ inputEl.focus(); }, 100);
+      keyErr.textContent = msg; keyErr.style.display = "block";
+      keySave.disabled = false; keySave.textContent = "Guardar y continuar →";
+    };
+    keyErr.style.display = "none";
+    if (!k || k.length < 20) { fail("La clave está incompleta. Cópiela completa desde aistudio.google.com/apikey"); return; }
+    keySave.disabled = true; keySave.textContent = "Verificando con Google...";
+    _aiKeyTest(k).then(function () {
+      _aiKeySave(k);
+      keyInput.style.borderColor = ""; keyInput.value = "";
+      keySave.disabled = false; keySave.textContent = "Guardar y continuar →";
+      keySection.style.display = "none";
+      chatSection.style.display = "flex";
+      setTimeout(function(){ inputEl.focus(); }, 100);
+    }).catch(function (e) {
+      var m = (e && e.error && e.error.message) || "";
+      if (/saturados|límite gratuito/.test(m)) { _aiKeySave(k); keySection.style.display = "none"; chatSection.style.display = "flex"; keySave.disabled = false; keySave.textContent = "Guardar y continuar →"; return; } // la clave sirve, Google solo está ocupado
+      fail(m || "Google no aceptó esa clave. Revise que esté completa.");
+    });
   });
 
   resetKey.addEventListener("click", function() {
