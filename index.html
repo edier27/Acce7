@@ -11443,7 +11443,7 @@ var _geminiOk = null; // modelo que funcionó la última vez (se prueba primero)
 function _geminiGenerate(apiKey, body) {
   var list = _GEMINI_MODELS.slice();
   if (_geminiOk) list = [_geminiOk].concat(list.filter(function (m) { return m !== _geminiOk; }));
-  var i = 0, lastBusy = null;
+  var i = 0, lastBusy = null, round = 0, tried = [];
   var tryNext = function () {
     var model = list[i];
     return fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent", {
@@ -11456,11 +11456,18 @@ function _geminiGenerate(apiKey, body) {
         var msg = (e && e.error && e.error.message) || "";
         var gone = res.status === 404 || (res.status === 400 && /not found|not supported|is not available/i.test(msg));
         var busy = res.status === 429 || res.status === 500 || res.status === 503 || /overloaded|high demand|unavailable/i.test(msg);
+        tried.push(model + ":" + res.status);
         if (busy) lastBusy = res.status;
         if ((gone || busy) && i < list.length - 1) { i++; return tryNext(); }
+        // Todos ocupados: esperar un momento y dar una segunda vuelta antes de rendirse
+        if (busy && round === 0) {
+          round = 1; i = 0;
+          return new Promise(function (r) { setTimeout(r, 3000); }).then(tryNext);
+        }
+        if (tried.length) console.warn("[IA] modelos probados:", tried.join(", "), msg);
         if ((res.status === 400 || res.status === 403) && /api key|permission|unauthori[sz]ed/i.test(msg)) throw { error: { message: "Google no aceptó la API key. Revísala o crea una nueva en aistudio.google.com/apikey" } };
         if (lastBusy === 429) throw { error: { message: "Se alcanzó el límite gratuito de consultas por ahora. Espera un minuto y vuelve a intentar." } };
-        if (lastBusy) throw { error: { message: "Los servidores de Google están saturados en este momento. Espera unos segundos y vuelve a intentar." } };
+        if (lastBusy) throw { error: { message: "Los servidores de Google están saturados en este momento (código " + lastBusy + "). Tu clave sí funciona: espera unos segundos y vuelve a intentar." } };
         throw (e && e.error) ? e : { error: { message: "Google respondió " + res.status } };
       });
     });
@@ -14099,7 +14106,12 @@ function AIKeySettingsCard(props) {
         notify(ok ? "Clave guardada en su cuenta: ya funciona en todos sus equipos" : "Clave guardada en este equipo (no se pudo subir a la cuenta, revise la conexión)", ok ? undefined : "error");
       });
     }).catch(function (e) {
-      notify((e && e.error && e.error.message) || "Google no aceptó esa clave. Revise que esté completa.", "error");
+      var m = (e && e.error && e.error.message) || "";
+      if (/saturados|límite gratuito/.test(m)) {
+        // La clave es válida (Google respondió), solo está ocupado: se guarda igual
+        return _aiKeySave(k).then(function () { setKey(k); setInput(""); setEditing(false); notify("Clave guardada en su cuenta. Google está ocupado ahora mismo; pruebe la IA en unos minutos."); });
+      }
+      notify(m || "Google no aceptó esa clave. Revise que esté completa.", "error");
     }).then(function () { setBusy(""); });
   };
   var probar = function () {
