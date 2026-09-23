@@ -11434,6 +11434,40 @@ function _aplicarRecepcion(data, lineas, opts) {
 // ─── Lectura de factura con Gemini (reutiliza la clave del chat IA) ───────
 var _IA_KEY_STORE = "acce_ai_key";
 
+// Google retira modelos cada cierto tiempo (gemini-1.5-flash ya no existe).
+// "gemini-flash-latest" siempre apunta al Flash vigente; si no responde, se prueban los siguientes.
+var _GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"];
+var _geminiOk = null; // modelo que ya funcionó en esta sesión
+function _geminiGenerate(apiKey, body) {
+  var list = _geminiOk ? [_geminiOk] : _GEMINI_MODELS.slice();
+  var i = 0;
+  var tryNext = function () {
+    var model = list[i];
+    return fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      if (res.ok) { _geminiOk = model; return res.json(); }
+      return res.json().catch(function () { return {}; }).then(function (e) {
+        var msg = (e && e.error && e.error.message) || "";
+        var gone = res.status === 404 || (res.status === 400 && /not found|not supported|is not available/i.test(msg));
+        if (gone && i < list.length - 1) { i++; return tryNext(); }
+        if (res.status === 400 && /api key/i.test(msg)) throw { error: { message: "La API key no es válida. Revísala o crea una nueva en aistudio.google.com/apikey" } };
+        if (res.status === 429) throw { error: { message: "Se alcanzó el límite gratuito de consultas por ahora. Espera un minuto y vuelve a intentar." } };
+        throw (e && e.error) ? e : { error: { message: "Google respondió " + res.status } };
+      });
+    });
+  };
+  return tryNext();
+}
+// Junta el texto de la respuesta (ignora partes de "pensamiento" si las hay)
+function _geminiText(json) {
+  try {
+    return (json.candidates[0].content.parts || []).filter(function (x) { return x.text && !x.thought; }).map(function (x) { return x.text; }).join("");
+  } catch (e) { return ""; }
+}
+
 var _FACTURA_PROMPT =
   "Eres un lector de facturas de compra de un taller de reparacion de celulares. " +
   "Extrae UNICAMENTE las lineas de producto/repuesto de la factura de la imagen. " +
@@ -11466,10 +11500,7 @@ function _leerFacturaIA(file) {
       reader.onerror = function () { reject(new Error("No se pudo leer el archivo.")); };
       reader.onload = function () {
         var b64 = String(reader.result).split(",")[1];
-        fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        _geminiGenerate(apiKey, {
             contents: [{
               role: "user",
               parts: [
@@ -11479,18 +11510,12 @@ function _leerFacturaIA(file) {
             }],
             generationConfig: {
               temperature: 0,
-              maxOutputTokens: 4096,
+              maxOutputTokens: 8192,
               responseMimeType: "application/json"
             }
-          })
-        })
-        .then(function (res) {
-          if (!res.ok) return res.json().then(function (e) { throw e; });
-          return res.json();
         })
         .then(function (json) {
-          var txt = "";
-          try { txt = json.candidates[0].content.parts[0].text; } catch (e) {}
+          var txt = _geminiText(json);
           if (!txt) throw new Error("La IA no devolvio nada legible. Intenta con una foto mas nitida.");
           // Por si responde envuelto en ```json ... ```
           txt = txt.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "").trim();
@@ -16367,12 +16392,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   font-family: 'DM Mono', monospace;
   transition: border-color 0.2s;
 }
-.ai-key-input:focus { border-color: #1A1A1A; }
-.ai-key-info { color: #787878; font-size: 11px; line-height: 1.5; }
+.ai-key-input:focus { border-color: #818CF8; }
+.ai-key-info { color: #9a9a9a; font-size: 11px; line-height: 1.5; }
+.ai-key-info a { color: #A5B4FC; font-weight: 700; }
 .ai-key-save {
-  background: #1A1A1A;
+  background: #4F46E5;
   border: none; border-radius: 10px;
-  color: #000; font-weight: 700; font-size: 13px;
+  color: #fff; font-weight: 700; font-size: 13px;
   padding: 10px; cursor: pointer;
   transition: opacity 0.2s;
 }
@@ -16464,7 +16490,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
     <input class="ai-key-input" id="acce-ai-key-input" type="password" placeholder="AIzaSy..." autocomplete="off"/>
     <div class="ai-key-info">
       Tu key se guarda solo en este navegador y nunca se envía a terceros.<br>
-      Obténla gratis en <strong style="color:#1A1A1A">aistudio.google.com</strong>
+      Obténla gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>
     </div>
     <button class="ai-key-save" id="acce-ai-key-save">Guardar y continuar →</button>
   </div>
@@ -16696,7 +16722,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   keySave.addEventListener("click", function() {
     var k = keyInput.value.trim();
     if (!k || k.length < 10) {
-      keyInput.style.borderColor = "#1A1A1A";
+      keyInput.style.borderColor = "#EF4444";
       setTimeout(function(){ keyInput.style.borderColor = ""; }, 1500);
       return;
     }
@@ -16866,22 +16892,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 
     var systemPrompt = "Eres el asistente de ACCE PRO, un software de gestión de talleres de reparación y tiendas de accesorios. Tu trabajo es responder preguntas del dueño/empleado sobre sus datos reales del negocio. Usa SOLO los datos que se te proporcionan. Si algo no está en los datos, dilo claramente. Responde en español, de forma concisa y útil. No inventes datos. Usa negritas para resaltar nombres y cifras importantes.\n\n" + context;
 
-    fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    _geminiGenerate(apiKey, {
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: "user", parts: [{ text: text }] }],
-        generationConfig: { maxOutputTokens: 600 }
-      })
-    })
-    .then(function(res) {
-      if (!res.ok) return res.json().then(function(e){ throw e; });
-      return res.json();
+        generationConfig: { maxOutputTokens: 2048 }
     })
     .then(function(json) {
       typingEl.remove();
-      var reply = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts && json.candidates[0].content.parts[0]) ? json.candidates[0].content.parts[0].text : "Sin respuesta.";
+      var reply = _geminiText(json) || "Sin respuesta.";
       addMessage(reply, "bot");
     })
     .catch(function(err) {
