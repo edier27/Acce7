@@ -1,5 +1,5 @@
 // ACCE PRO — Service Worker v1.0
-const CACHE_NAME = 'accepro-v1';
+const CACHE_NAME = 'accepro-v2';
 const ASSETS = [
   '/Acce7/',
   '/Acce7/index.html'
@@ -31,6 +31,9 @@ self.addEventListener('activate', function(e) {
 // Interceptar requests — Network first, cache fallback
 self.addEventListener('fetch', function(e) {
   if (e.request.method !== 'GET') return;
+  // Solo archivos propios del sitio: las fotos/documentos de Google Drive y las
+  // llamadas a Google/Firebase van directo a la red (no se guardan en caché)
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then(function(response) {

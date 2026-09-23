@@ -2787,11 +2787,15 @@ function RepairModal(_ref0) {
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
         var dataUrl = canvas.toDataURL("image/jpeg", 0.75);
-        var newPhotos = (form.photos || []).concat([dataUrl]);
-        var updReps = (data.repairs || []).map(function(r) { return r.id === form.id ? Object.assign({}, r, { photos: newPhotos }) : r; });
-        save(Object.assign({}, data, { repairs: updReps }));
-        setForm(function(f) { return Object.assign({}, f, { photos: newPhotos }); });
-        notify("Foto añadida");
+        if (_gdState.connected && _gdState.tokenOk) notify("Subiendo foto a Google Drive...");
+        // Se sube a Google Drive si está conectado; si no, queda en los datos y se sube después
+        _gdStorePhoto(dataUrl, { kind: "rep", owner: form, clientId: clientId, storeName: window.__acceStoreName }).then(function(ref) {
+          var newPhotos = (form.photos || []).concat([ref]);
+          var updReps = (data.repairs || []).map(function(r) { return r.id === form.id ? Object.assign({}, r, { photos: newPhotos }) : r; });
+          save(Object.assign({}, data, { repairs: updReps }));
+          setForm(function(f) { return Object.assign({}, f, { photos: newPhotos }); });
+          notify(_isGd(ref) ? "Foto guardada en Google Drive" : "Foto añadida");
+        });
       };
       img.src = ev.target.result;
     };
@@ -2799,9 +2803,11 @@ function RepairModal(_ref0) {
   };
   var _removePhoto = function(idx) {
     if (!confirm("¿Eliminar esta foto?")) return;
+    var removed = (form.photos || [])[idx];
     var newPhotos = (form.photos || []).filter(function(_, i) { return i !== idx; });
     var updReps = (data.repairs || []).map(function(r) { return r.id === form.id ? Object.assign({}, r, { photos: newPhotos }) : r; });
     save(Object.assign({}, data, { repairs: updReps }));
+    if (_isGd(removed)) _gdTrash(removed);
     setForm(function(f) { return Object.assign({}, f, { photos: newPhotos }); });
     notify("Foto eliminada");
   };
@@ -2945,7 +2951,7 @@ function RepairModal(_ref0) {
         ? /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 } },
             form.photos.map(function(src, i) {
               return /*#__PURE__*/React.createElement("div", { key: i, style: { position: "relative", borderRadius: 7, overflow: "hidden", aspectRatio: "1" } },
-                /*#__PURE__*/React.createElement("img", { src: src, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }, onClick: function() { window.open(src); } }),
+                /*#__PURE__*/React.createElement(DrivePhoto, { src: src, w: 600, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }, onClick: function() { _openPhoto(src); } }),
                 /*#__PURE__*/React.createElement("button", {
                   onClick: function() { _removePhoto(i); },
                   style: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(119,119,119,0.92)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1 }
@@ -4604,12 +4610,12 @@ function CelularesView(_refCel) {
       },
         /*#__PURE__*/React.createElement("div", { style: { position: "relative", height: 180, background: T.bg, overflow: "hidden", display: "flex" } },
           (c.photos && c.photos[0])
-            ? /*#__PURE__*/React.createElement("img", { src: c.photos[0], alt: "", style: { width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }, onClick: function () { window.open(c.photos[0]); } })
+            ? /*#__PURE__*/React.createElement(DrivePhoto, { src: c.photos[0], w: 700, alt: "", style: { width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }, onClick: function () { _openPhoto(c.photos[0]); } })
             : /*#__PURE__*/React.createElement("div", { style: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: T.dim } }, /*#__PURE__*/React.createElement(Smartphone, { size: 48 })),
-          c.photos && c.photos[1] && /*#__PURE__*/React.createElement("img", {
-            src: c.photos[1], alt: "",
+          c.photos && c.photos[1] && /*#__PURE__*/React.createElement(DrivePhoto, {
+            src: c.photos[1], w: 200, alt: "",
             style: { position: "absolute", bottom: 8, right: 8, width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: "2px solid #fff", cursor: "pointer" },
-            onClick: function () { window.open(c.photos[1]); }
+            onClick: function () { _openPhoto(c.photos[1]); }
           }),
           /*#__PURE__*/React.createElement("div", { style: { position: "absolute", top: 8, left: 8 } },
             /*#__PURE__*/React.createElement(Badge, { label: c.estado, color: estadoColor, bg: estadoBg })
@@ -4705,8 +4711,11 @@ function CelularModal(_refCM) {
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
         var dataUrl = canvas.toDataURL("image/jpeg", 0.75);
-        setForm(function (f) { return Object.assign({}, f, { photos: (f.photos || []).concat([dataUrl]) }); });
-        notify("Foto a\xF1adida");
+        if (_gdState.connected && _gdState.tokenOk) notify("Subiendo foto a Google Drive...");
+        _gdStorePhoto(dataUrl, { kind: "cel", owner: form, clientId: window.__acceClientId, storeName: window.__acceStoreName }).then(function (ref) {
+          setForm(function (f) { return Object.assign({}, f, { photos: (f.photos || []).concat([ref]) }); });
+          notify(_isGd(ref) ? "Foto guardada en Google Drive" : "Foto a\xF1adida");
+        });
       };
       img.src = ev.target.result;
     };
@@ -4773,7 +4782,7 @@ function CelularModal(_refCM) {
           ? /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } },
               form.photos.map(function (src, i) {
                 return /*#__PURE__*/React.createElement("div", { key: i, style: { position: "relative", borderRadius: 7, overflow: "hidden", aspectRatio: "1" } },
-                  /*#__PURE__*/React.createElement("img", { src: src, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }, onClick: function () { window.open(src); } }),
+                  /*#__PURE__*/React.createElement(DrivePhoto, { src: src, w: 600, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }, onClick: function () { _openPhoto(src); } }),
                   /*#__PURE__*/React.createElement("button", {
                     onClick: function () { _removePhoto(i); },
                     style: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(119,119,119,0.92)", border: "none", color: "#fff", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1 }
@@ -9635,7 +9644,10 @@ function SettingsView(_ref20) {
       }),
       /*#__PURE__*/React.createElement(Btn, { onClick: handleChangePwd, small: true }, isBypass ? "Establecer nueva contraseña" : "Cambiar contraseña")
     )
-  )));
+  )),
+  /*#__PURE__*/React.createElement("div", { style: rowWrapStyle },
+    /*#__PURE__*/React.createElement(DriveSettingsCard, { style: rowItemStyle, clientId: clientId, notify: notify, pending: _ref20.drivePending })
+  ));
 }
 
 // ─── Responsive Hook ──────────────────────────────────────
@@ -12527,6 +12539,434 @@ function _compressImageFile(file, maxS, quality) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// GOOGLE DRIVE — fotos y documentos
+// Los DATOS del taller siguen en Firebase. Solo los archivos pesados
+// (fotos de reparaciones, fotos de celulares y documentos) se suben al
+// Google Drive del taller; en Firebase queda solo la referencia "gd:<id>".
+// Permiso pedido: drive.file → la app solo ve los archivos que ella crea.
+// Fotos de reparaciones/celulares: "cualquiera con el enlace" (para el link
+// de seguimiento). Documentos (facturas, avisos): privados.
+// ═══════════════════════════════════════════════════════════════════
+var GDRIVE_CLIENT_ID = "779307465490-fi9co89m1v5e3naob875dhhl5fp13ulg.apps.googleusercontent.com"; // ID de cliente OAuth (tipo Web) de Google Cloud — ver README
+var _GD_SCOPE = "https://www.googleapis.com/auth/drive.file";
+var _GD_TOKEN_KEY = "acce_gd_token";
+var _GD_CONN_KEY = "acce_gd_conn";
+var _GD_KNOWN_KEY = "acce_gd_known";
+var _GD_API = "https://www.googleapis.com/drive/v3/files";
+var _GD_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id";
+
+function _gdReadJSON(k, def) { try { var v = JSON.parse(localStorage.getItem(k) || "null"); return v == null ? def : v; } catch (e) { return def; } }
+function _gdWriteJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function _gdReadToken() {
+  var t = _gdReadJSON(_GD_TOKEN_KEY, null);
+  return (t && t.token && t.exp > Date.now() + 60000) ? t.token : null;
+}
+function _gdConn() { return _gdReadJSON(_GD_CONN_KEY, null); }
+
+// ── Estado observable (para la tarjeta de Configuración y la barra de sincronización) ──
+var _gdState = { connected: !!_gdConn(), email: (_gdConn() || {}).email || "", tokenOk: !!_gdReadToken(), busy: false, done: 0, total: 0, error: "" };
+var _gdListeners = [];
+function _gdSet(p) {
+  _gdState = Object.assign({}, _gdState, p);
+  _gdListeners.slice().forEach(function (f) { try { f(_gdState); } catch (e) {} });
+}
+function _useGd() {
+  var s = useState(_gdState);
+  useEffect(function () {
+    var f = function (v) { s[1](v); };
+    _gdListeners.push(f);
+    f(_gdState);
+    return function () { _gdListeners = _gdListeners.filter(function (x) { return x !== f; }); };
+  }, []);
+  return s[0];
+}
+// El token dura ~1 hora: revisar cada minuto si venció para avisar
+setInterval(function () { var ok = !!_gdReadToken(); if (ok !== _gdState.tokenOk) _gdSet({ tokenOk: ok }); }, 60000);
+
+// ── Referencias de foto: "gd:<fileId>" | dataURL | URL http ──
+function _isGd(p) { return typeof p === "string" && p.indexOf("gd:") === 0; }
+function _isDataUrl(p) { return typeof p === "string" && p.indexOf("data:") === 0; }
+function _gdIdOf(p) { return String(p).slice(3); }
+function _photoSrc(p, w) { return _isGd(p) ? "https://lh3.googleusercontent.com/d/" + _gdIdOf(p) + "=w" + (w || 1600) : p; }
+function _photoAltSrc(p, w) { return "https://drive.google.com/thumbnail?id=" + _gdIdOf(p) + "&sz=w" + (w || 1600); }
+function _photoViewUrl(p) { return _isGd(p) ? "https://drive.google.com/file/d/" + _gdIdOf(p) + "/view" : p; }
+function _openPhoto(p) {
+  if (!p) return;
+  if (!_isDataUrl(p)) { window.open(_photoViewUrl(p), "_blank", "noopener"); return; }
+  // Chrome bloquea abrir un dataURL directo en una pestaña: se envuelve en una página
+  var w = window.open("", "_blank");
+  if (w) w.document.write('<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="' + _escHtml(p) + '" style="max-width:100%;max-height:100vh"></body></html>');
+}
+
+// Foto que puede venir de Drive: intenta 2 servidores de Google y si ambos
+// fallan muestra un botón "Ver foto" que la abre directamente en Drive.
+function DrivePhoto(props) {
+  var p = props.src;
+  var _s = useState(0), stage = _s[0], setStage = _s[1];
+  useEffect(function () { setStage(0); }, [p]);
+  if (!p) return null;
+  if (!_isGd(p)) return React.createElement("img", { src: p, alt: props.alt || "", style: props.style, onClick: props.onClick });
+  if (stage >= 2) {
+    return React.createElement("a", {
+      href: _photoViewUrl(p), target: "_blank", rel: "noopener noreferrer",
+      onClick: function (e) { e.stopPropagation(); },
+      style: Object.assign({}, props.style, { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: "#f1f1f1", color: "#555", fontSize: 12, fontWeight: 600, textDecoration: "none", cursor: "pointer" })
+    }, React.createElement(ImageOff, { size: 20 }), "Ver foto");
+  }
+  return React.createElement("img", {
+    key: stage, src: stage === 0 ? _photoSrc(p, props.w) : _photoAltSrc(p, props.w),
+    alt: props.alt || "", style: props.style, onClick: props.onClick,
+    referrerPolicy: "no-referrer", loading: "lazy",
+    onError: function () { setStage(stage + 1); }
+  });
+}
+
+// ── Google Identity Services (token de acceso, ~1 hora) ──
+var _gdGisPromise = null, _gdTokenClient = null;
+function _gdGisReady() { return !!(window.google && google.accounts && google.accounts.oauth2); }
+function _gdLoadGis() {
+  if (_gdGisReady()) return Promise.resolve();
+  if (_gdGisPromise) return _gdGisPromise;
+  _gdGisPromise = new Promise(function (res, rej) {
+    var s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client"; s.async = true;
+    s.onload = function () { res(); };
+    s.onerror = function () { _gdGisPromise = null; rej(new Error("No se pudo cargar el servicio de Google. Revisa tu conexión.")); };
+    document.head.appendChild(s);
+  });
+  return _gdGisPromise;
+}
+// Debe llamarse DIRECTO desde un clic (si no, el navegador bloquea la ventana de Google).
+// Por eso la librería se precarga al abrir la app (ver _gdLoadGis en App).
+function _gdRequestToken(prompt) {
+  return new Promise(function (resolve, reject) {
+    if (!GDRIVE_CLIENT_ID) { reject(new Error("Falta configurar el ID de cliente de Google Drive.")); return; }
+    var go = function () {
+      if (!_gdTokenClient) {
+        _gdTokenClient = google.accounts.oauth2.initTokenClient({ client_id: GDRIVE_CLIENT_ID, scope: _GD_SCOPE, callback: function () {} });
+      }
+      _gdTokenClient.callback = function (resp) {
+        if (!resp || resp.error || !resp.access_token) { reject(new Error("Google no dio el permiso" + (resp && resp.error ? " (" + resp.error + ")" : ""))); return; }
+        if (!google.accounts.oauth2.hasGrantedAllScopes(resp, _GD_SCOPE)) { reject(new Error("Debes marcar la casilla de Google Drive al dar el permiso.")); return; }
+        _gdWriteJSON(_GD_TOKEN_KEY, { token: resp.access_token, exp: Date.now() + (Number(resp.expires_in) || 3600) * 1000 });
+        _gdSet({ tokenOk: true, error: "" });
+        resolve(resp.access_token);
+      };
+      _gdTokenClient.error_callback = function (err) {
+        var t = err && err.type;
+        reject(new Error(t === "popup_closed" ? "Se cerró la ventana de Google sin terminar."
+          : t === "popup_failed_to_open" ? "El navegador bloqueó la ventana de Google. Permite ventanas emergentes para este sitio."
+          : "No se pudo conectar con Google."));
+      };
+      var cfg = { prompt: prompt || "" };
+      var conn = _gdConn();
+      if (conn && conn.email) cfg.login_hint = conn.email;
+      _gdTokenClient.requestAccessToken(cfg);
+    };
+    if (_gdGisReady()) go(); else _gdLoadGis().then(go, reject);
+  });
+}
+function _gdToken(interactive) {
+  var t = _gdReadToken();
+  if (t) return Promise.resolve(t);
+  if (_gdState.tokenOk) _gdSet({ tokenOk: false });
+  if (!interactive) { var e = new Error("NEED_AUTH"); e.needAuth = true; return Promise.reject(e); }
+  return _gdRequestToken("");
+}
+
+// ── Llamadas a la API de Drive ──
+function _gdApi(method, url, body, headers) {
+  return _gdToken(false).then(function (tok) {
+    return fetch(url, { method: method, headers: Object.assign({ Authorization: "Bearer " + tok }, headers || {}), body: body });
+  }).then(function (r) {
+    if (r.status === 401) {
+      try { localStorage.removeItem(_GD_TOKEN_KEY); } catch (e) {}
+      _gdSet({ tokenOk: false });
+      var e1 = new Error("NEED_AUTH"); e1.needAuth = true; throw e1;
+    }
+    if (!r.ok) return r.text().then(function (t) { var e2 = new Error("Drive respondió " + r.status + ": " + String(t).slice(0, 160)); e2.status = r.status; throw e2; });
+    return r.status === 204 ? null : r.json();
+  });
+}
+function _gdTag(s) { return String(s || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80); }
+function _gdFoldersKey() { return "acce_gd_folders_" + ((_gdConn() || {}).email || "x"); }
+// Busca (por etiqueta interna) o crea una carpeta. Cachea el id en este equipo.
+function _gdFolder(name, tag, parentId) {
+  var cache = _gdReadJSON(_gdFoldersKey(), {});
+  if (cache[tag]) return Promise.resolve(cache[tag]);
+  var q = "mimeType='application/vnd.google-apps.folder' and trashed=false and appProperties has { key='acceTag' and value='" + tag + "' }";
+  return _gdApi("GET", _GD_API + "?pageSize=1&fields=files(id)&q=" + encodeURIComponent(q)).then(function (res) {
+    if (res && res.files && res.files.length) return res.files[0].id;
+    var meta = { name: String(name).slice(0, 120), mimeType: "application/vnd.google-apps.folder", appProperties: { acceTag: tag } };
+    if (parentId) meta.parents = [parentId];
+    return _gdApi("POST", _GD_API + "?fields=id", JSON.stringify(meta), { "Content-Type": "application/json" }).then(function (f) { return f.id; });
+  }).then(function (id) {
+    var c2 = _gdReadJSON(_gdFoldersKey(), {}); c2[tag] = id; _gdWriteJSON(_gdFoldersKey(), c2);
+    return id;
+  });
+}
+// path = [{name, tag}, ...] desde la raíz "ACCE PRO"
+function _gdFolderPath(path) {
+  return path.reduce(function (p, seg) {
+    return p.then(function (parentId) { return _gdFolder(seg.name, seg.tag, parentId); });
+  }, Promise.resolve(null));
+}
+function _gdTallerPath(clientId, storeName) {
+  var cid = _gdTag(clientId);
+  return [{ name: "ACCE PRO", tag: "root" }, { name: storeName || clientId, tag: "t_" + cid }];
+}
+function _gdUploadBlob(blob, name, folderId, makePublic) {
+  var boundary = "acce" + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  var meta = { name: name, parents: [folderId] };
+  var body = new Blob([
+    "--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(meta) + "\r\n",
+    "--" + boundary + "\r\nContent-Type: " + (blob.type || "image/jpeg") + "\r\n\r\n", blob,
+    "\r\n--" + boundary + "--"
+  ]);
+  return _gdApi("POST", _GD_UPLOAD, body, { "Content-Type": "multipart/related; boundary=" + boundary }).then(function (f) {
+    if (!makePublic) return f.id;
+    return _gdApi("POST", _GD_API + "/" + f.id + "/permissions?fields=id", JSON.stringify({ role: "reader", type: "anyone" }), { "Content-Type": "application/json" })
+      .then(function () { return f.id; }, function (e) { console.warn("[Drive] no se pudo compartir por enlace:", e); return f.id; });
+  });
+}
+// Sube a una ruta de carpetas; si una carpeta cacheada fue borrada en Drive, la recrea y reintenta
+function _gdUploadTo(path, blob, name, makePublic) {
+  var attempt = function () { return _gdFolderPath(path).then(function (fid) { return _gdUploadBlob(blob, name, fid, makePublic); }); };
+  return attempt().catch(function (e) {
+    if (e && (e.status === 404 || e.status === 403) && !e.needAuth) { _gdWriteJSON(_gdFoldersKey(), {}); return attempt(); }
+    throw e;
+  });
+}
+// Mover a la papelera de Drive (recuperable 30 días). Silencioso si no hay sesión.
+function _gdTrash(ref) {
+  var id = _isGd(ref) ? _gdIdOf(ref) : ref;
+  if (!id || !_gdReadToken()) return;
+  _gdApi("PATCH", _GD_API + "/" + id, JSON.stringify({ trashed: true }), { "Content-Type": "application/json" }).catch(function () {});
+}
+function _gdDataUrlToBlob(u) {
+  var parts = String(u).split(","), mime = (parts[0].match(/data:([^;]+)/) || [])[1] || "image/jpeg";
+  var bin = atob(parts[1] || ""), arr = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+function _gdFileSafe(s) { return String(s || "").replace(/[\\/:*?"<>|#%]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60); }
+
+// Recordar qué dataURL ya se subió (evita subir dos veces la misma foto si un
+// formulario abierto vuelve a guardar la versión vieja)
+function _gdHash(s) { var h = 5381; for (var i = 0; i < s.length; i += 7) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return s.length + "_" + (h >>> 0).toString(36); }
+function _gdKnown(u) { return _gdReadJSON(_GD_KNOWN_KEY, {})[_gdHash(u)] || null; }
+function _gdRemember(u, ref) {
+  var m = _gdReadJSON(_GD_KNOWN_KEY, {}), keys = Object.keys(m);
+  if (keys.length > 400) keys.slice(0, keys.length - 300).forEach(function (k) { delete m[k]; });
+  m[_gdHash(u)] = ref; _gdWriteJSON(_GD_KNOWN_KEY, m);
+}
+
+// Ruta y nombre de archivo según el tipo de foto
+function _gdPhotoTarget(ctx) {
+  var base = _gdTallerPath(ctx.clientId, ctx.storeName), cid = _gdTag(ctx.clientId), o = ctx.owner || {};
+  var stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-") + "-" + Math.random().toString(36).slice(2, 5);
+  if (ctx.kind === "cel") {
+    return { path: base.concat([{ name: "Celulares", tag: "cel_" + cid }]), name: _gdFileSafe([o.marca, o.modelo, o.imei ? "IMEI " + String(o.imei).slice(-4) : ""].join(" ") || "celular") + " " + stamp + ".jpg" };
+  }
+  var code = String(o.id || "").slice(-6).toUpperCase();
+  var folder = _gdFileSafe((o.customer || "Cliente") + " - " + (o.device || "Equipo")) + " (#" + code + ")";
+  return {
+    path: base.concat([{ name: "Reparaciones", tag: "rep_" + cid }, { name: folder, tag: "r_" + cid + "_" + _gdTag(o.id) }]),
+    name: "foto " + stamp + ".jpg"
+  };
+}
+function _gdUploadPhoto(dataUrl, ctx) {
+  var known = _gdKnown(dataUrl);
+  if (known) return Promise.resolve(known);
+  var t = _gdPhotoTarget(ctx);
+  return _gdUploadTo(t.path, _gdDataUrlToBlob(dataUrl), t.name, true).then(function (id) {
+    var ref = "gd:" + id; _gdRemember(dataUrl, ref); return ref;
+  });
+}
+// Para los formularios: si Drive está listo sube ya; si no (o falla) devuelve
+// el dataURL y la sincronización lo subirá después. Nunca falla.
+function _gdStorePhoto(dataUrl, ctx) {
+  if (!_gdState.connected || !_gdReadToken() || !navigator.onLine) return Promise.resolve(dataUrl);
+  return _gdUploadPhoto(dataUrl, ctx).catch(function (e) { console.warn("[Drive] foto quedó pendiente:", e); return dataUrl; });
+}
+
+// ── Sincronización: sube las fotos que siguen guardadas dentro de los datos ──
+function _gdCollectPending(d) {
+  var out = [];
+  (d.repairs || []).forEach(function (r) { (r.photos || []).forEach(function (p) { if (_isDataUrl(p)) out.push({ kind: "rep", owner: r, dataUrl: p }); }); });
+  (d.celulares || []).forEach(function (c) { (c.photos || []).forEach(function (p) { if (_isDataUrl(p)) out.push({ kind: "cel", owner: c, dataUrl: p }); }); });
+  return out;
+}
+function _gdReplacePhotos(d, map) {
+  var changed = false;
+  var fix = function (list) {
+    return (list || []).map(function (item) {
+      if (!item.photos || !item.photos.some(function (p) { return map[p]; })) return item;
+      changed = true;
+      return Object.assign({}, item, { photos: item.photos.map(function (p) { return map[p] || p; }) });
+    });
+  };
+  var nd = Object.assign({}, d, { repairs: fix(d.repairs), celulares: fix(d.celulares) });
+  return changed ? nd : d;
+}
+var _gdSyncing = false;
+// opts: { clientId, storeName, getData, save, interactive }
+function _gdSyncPhotos(opts) {
+  if (_gdSyncing || !_gdState.connected) return Promise.resolve(0);
+  var items = _gdCollectPending(opts.getData());
+  if (!items.length) return Promise.resolve(0);
+  _gdSyncing = true;
+  _gdSet({ busy: true, done: 0, total: items.length, error: "" });
+  var map = {}, n = 0;
+  var apply = function () {
+    if (!Object.keys(map).length) return;
+    var d = opts.getData(), nd = _gdReplacePhotos(d, map);
+    if (nd !== d) opts.save(nd);
+  };
+  return _gdToken(!!opts.interactive).then(function () {
+    return items.reduce(function (p, it) {
+      return p.then(function () {
+        if (map[it.dataUrl]) return;
+        return _gdUploadPhoto(it.dataUrl, { kind: it.kind, owner: it.owner, clientId: opts.clientId, storeName: opts.storeName }).then(function (ref) {
+          map[it.dataUrl] = ref; n++;
+          _gdSet({ done: n });
+          if (n % 5 === 0) apply(); // guardar avance cada 5 fotos
+        });
+      });
+    }, Promise.resolve());
+  }).then(function () {
+    apply(); _gdSyncing = false; _gdSet({ busy: false });
+    return n;
+  }, function (e) {
+    apply(); _gdSyncing = false;
+    _gdSet({ busy: false, error: e && e.needAuth ? "" : (e && e.message) || "Error al subir" });
+    throw e;
+  });
+}
+
+function _gdConnect() {
+  return _gdRequestToken("select_account").then(function () {
+    return _gdApi("GET", "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)").catch(function () { return null; });
+  }).then(function (about) {
+    var u = (about && about.user) || {};
+    _gdWriteJSON(_GD_CONN_KEY, { email: u.emailAddress || "", name: u.displayName || "", at: new Date().toISOString() });
+    _gdSet({ connected: true, email: u.emailAddress || "", tokenOk: true, error: "" });
+  });
+}
+function _gdDisconnect() {
+  var t = _gdReadToken();
+  try { if (t && _gdGisReady()) google.accounts.oauth2.revoke(t, function () {}); } catch (e) {}
+  try { localStorage.removeItem(_GD_TOKEN_KEY); localStorage.removeItem(_GD_CONN_KEY); } catch (e) {}
+  _gdSet({ connected: false, email: "", tokenOk: false, busy: false, error: "" });
+}
+
+// Miniatura de un documento PRIVADO de Drive (se descarga con el token)
+var _gdBlobCache = {};
+function DriveDocThumb(props) {
+  var id = props.id;
+  var gd = _useGd();
+  var _s = useState(_gdBlobCache[id] || null), url = _s[0], setUrl = _s[1];
+  useEffect(function () {
+    if (url || !gd.tokenOk) return;
+    var alive = true;
+    _gdToken(false).then(function (tok) {
+      return fetch(_GD_API + "/" + id + "?alt=media", { headers: { Authorization: "Bearer " + tok } });
+    }).then(function (r) { return r && r.ok ? r.blob() : null; }).then(function (b) {
+      if (!b || !alive) return;
+      var u = URL.createObjectURL(b); _gdBlobCache[id] = u; setUrl(u);
+    }).catch(function () {});
+    return function () { alive = false; };
+  }, [id, gd.tokenOk]);
+  if (url) return React.createElement("img", { src: url, alt: "", style: props.style });
+  return React.createElement("div", { style: Object.assign({}, props.style, { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, color: T.dim, fontSize: 11 }) },
+    React.createElement(FileImage, { size: 36, color: T.dim }), "Guardado en Drive");
+}
+
+// ── Tarjeta en Configuración ──
+function DriveSettingsCard(props) {
+  var notify = props.notify;
+  var gd = _useGd();
+  var _w = useState(false), working = _w[0], setWorking = _w[1];
+  useEffect(function () { if (GDRIVE_CLIENT_ID) _gdLoadGis().catch(function () {}); }, []);
+  var pending = props.pending || 0;
+  var folderId = _gdReadJSON(_gdFoldersKey(), {})["t_" + _gdTag(props.clientId)];
+  var title = React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15, marginBottom: 12, color: T.text } },
+    React.createElement(UploadCloud, { size: 15 }), "Google Drive — fotos y documentos");
+  var p = function (txt) { return React.createElement("div", { style: { fontSize: 13, color: T.muted, lineHeight: 1.55, marginBottom: 12 } }, txt); };
+
+  var connect = function () {
+    setWorking(true);
+    _gdConnect().then(function () {
+      notify("Google Drive conectado");
+      if (window.__gdSyncNow) window.__gdSyncNow(false).catch(function () {});
+    }).catch(function (e) { notify(e.message || "No se pudo conectar", "error"); })
+      .then(function () { setWorking(false); });
+  };
+  var syncNow = function () {
+    if (!window.__gdSyncNow) return;
+    window.__gdSyncNow(true).then(function (n) { notify(n ? n + " foto(s) subidas a Drive" : "No hay fotos pendientes"); })
+      .catch(function (e) { notify((e && e.message) || "No se pudo subir", "error"); });
+  };
+  var disconnect = function () {
+    if (!confirm("¿Desconectar Google Drive en este equipo?\n\nLas fotos ya subidas siguen en tu Drive y se siguen viendo. Las nuevas quedarán guardadas en los datos hasta que vuelvas a conectar.")) return;
+    _gdDisconnect(); notify("Google Drive desconectado");
+  };
+
+  if (!GDRIVE_CLIENT_ID) {
+    return React.createElement(Card, { style: props.style }, title,
+      p("Guarda las fotos de reparaciones, de celulares y los documentos en tu Google Drive, en vez de dentro de la base de datos. Los datos del taller siguen en la nube como siempre."),
+      React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.muted, background: T.bg, border: "1px solid " + T.border, borderRadius: 8, padding: "10px 12px" } },
+        React.createElement(AlertCircle, { size: 15 }), "Pendiente: el administrador debe configurar el ID de cliente de Google."));
+  }
+  if (!gd.connected) {
+    return React.createElement(Card, { style: props.style }, title,
+      p("Conecta tu cuenta de Google y las fotos y documentos se guardarán en la carpeta \"ACCE PRO\" de tu Drive. Los datos (reparaciones, ventas, caja...) siguen en la nube como siempre. La app solo puede ver los archivos que ella misma crea."),
+      pending > 0 && p(pending + " foto(s) están guardadas hoy dentro de la base de datos y se pasarán a Drive al conectar."),
+      React.createElement(Btn, { onClick: connect, disabled: working, icon: working ? React.createElement(Loader2, { size: 15, className: "trp-spin" }) : React.createElement(UploadCloud, { size: 15 }) },
+        working ? "Conectando..." : "Conectar Google Drive"));
+  }
+  return React.createElement(Card, { style: props.style }, title,
+    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 13, color: T.text } },
+      React.createElement(CheckCircle, { size: 15, color: T.green || "#16a34a" }),
+      React.createElement("span", null, "Conectado", gd.email ? " como " : "", gd.email && React.createElement("strong", null, gd.email))),
+    !gd.tokenOk && p("La sesión de Google vence cada hora por seguridad. Si hay fotos por subir, toca \"Subir pendientes\" y se renueva sola."),
+    gd.busy
+      ? p("Subiendo fotos a Drive... " + gd.done + " de " + gd.total)
+      : p(pending > 0 ? pending + " foto(s) esperando para subir a Drive." : "Todas las fotos están en Drive."),
+    gd.error && React.createElement("div", { style: { fontSize: 12, color: T.red, marginBottom: 10 } }, gd.error),
+    React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+      pending > 0 && React.createElement(Btn, { small: true, onClick: syncNow, disabled: gd.busy, icon: React.createElement(UploadCloud, { size: 13 }) }, "Subir pendientes"),
+      folderId && React.createElement(Btn, { small: true, variant: "ghost", onClick: function () { window.open("https://drive.google.com/drive/folders/" + folderId, "_blank", "noopener"); }, icon: React.createElement(ExternalLink, { size: 13 }) }, "Abrir carpeta en Drive"),
+      React.createElement(Btn, { small: true, variant: "ghost", onClick: disconnect }, "Desconectar")));
+}
+
+// ── Barra superior: avisa fotos por subir y espacio usado en la base ──
+var _GD_DOC_LIMIT = 1048576; // límite de Firestore por documento
+function DriveSyncBar(props) {
+  var gd = _useGd();
+  var _h = useState(false), hidden = _h[0], setHidden = _h[1];
+  var pending = props.pending || 0, bytes = props.bytes || 0;
+  var pct = Math.round(bytes / _GD_DOC_LIMIT * 100);
+  var bar = function (color, icon, text, action) {
+    return React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: T.card, border: "1px solid " + T.border, borderLeft: "3px solid " + color, borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: T.text } },
+      icon, React.createElement("span", { style: { flex: 1, minWidth: 180 } }, text), action,
+      React.createElement("button", { onClick: function () { setHidden(true); }, title: "Ocultar", style: { background: "none", border: "none", color: T.muted, cursor: "pointer", padding: 2, display: "flex" } }, React.createElement(X, { size: 14 })));
+  };
+  if (gd.busy) return bar(T.accent, React.createElement(Loader2, { size: 15, className: "trp-spin" }), "Subiendo fotos a Google Drive... " + gd.done + " de " + gd.total);
+  if (hidden) return null;
+  if (pct >= 70) {
+    return bar(pct >= 90 ? T.red : "#d97706", React.createElement(AlertTriangle, { size: 15 }),
+      "La base de datos del taller está al " + pct + "% de su límite (" + Math.round(bytes / 1024) + " KB de 1024 KB)." + (pending ? " Pasar las fotos a Google Drive libera espacio." : ""),
+      pending ? React.createElement(Btn, { small: true, onClick: props.onAction }, gd.connected ? "Subir fotos a Drive" : "Conectar Drive") : null);
+  }
+  if (gd.connected && pending > 0 && !gd.tokenOk) {
+    return bar(T.accent, React.createElement(UploadCloud, { size: 15 }), pending + " foto(s) guardadas solo en la base de datos, esperando subir a Google Drive.",
+      React.createElement(Btn, { small: true, onClick: props.onAction }, "Subir ahora"));
+  }
+  return null;
+}
+
 // ── DOCUMENTOS: facturas de compra + evidencias de aviso a clientes ──
 // Las fotos se comprimen y se suben a Firebase Storage (documentos/{uid}/{clientId}/...)
 // y solo se guarda su URL + metadatos en los datos del taller (no ocupan espacio en Firestore).
@@ -12542,6 +12982,7 @@ function DocumentosView(_ref) {
   var _note = useState(""), _noteA = _slicedToArray(_note, 2), noteDraft = _noteA[0], setNoteDraft = _noteA[1];
   var _who = useState(""), _whoA = _slicedToArray(_who, 2), whoDraft = _whoA[0], setWhoDraft = _whoA[1];
   var fileInputRef = useRef(null);
+  var gd = _useGd();
 
   var cfg = DOC_TABS.find(function (t) { return t.id === tab; });
   var docs = (data.documentos || [])
@@ -12552,6 +12993,7 @@ function DocumentosView(_ref) {
     var isImg = /^image\//.test(file.type);
     if (!isImg) { notify("Solo se permiten imágenes (foto o captura de pantalla)", "error"); return; }
     if (file.size > 15 * 1024 * 1024) { notify("El archivo pesa más de 15MB", "error"); return; }
+    if (_gdState.connected) { uploadToDrive(file); return; }
     if (!window.__storage) { notify("Almacenamiento no disponible. Revisa tu conexión e inténtalo de nuevo.", "error"); return; }
     var ownerUid = window.__uid || _currentUid();
     if (!ownerUid) { notify("Sesión no válida", "error"); return; }
@@ -12592,6 +13034,39 @@ function DocumentosView(_ref) {
     });
   };
 
+  // Documentos en Google Drive: privados, en ACCE PRO/<taller>/Documentos/<tipo>
+  var uploadToDrive = function (file) {
+    var docId = uid();
+    var noteAtUpload = noteDraft.trim();
+    var whoAtUpload = whoDraft.trim();
+    var tipo = tab;
+    var cid = _gdTag(clientId);
+    var path = _gdTallerPath(clientId, window.__acceStoreName).concat([
+      { name: "Documentos", tag: "doc_" + cid },
+      { name: cfg.label, tag: "doc_" + cid + "_" + _gdTag(tipo) }
+    ]);
+    var fname = _gdFileSafe((whoAtUpload || cfg.label) + " " + getHoyColombia()) + ".jpg";
+    setUploading(true); setProgress(0);
+    _gdToken(true).then(function () {
+      setProgress(30);
+      return _compressImageFile(file, 1600, 0.82).catch(function () { return file; });
+    }).then(function (blob) {
+      return _gdUploadTo(path, blob, fname, false).then(function (id) { return { id: id, type: blob.type || "image/jpeg" }; });
+    }).then(function (up) {
+      var meta = {
+        id: docId, tipo: tipo, fileName: file.name || fname, fileType: up.type,
+        driveId: up.id, url: "https://drive.google.com/file/d/" + up.id + "/view",
+        date: getHoyColombia(), note: noteAtUpload, who: whoAtUpload, createdAt: getNowColombiaISO()
+      };
+      save(Object.assign({}, data, { documentos: [].concat(data.documentos || [], [meta]) }));
+      setUploading(false); setProgress(0); setNoteDraft(""); setWhoDraft("");
+      notify(tipo === "facturas" ? "Factura guardada en Google Drive" : "Evidencia guardada en Google Drive");
+    }).catch(function (err) {
+      setUploading(false); setProgress(0);
+      notify("No se pudo subir a Google Drive: " + (err && err.message && !err.needAuth ? err.message : "renueva la conexión con Google y vuelve a intentar"), "error");
+    });
+  };
+
   var handlePick = function (e) {
     var file = e.target.files && e.target.files[0];
     e.target.value = "";
@@ -12602,6 +13077,7 @@ function DocumentosView(_ref) {
     if (!confirm("¿Eliminar este archivo? Esta acción no se puede deshacer.")) return;
     save(Object.assign({}, data, { documentos: (data.documentos || []).filter(function (x) { return x.id !== d.id; }) }));
     if (window.__storage && d.storagePath) { window.__storage.ref(d.storagePath).delete().catch(function () {}); }
+    if (d.driveId) _gdTrash(d.driveId);
     notify("Archivo eliminado");
   };
 
@@ -12635,6 +13111,10 @@ function DocumentosView(_ref) {
           placeholder: tab === "facturas" ? "Ej: Compra de pantallas" : "Ej: 2do aviso por WhatsApp"
         })
       ),
+      gd.connected && !gd.tokenOk && /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12, color: T.muted, marginBottom: 12 } },
+        "Los archivos se guardan en tu Google Drive. La sesión de Google venció (dura 1 hora).",
+        /*#__PURE__*/React.createElement(Btn, { small: true, variant: "ghost", onClick: function () { _gdToken(true).then(function () { notify("Conexión con Google renovada"); }, function (e) { notify((e && e.message) || "No se pudo renovar", "error"); }); } }, "Renovar conexión")
+      ),
       /*#__PURE__*/React.createElement("input", {
         ref: fileInputRef, type: "file", accept: "image/*",
         style: { display: "none" }, onChange: handlePick
@@ -12643,7 +13123,7 @@ function DocumentosView(_ref) {
         icon: uploading ? /*#__PURE__*/React.createElement(Loader2, { size: 15, className: "trp-spin" }) : /*#__PURE__*/React.createElement(UploadCloud, { size: 15 }),
         disabled: uploading,
         onClick: function () { fileInputRef.current && fileInputRef.current.click(); }
-      }, uploading ? "Subiendo... " + progress + "%" : "Subir foto o captura")
+      }, uploading ? (gd.connected ? "Subiendo a Google Drive..." : "Subiendo... " + progress + "%") : "Subir foto o captura")
     ),
     docs.length === 0
       ? /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: "40px 20px", color: T.muted, fontSize: 14 } }, cfg.empty)
@@ -12657,7 +13137,9 @@ function DocumentosView(_ref) {
               /*#__PURE__*/React.createElement("div", {
                 style: { height: 140, background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden" },
                 onClick: function () { window.open(d.url, "_blank"); }
-              }, isImg
+              }, d.driveId
+                ? /*#__PURE__*/React.createElement(DriveDocThumb, { id: d.driveId, style: { width: "100%", height: "100%", objectFit: "cover" } })
+                : isImg
                 ? /*#__PURE__*/React.createElement("img", { src: d.url, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } })
                 : /*#__PURE__*/React.createElement(FileText, { size: 40, color: T.dim })
               ),
@@ -13973,6 +14455,36 @@ function App(_appProps) {
   var switchEmpleado = function (id) { _empSessionSet(id); setEmpId(id); };
   useEffect(function () { if (empleado && !_empCanView(empleado, view)) setView("dashboard"); }, [empId, view]);
   window.__acceStoreName = settings.storeName;
+  window.__acceClientId = clientId;
+
+  // ─── GOOGLE DRIVE: sube a Drive las fotos que siguen dentro de los datos ───
+  var _gdDataRef = React.useRef(data), _gdSaveRef = React.useRef(save);
+  _gdDataRef.current = data; _gdSaveRef.current = save;
+  var gdPending = React.useMemo(function () { return data ? _gdCollectPending(data).length : 0; }, [data]);
+  var dataBytes = React.useMemo(function () { try { return data ? JSON.stringify(data).length : 0; } catch (e) { return 0; } }, [data]);
+  useEffect(function () {
+    window.__gdSyncNow = function (interactive) {
+      return _gdSyncPhotos({
+        clientId: clientId, storeName: window.__acceStoreName, interactive: interactive,
+        getData: function () { return _gdDataRef.current; },
+        save: function (d) { _gdSaveRef.current(d); }
+      });
+    };
+    // Precargar la librería de Google para que el botón abra la ventana sin bloqueo
+    if (GDRIVE_CLIENT_ID && _gdState.connected) _gdLoadGis().catch(function () {});
+    return function () { window.__gdSyncNow = null; };
+  }, [clientId]);
+  useEffect(function () {
+    if (!gdPending || !_gdState.connected || !_gdReadToken() || !navigator.onLine) return;
+    var t = setTimeout(function () { if (window.__gdSyncNow) window.__gdSyncNow(false).catch(function () {}); }, 3000);
+    return function () { clearTimeout(t); };
+  }, [gdPending]);
+  var gdAction = function () {
+    if (!_gdState.connected) { setView("settings"); return; }
+    if (window.__gdSyncNow) window.__gdSyncNow(true).then(function (n) { if (n) notify(n + " foto(s) subidas a Google Drive"); })
+      .catch(function (e) { notify((e && e.message) || "No se pudo subir a Google Drive", "error"); });
+  };
+
   if (!data || !minLoadTimeDone) return /*#__PURE__*/React.createElement(LoadingScreen, { title: "Cargando", subtitle: "Recuperando información necesaria" });
   if (publicMode) return /*#__PURE__*/React.createElement(PublicView, {
     data: data,
@@ -14348,6 +14860,7 @@ function App(_appProps) {
       style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24, paddingBottom: isMobile ? 78 : 24 }
     },
     /*#__PURE__*/React.createElement(EmpleadoBar, { empleado: empleado, data: data, onSwitch: switchEmpleado, notify: notify }),
+    /*#__PURE__*/React.createElement(DriveSyncBar, { pending: gdPending, bytes: dataBytes, onAction: gdAction }),
     view === "gestion" && /*#__PURE__*/React.createElement(GestionView, { data: data, save: save, notify: notify, storeName: settings.storeName, empleado: empleado, onSwitch: switchEmpleado }),
     view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify, clientId: clientId }),
     view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
@@ -14357,7 +14870,7 @@ function App(_appProps) {
     view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
     view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
     view === "facturas" && /*#__PURE__*/React.createElement(FacturasView, { data: data, save: save, notify: notify, settings: settings }),
-    view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
+    view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout, drivePending: gdPending }),
     view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
     view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data, isMobile: isMobile, notify: notify }),
     view === "proveedores" && /*#__PURE__*/React.createElement(ProveedoresView, { data: data, save: save, notify: notify }),
@@ -15264,8 +15777,8 @@ function TrackingLoader(_ref) {
         /*#__PURE__*/React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 } },
           r.photos.map(function(src, i) {
             return /*#__PURE__*/React.createElement("div", { key:i, style:{ borderRadius:10, overflow:"hidden", aspectRatio:"1" } },
-              /*#__PURE__*/React.createElement("img", {
-                src: src,
+              /*#__PURE__*/React.createElement(DrivePhoto, {
+                src: src, w: 600,
                 style:{ width:"100%", height:"100%", objectFit:"cover", display:"block", cursor:"pointer" },
                 onClick: function() { setLightboxSrc(src); }
               })
@@ -15324,9 +15837,9 @@ function TrackingLoader(_ref) {
           padding:16, WebkitTapHighlightColor:"transparent"
         }
       },
-        /*#__PURE__*/React.createElement("img", {
-          src: lightboxSrc,
-          style:{ maxWidth:"100%", maxHeight:"100%", borderRadius:10, objectFit:"contain", boxShadow:"0 4px 16px rgba(0,0,0,0.3)", pointerEvents:"none" }
+        /*#__PURE__*/React.createElement(DrivePhoto, {
+          src: lightboxSrc, w: 1600,
+          style:{ maxWidth:"100%", maxHeight:"100%", borderRadius:10, objectFit:"contain", boxShadow:"0 4px 16px rgba(0,0,0,0.3)" }
         }),
         /*#__PURE__*/React.createElement("div", {
           style:{ position:"absolute", top:18, right:18, width:36, height:36, borderRadius:"50%", background:"rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, color:"#fff", cursor:"pointer", backdropFilter:"blur(4px)" }
@@ -15433,7 +15946,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.1.0";
+var APP_VERSION = "1.2.0";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

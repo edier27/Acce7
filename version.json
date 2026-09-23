@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
-  "notes": "ACCE PRO — Gestión: cotizaciones, cierre de caja, cobros, garantías, empleados, checklist de recepción",
+  "version": "1.2.0",
+  "notes": "ACCE PRO — Fotos y documentos en Google Drive (los datos siguen en la nube), aviso de espacio de la base de datos",
   "url": "https://edier27.github.io/Acce7/"
 }
