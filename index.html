@@ -9646,6 +9646,7 @@ function SettingsView(_ref20) {
     )
   )),
   /*#__PURE__*/React.createElement("div", { style: rowWrapStyle },
+    /*#__PURE__*/React.createElement(AIKeySettingsCard, { style: rowItemStyle, notify: notify }),
     /*#__PURE__*/React.createElement(DriveSettingsCard, { style: rowItemStyle, clientId: clientId, notify: notify, pending: _ref20.drivePending })
   ));
 }
@@ -14044,6 +14045,102 @@ function _iaNorm(s) { return String(s || "").toLowerCase().normalize("NFD").repl
 function _iaFirst(n) { return String(n || "").trim().split(/\s+/)[0] || ""; }
 function _iaMoney(v) { return "$" + Math.round(Number(v) || 0).toLocaleString("es-CO"); }
 
+// ─── Clave de Gemini guardada en la CUENTA del taller (trp_users/{uid}.aiKey) ───
+// Se pone una sola vez y funciona en todos los equipos donde se abra la cuenta.
+// Solo la pueden leer el propio taller y el admin (reglas de trp_users); nunca va al catálogo público.
+var _AIKEY_OWNER = "acce_ai_key_owner";
+function _aiKeyUid() { return window.__uid || _currentUid(); }
+function _aiKeyLocalSet(k, uid) {
+  try {
+    if (k) { localStorage.setItem(_IA_KEY_STORE, k); localStorage.setItem(_AIKEY_OWNER, uid || _aiKeyUid() || ""); }
+    else { localStorage.removeItem(_IA_KEY_STORE); localStorage.removeItem(_AIKEY_OWNER); }
+  } catch (e) {}
+}
+function _aiKeyRemoteSave(k) {
+  var uid = _aiKeyUid(), ref = _profileRef(uid);
+  if (!ref) return Promise.resolve(false);
+  var v = k ? k : firebase.firestore.FieldValue.delete();
+  return ref.set({ aiKey: v, aiKeyAt: new Date().toISOString() }, { merge: true }).then(function () { return true; }, function (e) { console.warn("[IA] clave no subió a la cuenta:", e); return false; });
+}
+// Guardar desde la app: en este equipo + en la cuenta
+function _aiKeySave(k) { _aiKeyLocalSet(k); return _aiKeyRemoteSave(k); }
+// Al entrar: traer la clave de la cuenta; si la cuenta no tiene y este equipo sí (de esta misma cuenta), subirla
+function _aiKeySync() {
+  var uid = _aiKeyUid(), ref = _profileRef(uid);
+  if (!ref) return Promise.resolve();
+  return ref.get().then(function (doc) {
+    var remota = doc.exists ? (doc.data().aiKey || "") : "";
+    var local = "", owner = "";
+    try { local = localStorage.getItem(_IA_KEY_STORE) || ""; owner = localStorage.getItem(_AIKEY_OWNER) || ""; } catch (e) {}
+    if (remota) { if (remota !== local || owner !== uid) _aiKeyLocalSet(remota, uid); return; }
+    if (local && (!owner || owner === uid)) { _aiKeyLocalSet(local, uid); _aiKeyRemoteSave(local); return; }
+    if (local && owner !== uid) _aiKeyLocalSet(""); // clave de otra cuenta en este navegador: no usarla
+  }).catch(function () {});
+}
+function _aiKeyTest(k) {
+  return _geminiGenerate(k, { contents: [{ role: "user", parts: [{ text: "Responde solo con la palabra OK" }] }], generationConfig: { maxOutputTokens: 20 } });
+}
+
+// Tarjeta en Configuración
+function AIKeySettingsCard(props) {
+  var notify = props.notify;
+  var _k = useState(_iaKey()), key = _k[0], setKey = _k[1];
+  var _i = useState(""), input = _i[0], setInput = _i[1];
+  var _e = useState(!_iaKey()), editing = _e[0], setEditing = _e[1];
+  var _b = useState(""), busy = _b[0], setBusy = _b[1];
+  useEffect(function () { _aiKeySync().then(function () { var k = _iaKey(); setKey(k); if (k) setEditing(false); }); }, []);
+  var guardar = function () {
+    var k = input.trim();
+    if (k.length < 20) { notify("Esa clave parece incompleta. Cópiela completa desde Google AI Studio.", "error"); return; }
+    setBusy("guardar");
+    _aiKeyTest(k).then(function () {
+      return _aiKeySave(k).then(function (ok) {
+        setKey(k); setInput(""); setEditing(false);
+        notify(ok ? "Clave guardada en su cuenta: ya funciona en todos sus equipos" : "Clave guardada en este equipo (no se pudo subir a la cuenta, revise la conexión)", ok ? undefined : "error");
+      });
+    }).catch(function (e) {
+      notify((e && e.error && e.error.message) || "Google no aceptó esa clave. Revise que esté completa.", "error");
+    }).then(function () { setBusy(""); });
+  };
+  var probar = function () {
+    setBusy("probar");
+    _aiKeyTest(key).then(function () { notify("La IA está funcionando"); }, function (e) { notify((e && e.error && e.error.message) || "No respondió", "error"); }).then(function () { setBusy(""); });
+  };
+  var quitar = function () {
+    if (!confirm("¿Quitar la clave de Gemini de su cuenta?\n\nLas funciones de IA dejarán de funcionar en todos sus equipos hasta que ponga una nueva.")) return;
+    _aiKeySave("").then(function () { setKey(""); setEditing(true); notify("Clave quitada"); });
+  };
+  var paso = function (n, contenido) {
+    return _gh("div", { style: { display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, color: T.text, lineHeight: 1.5 } },
+      _gh("span", { style: { flex: "0 0 22px", height: 22, borderRadius: "50%", background: T.accentDim, color: T.accent, fontWeight: 700, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" } }, n),
+      _gh("div", null, contenido));
+  };
+  var enmascarada = key ? key.slice(0, 4) + "••••••••" + key.slice(-4) : "";
+  return _gh(Card, { style: props.style },
+    _gh("div", { style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15, marginBottom: 12, color: T.text } }, _gIco("Sparkles", 15), "Inteligencia artificial (Google Gemini)"),
+    key && !editing
+      ? _gh(React.Fragment, null,
+          _gh("div", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.text, marginBottom: 6 } },
+            _gh(CheckCircle, { size: 15, color: T.green }), "Configurada en su cuenta ", _gh("code", { style: { fontSize: 12, color: T.muted } }, enmascarada)),
+          _gh("div", { style: { fontSize: 13, color: T.muted, lineHeight: 1.55, marginBottom: 12 } }, "Funciona en todos los equipos donde abra esta cuenta (computador, celular, tablet). No hay que volver a ponerla."),
+          _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+            _gh(Btn, { small: true, onClick: probar, disabled: !!busy, icon: busy === "probar" ? _gh(Loader2, { size: 13, className: "trp-spin" }) : null }, "Probar"),
+            _gh(Btn, { small: true, variant: "ghost", onClick: function () { setEditing(true); } }, "Cambiar clave"),
+            _gh(Btn, { small: true, variant: "ghost", onClick: quitar }, "Quitar")))
+      : _gh(React.Fragment, null,
+          _gh("div", { style: { fontSize: 13, color: T.muted, lineHeight: 1.55, marginBottom: 12 } }, "Activa el chat, el Asistente IA, la lectura de facturas y las publicaciones para vender. Es gratis y se configura una sola vez para toda la cuenta."),
+          _gh("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 } },
+            paso(1, _gh("span", null, "Abra ", _gh("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener noreferrer", style: { color: T.accent, fontWeight: 700 } }, "aistudio.google.com/apikey"), " e inicie sesión con su cuenta de Google.")),
+            paso(2, "Toque \"Crear clave de API\" (Create API key). Si pregunta por un proyecto, elija cualquiera o deje que cree uno."),
+            paso(3, "Copie la clave completa y péguela aquí abajo.")),
+          _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+            _gh("input", { type: "password", value: input, onChange: function (e) { setInput(e.target.value); }, placeholder: "Pegue aquí su API key", autoComplete: "off",
+              style: { flex: "1 1 220px", padding: "9px 12px", border: "1px solid " + T.border, borderRadius: 6, fontSize: 14, fontFamily: "inherit", color: T.text, background: T.surface } }),
+            _gh(Btn, { onClick: guardar, disabled: !!busy || !input.trim(), icon: busy === "guardar" ? _gh(Loader2, { size: 14, className: "trp-spin" }) : null }, busy === "guardar" ? "Verificando..." : "Guardar"),
+            key && _gh(Btn, { variant: "ghost", onClick: function () { setEditing(false); setInput(""); } }, "Cancelar")),
+          _gh("div", { style: { fontSize: 11, color: T.muted, marginTop: 8 } }, "Se guarda privada en su cuenta: solo usted puede verla y nunca aparece en el catálogo público.")));
+}
+
 // ── Hechos del día (se calculan localmente, sin IA) ──
 function _iaHechos(data) {
   var hoy = getHoyColombia();
@@ -15158,6 +15255,7 @@ function App(_appProps) {
   window.__acceClientId = clientId;
   window.__acceData = data; // datos en vivo para el asistente IA
   useEffect(function () { return function () { window.__acceData = null; }; }, []); // al cerrar sesión
+  useEffect(function () { _aiKeySync(); }, [clientId]); // clave de IA de la cuenta → este equipo
 
   // ─── GOOGLE DRIVE: sube a Drive las fotos que siguen dentro de los datos ───
   var _gdDataRef = React.useRef(data), _gdSaveRef = React.useRef(save);
@@ -15848,6 +15946,8 @@ function _saveProfile(profile) {
   if (!uid) return;
   profile.uid = uid;
   if (profile.passwordHash) delete profile.passwordHash; // ya no guardamos hashes
+  // La clave de IA se maneja aparte (_aiKeySave); una copia vieja del perfil no debe pisarla
+  if ("aiKey" in profile || "aiKeyAt" in profile) { profile = Object.assign({}, profile); delete profile.aiKey; delete profile.aiKeyAt; }
   var ref = _profileRef(uid);
   if (ref) ref.set(profile, { merge: true }).catch(function(e){ console.warn("[TRP] perfil no subió:", e); });
   try {
@@ -17190,7 +17290,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
     <label>API Key de Google Gemini</label>
     <input class="ai-key-input" id="acce-ai-key-input" type="password" placeholder="AIzaSy..." autocomplete="off"/>
     <div class="ai-key-info">
-      Tu key se guarda solo en este navegador y nunca se envía a terceros.<br>
+      Se guarda privada en la cuenta de tu taller: la pones una sola vez y funciona en todos tus equipos.<br>
       Obténla gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>
     </div>
     <button class="ai-key-save" id="acce-ai-key-save">Guardar y continuar →</button>
@@ -17427,7 +17527,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
       setTimeout(function(){ keyInput.style.borderColor = ""; }, 1500);
       return;
     }
-    localStorage.setItem(KEY_STORE, k);
+    if (typeof _aiKeySave === "function") _aiKeySave(k); else localStorage.setItem(KEY_STORE, k);
     keySection.style.display = "none";
     chatSection.style.display = "flex";
     setTimeout(function(){ inputEl.focus(); }, 100);
