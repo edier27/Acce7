@@ -14500,7 +14500,13 @@ function _fotoCargar(src) {
     img.src = _isGd(src) ? _photoSrc(src, 1600) : src;
   });
 }
-// o = { mejorar, cuadrada, marca (texto o "") } → dataURL JPEG
+var FOTO_FORMATOS = [
+  { id: "1:1", l: "Cuadrada 1:1 (Facebook, Instagram)", a: 1 },
+  { id: "4:5", l: "Vertical 4:5 (Instagram)", a: 0.8 },
+  { id: "9:16", l: "Historia 9:16 (TikTok, historias, estados)", a: 0.5625 },
+  { id: "orig", l: "Original", a: 0 }
+];
+// o = { mejorar, formato ("1:1" | "4:5" | "9:16" | "orig"), marca (texto o "") } → dataURL JPEG
 function _fotoProcesar(img, o) {
   var W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
   var sc = Math.min(1, 1600 / Math.max(W, H)), w = Math.round(W * sc), h = Math.round(H * sc);
@@ -14530,23 +14536,34 @@ function _fotoProcesar(img, o) {
     }
     bx.putImageData(id, 0, 0);
   }
-  var out = base, fx = 0, fy = 0; // fx, fy: dónde quedó la foto dentro del lienzo
-  if (o.cuadrada && w !== h) {
-    var s = Math.max(w, h);
-    out = document.createElement("canvas"); out.width = s; out.height = s;
+  var out = base, fx = 0, fy = 0, pw = w, ph = h; // dónde quedó la foto dentro del lienzo
+  var fmt = FOTO_FORMATOS.find(function (f) { return f.id === (o.formato || (o.cuadrada ? "1:1" : "orig")); });
+  if (fmt && fmt.a && Math.abs(w / h - fmt.a) > 0.01) {
+    var Cw, Ch;
+    if (w / h > fmt.a) { Cw = w; Ch = Math.round(w / fmt.a); } else { Ch = h; Cw = Math.round(h * fmt.a); }
+    var sf = Math.min(1, 1920 / Math.max(Cw, Ch));
+    Cw = Math.round(Cw * sf); Ch = Math.round(Ch * sf); pw = Math.round(w * sf); ph = Math.round(h * sf);
+    out = document.createElement("canvas"); out.width = Cw; out.height = Ch;
     var ox = out.getContext("2d");
-    fx = Math.round((s - w) / 2); fy = Math.round((s - h) / 2);
-    ox.fillStyle = "#ffffff"; ox.fillRect(0, 0, s, s);
-    ox.drawImage(base, fx, fy);
+    fx = Math.round((Cw - pw) / 2); fy = Math.round((Ch - ph) / 2);
+    ox.fillStyle = "#ffffff"; ox.fillRect(0, 0, Cw, Ch);
+    if (fmt.id !== "1:1" && "filter" in ox) {
+      // Formatos verticales: el fondo es la misma foto ampliada y desenfocada (estilo TikTok / historias)
+      var cover = Math.max(Cw / w, Ch / h) * 1.08;
+      ox.filter = "blur(" + Math.round(Math.max(Cw, Ch) / 45) + "px) brightness(0.8)";
+      ox.drawImage(base, (Cw - w * cover) / 2, (Ch - h * cover) / 2, w * cover, h * cover);
+      ox.filter = "none";
+    }
+    ox.drawImage(base, fx, fy, pw, ph);
   }
   if (o.marca) {
-    // La marca va sobre la foto (no sobre el borde blanco del formato cuadrado)
-    var cx = out.getContext("2d"), S = Math.min(w, h);
+    // La marca va sobre la foto (no sobre el relleno del formato)
+    var cx = out.getContext("2d"), S = Math.min(pw, ph);
     var fs = Math.max(14, Math.round(S * 0.05));
     cx.font = "800 " + fs + "px 'Segoe UI', Arial, sans-serif";
     cx.textAlign = "right"; cx.textBaseline = "bottom";
     var txt = String(o.marca).toUpperCase().split("").join(String.fromCharCode(8202)); // espaciado entre letras
-    var mx = fx + w - Math.round(S * 0.035), my = fy + h - Math.round(S * 0.03);
+    var mx = fx + pw - Math.round(S * 0.035), my = fy + ph - Math.round(S * 0.03);
     cx.shadowColor = "rgba(0,0,0,0.55)"; cx.shadowBlur = Math.round(fs * 0.35); cx.shadowOffsetY = Math.round(fs * 0.06);
     cx.fillStyle = "rgba(255,255,255,0.92)";
     cx.fillText(txt, mx, my);
@@ -14559,7 +14576,7 @@ function _fotoDescargar(url, nombre) {
 }
 function FotosVenta(props) {
   var fotos = props.fotos || [], notify = props.notify;
-  var _o = useState({ mejorar: true, cuadrada: true, marcaOn: true }), op = _o[0], setOp = _o[1];
+  var _o = useState({ mejorar: true, formato: "1:1", marcaOn: true }), op = _o[0], setOp = _o[1];
   var _m = useState(_marcaAgua()), marca = _m[0], setMarca = _m[1];
   var _r = useState({}), proc = _r[0], setProc = _r[1];
   var key = fotos.join("|").length + "_" + fotos.length;
@@ -14568,16 +14585,16 @@ function FotosVenta(props) {
     setProc({});
     var t = setTimeout(function () { fotos.forEach(function (src, i) {
       _fotoCargar(src).then(function (img) {
-        var url = _fotoProcesar(img, { mejorar: op.mejorar, cuadrada: op.cuadrada, marca: op.marcaOn ? marca.trim() : "" });
+        var url = _fotoProcesar(img, { mejorar: op.mejorar, formato: op.formato, marca: op.marcaOn ? marca.trim() : "" });
         if (alive) setProc(function (p) { var n = Object.assign({}, p); n[i] = { url: url }; return n; });
       }).catch(function () {
         if (alive) setProc(function (p) { var n = Object.assign({}, p); n[i] = { err: true }; return n; });
       });
     }); }, 300);
     return function () { alive = false; clearTimeout(t); };
-  }, [key, op.mejorar, op.cuadrada, op.marcaOn, marca]);
+  }, [key, op.mejorar, op.formato, op.marcaOn, marca]);
   if (!fotos.length) return null;
-  var slug = String(marca || "foto").toLowerCase().replace(/[^a-z0-9]+/g, "-") || "foto";
+  var slug = (String(marca || "foto").toLowerCase().replace(/[^a-z0-9]+/g, "-") || "foto") + (op.formato === "orig" ? "" : "-" + op.formato.replace(":", "x"));
   var compartir = function (url, i) {
     fetch(url).then(function (r) { return r.blob(); }).then(function (b) {
       var file = new File([b], slug + "-" + (i + 1) + ".jpg", { type: "image/jpeg" });
@@ -14592,13 +14609,16 @@ function FotosVenta(props) {
   return _gh("div", { style: Object.assign({}, _gCard, { marginTop: 12 }) },
     _gh("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } }, _gIco("Image", 15), _gh("strong", { style: { fontSize: 14, color: T.text } }, "Fotos listas para publicar")),
     _gh("div", { style: { display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center", marginBottom: 10 } },
-      chk("mejorar", "Mejorar (brillo y nitidez)"), chk("cuadrada", "Formato cuadrado"), chk("marcaOn", "Marca de agua"),
+      _gh("select", { value: op.formato, onChange: function (e) { var v = e.target.value; setOp(function (o) { return Object.assign({}, o, { formato: v }); }); },
+        style: { padding: "6px 8px", borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit", fontSize: 13 } },
+        FOTO_FORMATOS.map(function (f) { return _gh("option", { key: f.id, value: f.id }, f.l); })),
+      chk("mejorar", "Mejorar (brillo y nitidez)"), chk("marcaOn", "Marca de agua"),
       op.marcaOn && _gh("input", { value: marca, maxLength: 24, onChange: function (e) { setMarca(e.target.value); try { localStorage.setItem(_MARCA_KEY, e.target.value); } catch (er) {} },
         style: { width: 130, padding: "5px 8px", borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit", fontWeight: 700 } })),
     _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 } }, fotos.map(function (src, i) {
       var pr = proc[i];
       return _gh("div", { key: i, style: { border: "1px solid " + T.border, borderRadius: 8, overflow: "hidden", background: T.bg } },
-        _gh("div", { style: { aspectRatio: "1", display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" } },
+        _gh("div", { style: { aspectRatio: op.formato === "4:5" ? "4 / 5" : op.formato === "9:16" ? "9 / 16" : "1", display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" } },
           pr && pr.url ? _gh("img", { src: pr.url, alt: "", style: { width: "100%", height: "100%", objectFit: "contain", cursor: "zoom-in" }, onClick: function () { _openPhoto(pr.url); } })
             : pr && pr.err ? _gh("div", { style: { padding: 10, fontSize: 11, color: T.muted, textAlign: "center" } }, "Esta foto no se puede editar aquí. Descárguela y súbala con \"Agregar fotos\".")
             : _gh(Loader2, { size: 18, className: "trp-spin", color: T.muted })),
@@ -14622,6 +14642,8 @@ function IAPublicarTab(props) {
   var _r = useState(null), res = _r[0], setRes = _r[1];
   var _l = useState(false), loading = _l[0], setLoading = _l[1];
   var _ed = useState({}), ed = _ed[0], setEd = _ed[1]; // ediciones del usuario sobre los textos
+  var _rd = useState("facebook"), red = _rd[0], setRed = _rd[1];
+  var _str = function (v) { return Array.isArray(v) ? v.join("\n") : (v == null ? "" : String(v)); };
   var _sb = useState([]), subidas = _sb[0], setSubidas = _sb[1]; // fotos que sube el usuario (la IA las mira)
   var fotoRef = useRef(null);
   var agregarFotos = function (files) {
@@ -14664,16 +14686,19 @@ function IAPublicarTab(props) {
       (op.contacto && contacto ? "\n\nDatos de contacto para incluir:\n" + contacto : "") +
       (op.extra.trim() ? "\n\nIndicaciones del vendedor: " + op.extra.trim() : "") +
       (subidas.length ? "\n\nSe adjuntan " + subidas.length + " foto(s) del artículo: identifica exactamente qué producto es (marca y modelo si se ven), lee lo que diga la caja o las etiquetas y usa esos datos. Si se ve usado, menciona con honestidad el estado visible (rayones, marcas, desgaste)." : "") +
-      "\n\nDevuelve JSON con esta forma exacta: {\"producto\":\"nombre del producto identificado\",\"tipo\":\"qué clase de producto es\",\"facebook_titulo\":\"máx 80 caracteres\",\"facebook\":\"publicación para Facebook Marketplace o grupos\",\"whatsapp\":\"mensaje para enviar por WhatsApp\",\"estado\":\"texto muy corto para Estado de WhatsApp\",\"hashtags\":\"5 a 8 hashtags separados por espacio\"}";
+      "\n\nDevuelve JSON con esta forma exacta: {\"producto\":\"nombre del producto identificado\",\"tipo\":\"qué clase de producto es\",\"facebook_titulo\":\"máx 80 caracteres\",\"facebook\":\"publicación para Facebook Marketplace o grupos\",\"whatsapp\":\"mensaje para enviar por WhatsApp\",\"estado\":\"texto muy corto para Estado de WhatsApp\",\"hashtags\":\"5 a 8 hashtags separados por espacio\",\"instagram\":\"publicación de Instagram\",\"instagram_historia\":\"texto para historia de Instagram\",\"tiktok\":\"descripción del video de TikTok\",\"tiktok_guion\":\"guion del video de TikTok\"}";
     var system = "Eres experto en ventas por redes sociales en Colombia. Primero identifica qué tipo de producto es y destaca lo que más le importa a quien compra ESE tipo de producto " +
       "(por ejemplo: en un celular cámara, batería, almacenamiento, pantalla y estado; en una plancha de cabello temperatura, tipo de placas, calentamiento y cuidado del cabello; en unos audífonos sonido, batería y conexión; etc.). " +
       "Tono: " + op.tono + ". Español colombiano natural, claro y persuasivo, sin exagerar. " +
       (op.conocidas ? "Puedes agregar características técnicas conocidas y verificables de ese modelo exacto; si no estás seguro de un dato, no lo pongas. " : "Usa SOLO los datos dados; no agregues especificaciones que no estén en la ficha. ") +
       "Nunca inventes garantía, envíos, descuentos ni formas de pago que no estén en las indicaciones. " +
       "Facebook: título llamativo y descripción con viñetas (usa el guion -) de características, estado, qué incluye, precio y cierre con llamado a escribir. " +
-      "WhatsApp: más corto, usa *negrita* de WhatsApp para el nombre y el precio. Estado: una o dos líneas. Sin emojis.";
+      "WhatsApp: más corto, usa *negrita* de WhatsApp para el nombre y el precio. Estado: una o dos líneas. " +
+      "Instagram: primera línea gancho que haga parar el scroll, luego párrafos cortos separados por línea en blanco con los beneficios, precio y llamado a escribir por mensaje directo, y al final 10 a 15 hashtags en español mezclando populares y específicos del producto y de Colombia. Instagram_historia: máximo 3 líneas cortas, pensadas para poner encima de la foto. " +
+      "TikTok: descripción de máximo 150 caracteres con gancho, más 4 a 6 hashtags (incluye #tiktokshop o #ventas cuando aplique). TikTok_guion: guion para un video vertical de 15 a 30 segundos, en pasos numerados con tiempos, con: 1) gancho de los primeros 2 segundos (frase para decir o texto en pantalla), 2) tomas sugeridas del producto (qué mostrar y cómo), 3) texto en pantalla, 4) cierre con precio y llamado a escribir. Debe poder grabarse con un celular. " +
+      "Sin emojis en ningún texto.";
     setLoading(true); setRes(null); setEd({});
-    _iaAsk(prompt, { system: system, json: true, max: 3000, temp: 0.8, images: subidas })
+    _iaAsk(prompt, { system: system, json: true, max: 5000, temp: 0.8, images: subidas })
       .then(function (j) { setRes(j); })
       .catch(function (e) { notify(_iaErrMsg(e), "error"); })
       .then(function () { setLoading(false); });
@@ -14732,14 +14757,26 @@ function IAPublicarTab(props) {
       _gh("div", { style: { marginTop: 12 } }, _gh(Btn, { onClick: generar, disabled: loading, icon: loading ? _gh(Loader2, { size: 14, className: "trp-spin" }) : _gIco("Sparkles", 14) }, loading ? "Escribiendo..." : res ? "Escribir otra versión" : "Crear publicación")),
       op.conocidas && _gh("div", { style: { fontSize: 11, color: T.muted, marginTop: 10, lineHeight: 1.5 } }, "Revise las características técnicas antes de publicar: la IA puede equivocarse en algún dato del modelo.")),
     _gh("div", null,
-      !res ? _gh("div", { style: _gCard }, _gEmpty(loading ? "Escribiendo la publicación..." : "Aquí aparecen los textos para Facebook y WhatsApp"))
+      !res ? _gh("div", { style: _gCard }, _gEmpty(loading ? "Escribiendo la publicación..." : "Aquí aparecen los textos para Facebook, WhatsApp, Instagram y TikTok"))
         : _gh(React.Fragment, null,
           res.tipo && _gh("div", { style: { fontSize: 12, color: T.muted, marginBottom: 8 } }, "Tipo de producto detectado: ", _gh("strong", { style: { color: T.text } }, res.tipo)),
-          bloque("fb", "Facebook / Marketplace", fb, function (t) { return _gh(Btn, { small: true, onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); }),
-          res.whatsapp && bloque("wa", "WhatsApp", res.whatsapp, function (t) { return _gh("div", { style: { display: "flex", gap: 6 } },
+          _gh("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 } }, [["facebook", "Facebook"], ["whatsapp", "WhatsApp"], ["instagram", "Instagram"], ["tiktok", "TikTok"]].map(function (o) {
+            var on = o[0] === red;
+            return _gh("button", { key: o[0], onClick: function () { setRed(o[0]); }, style: { padding: "7px 14px", borderRadius: 18, border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accentDim : "transparent", color: on ? T.accent : T.text, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, o[1]);
+          })),
+          red === "facebook" && bloque("fb", "Facebook / Marketplace", fb, function (t) { return _gh(Btn, { small: true, onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); }),
+          red === "whatsapp" && res.whatsapp && bloque("wa", "Mensaje de WhatsApp", _str(res.whatsapp), function (t) { return _gh("div", { style: { display: "flex", gap: 6 } },
             _gh(Btn, { small: true, variant: "ghost", onClick: function () { _iaCopiar(t, notify); } }, "Copiar"),
             _gh(Btn, { small: true, onClick: function () { window.open("https://wa.me/?text=" + encodeURIComponent(t), "_blank"); }, icon: _gh(MessageCircle, { size: 13 }) }, "Enviar")); }),
-          res.estado && bloque("estado", "Estado de WhatsApp", res.estado, function (t) { return _gh(Btn, { small: true, variant: "ghost", onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); }),
+          red === "whatsapp" && res.estado && bloque("estado", "Estado de WhatsApp", _str(res.estado), function (t) { return _gh(Btn, { small: true, variant: "ghost", onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); }),
+          red === "instagram" && (res.instagram ? bloque("ig", "Publicación de Instagram", _str(res.instagram), function (t) { return _gh(Btn, { small: true, onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); })
+            : _gh("div", { style: Object.assign({}, _gCard, { marginBottom: 12, fontSize: 13, color: T.muted }) }, "Toque \"Escribir otra versión\" para crear también los textos de Instagram.")),
+          red === "instagram" && res.instagram_historia && bloque("igh", "Historia de Instagram (texto encima de la foto)", _str(res.instagram_historia), function (t) { return _gh(Btn, { small: true, variant: "ghost", onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); }),
+          red === "instagram" && _gh("div", { style: { fontSize: 12, color: T.muted, marginBottom: 12, lineHeight: 1.5 } }, "Formato de foto recomendado abajo: \"Vertical 4:5\" para el feed y \"Historia 9:16\" para historias."),
+          red === "tiktok" && (res.tiktok ? bloque("tt", "Descripción del video de TikTok", _str(res.tiktok), function (t) { return _gh(Btn, { small: true, onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); })
+            : _gh("div", { style: Object.assign({}, _gCard, { marginBottom: 12, fontSize: 13, color: T.muted }) }, "Toque \"Escribir otra versión\" para crear también los textos de TikTok.")),
+          red === "tiktok" && res.tiktok_guion && bloque("ttg", "Guion para grabar el video (15 a 30 segundos)", _str(res.tiktok_guion), function (t) { return _gh(Btn, { small: true, variant: "ghost", onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); }),
+          red === "tiktok" && _gh("div", { style: { fontSize: 12, color: T.muted, marginBottom: 12, lineHeight: 1.5 } }, "Si no va a grabar video, use las fotos en formato \"Historia 9:16\" como carrusel de fotos en TikTok."),
           null),
         _gh(FotosVenta, { fotos: ((ficha() || {}).fotos || []).concat(subidas), notify: notify, texto: res ? (ed.wa != null ? ed.wa : res.whatsapp) : "" })));
 }
