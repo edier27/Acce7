@@ -628,7 +628,17 @@ var _LucideReact = LucideReact,
   UploadCloud = _LucideReact.UploadCloud,
   ShieldAlert = _LucideReact.ShieldAlert,
   Loader2 = _LucideReact.Loader2,
-  FileImage = _LucideReact.FileImage;
+  FileImage = _LucideReact.FileImage,
+  PieChart = _LucideReact.PieChart,
+  Activity = _LucideReact.Activity,
+  Target = _LucideReact.Target,
+  Filter = _LucideReact.Filter,
+  Layers = _LucideReact.Layers,
+  Percent = _LucideReact.Percent,
+  AlertCircle = _LucideReact.AlertCircle,
+  ChevronDown = _LucideReact.ChevronDown,
+  ChevronUp = _LucideReact.ChevronUp,
+  Sparkles = _LucideReact.Sparkles;
 
 // ─── Theme System — Windows 11 Fluent Design ──────────────
 var DARK = {
@@ -907,10 +917,10 @@ var DEFAULT_SETTINGS = {
 };
 var ACCENT_PRESETS = ["#2563EB", "#16A34A", "#DC2626", "#D97706", "#0D9488", "#7C3AED", "#000000", "#4B5563"];
 var STATUSES = ["Recibido", "Diagnóstico", "En Reparación", "Listo", "Entregado", "Cancelado"];
-function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trackUrl) {
+function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trackUrl, storeName) {
   var nombre = customer ? customer.split(" ")[0] : "cliente";
   var equipo = device || "su equipo";
-  var tienda = "ACCE PRO";
+  var tienda = (storeName && String(storeName).trim()) || "ACCE PRO";
   var pagado = paid ? "PAGADO" : "PENDIENTE DE PAGO";
   var costoInfo = (cost && Number(cost) > 0) ? ("\nValor de la reparacion: *$" + Number(cost).toLocaleString("es-CO") + "*") : "";
   var wDays = (warrantyDays === 0 || warrantyDays) ? Number(warrantyDays) : 15;
@@ -938,13 +948,17 @@ function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trac
       ? ("\n\n*Garantia de " + wDays + " dia" + (wDays === 1 ? "" : "s") + "* a partir de la fecha de entrega. Si presenta algun inconveniente con la reparacion realizada, traigalo y con gusto lo revisamos sin costo adicional."
         + "\n\nImportante: *la garantia aplica unicamente para fallas de fabrica* relacionadas con la reparacion realizada. No cubre danos por golpes, humedad, presiones fuertes en pantalla ni mal uso del equipo.")
       : "\n\n*Este servicio no cuenta con garantia.*";
+    // La calificacion va PRIMERO: si queda debajo del texto de garantia,
+    // WhatsApp lo colapsa con "Leer mas" y el cliente nunca ve el enlace.
     var calificarMsg = trackUrl
-      ? ("\n\n*Nos encantaria conocer su opinion.* ¿Nos regala 30 segundos para calificar nuestro servicio? Su opinion nos ayuda mucho a seguir mejorando y a que mas personas confien en nosotros.\n\n" + trackUrl + "\n\n¡Gracias de antemano!")
+      ? ("\n\n*¿Como le quedo?* Califiquenos aqui, son 10 segundos:\n"
+        + trackUrl
+        + "\n\nSu opinion nos ayuda muchisimo.")
       : "";
-    msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* ha sido *entregado* exitosamente en *" + tienda + "*."
-        + garantiaMsg
-        + "\n\nGracias por confiar en *" + tienda + "*. Fue un placer atenderle."
-        + calificarMsg;
+    msg = "Hola " + nombre + ", su equipo *" + equipo + "* ya fue *entregado*. ¡Gracias por confiar en *" + tienda + "*!"
+        + calificarMsg
+        + "\n\n- - - - -"
+        + garantiaMsg;
   } else if (status === "Cancelado") {
     msg = "Hola " + nombre + ", le informamos que el servicio de su equipo *" + equipo + "* en *" + tienda + "* ha sido *cancelado*."
         + "\n\nPuede pasar a recoger su equipo en nuestro horario de atencion. Si tiene alguna duda, con gusto le atendemos."
@@ -1192,7 +1206,8 @@ var INIT = {
   cashflow: [],
   celulares: [],
   documentos: [],
-  facturas: []
+  facturas: [],
+  pedidos: []
 };
 var IS = {
   background: T.surface,
@@ -1652,7 +1667,10 @@ function DashboardView(_ref8) {
     isMobile = _ref8$isMobile === void 0 ? false : _ref8$isMobile,
     ratings = _ref8.ratings,
     settings = _ref8.settings,
-    notify = _ref8.notify;
+    notify = _ref8.notify,
+    clientId = _ref8.clientId;
+  // Rango del gráfico principal de flujo (7 / 14 / 30 / 90 días).
+  var _dr = useState(30), dashRange = _dr[0], setDashRange = _dr[1];
   // Calcular ingresos incluyendo abonos parciales
   var paid = (data.repairs || []).filter(function (r) {
     return r.paid;
@@ -1691,20 +1709,6 @@ function DashboardView(_ref8) {
     _serieActivasTop.push(_stReps);
     _serieIngresosTop.push(_stIng);
   }
-  var _miniSpark = function (series, color) {
-    var _w = 74, _h = 26;
-    var _max = Math.max.apply(null, series.concat([1]));
-    var _min = Math.min.apply(null, series.concat([0]));
-    var _range = (_max - _min) || 1;
-    var _pts = series.map(function (v, i) {
-      var x = (i / (series.length - 1 || 1)) * _w;
-      var y = _h - ((v - _min) / _range) * _h;
-      return x + "," + y;
-    }).join(" ");
-    return /*#__PURE__*/React.createElement("svg", { viewBox: "0 0 " + _w + " " + _h, width: _w, height: _h, style: { display: "block", flexShrink: 0 } },
-      /*#__PURE__*/React.createElement("polyline", { points: _pts, fill: "none", stroke: color, strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round" })
-    );
-  };
   var stats = [{
     label: "Reparaciones Activas",
     value: active.length,
@@ -1782,7 +1786,7 @@ function DashboardView(_ref8) {
       /*#__PURE__*/React.createElement("div", {
         style: { fontSize: 13, color: T.muted, marginTop: 6 }
       }, s.sub)
-    ), s.series && _miniSpark(s.series, s.color), s.faces && s.faces.length > 0 && /*#__PURE__*/React.createElement("div", { style: { display: "flex" } },
+    ), s.series && /*#__PURE__*/React.createElement(Sparkline, { series: s.series, color: s.color, width: 74, height: 26, fill: false }), s.faces && s.faces.length > 0 && /*#__PURE__*/React.createElement("div", { style: { display: "flex" } },
       s.faces.map(function (initial, fi) {
         return /*#__PURE__*/React.createElement("div", {
           key: fi,
@@ -1846,25 +1850,7 @@ function DashboardView(_ref8) {
     var _pctCompletadas = _pctChange(_actual.completadas, _anterior.completadas);
     var _pctTicket = _pctChange(_actual.ticket, _anterior.ticket);
 
-    var _renderSpark = function(series, color) {
-      var _w = 110, _h = 40;
-      var _max = Math.max.apply(null, series.concat([1]));
-      var _min = Math.min.apply(null, series.concat([0]));
-      var _range = (_max - _min) || 1;
-      var _pts = series.map(function(v, i) {
-        var x = (i / (series.length - 1 || 1)) * _w;
-        var y = _h - ((v - _min) / _range) * _h;
-        return x + "," + y;
-      }).join(" ");
-      var _areaPts = "0," + _h + " " + _pts + " " + _w + "," + _h;
-      return /*#__PURE__*/React.createElement("svg", { viewBox: "0 0 " + _w + " " + _h, width: _w, height: _h, style: { display: "block", flexShrink: 0 } },
-        /*#__PURE__*/React.createElement("polyline", { points: _areaPts, fill: color, opacity: 0.15, stroke: "none" }),
-        /*#__PURE__*/React.createElement("polyline", { points: _pts, fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" })
-      );
-    };
-
     var _trendCard = function(label, value, pct, color, series, icon) {
-      var _up = pct >= 0;
       return /*#__PURE__*/React.createElement(Card, { key: label, style: { display: "flex", flexDirection: "column", gap: 10 } },
         /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.muted, fontWeight: 600 } },
           /*#__PURE__*/React.createElement("span", { style: { display: "flex", color: color } }, icon), label
@@ -1872,12 +1858,11 @@ function DashboardView(_ref8) {
         /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" } },
           /*#__PURE__*/React.createElement("div", null,
             /*#__PURE__*/React.createElement("div", { style: { fontSize: 24, fontWeight: 800, color: T.text, lineHeight: 1 } }, value),
-            /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4, marginTop: 6, fontSize: 12, fontWeight: 700, color: _up ? T.green : T.red } },
-              /*#__PURE__*/React.createElement(_up ? ArrowUpCircle : ArrowDownCircle, { size: 12 }),
-              (_up ? "+" : "") + pct + "% vs mes anterior"
+            /*#__PURE__*/React.createElement("div", { style: { marginTop: 8 } },
+              /*#__PURE__*/React.createElement(DeltaPill, { pct: pct, suffix: "vs mes anterior" })
             )
           ),
-          _renderSpark(series, color)
+          /*#__PURE__*/React.createElement(Sparkline, { series: series, color: color, width: 110, height: 40 })
         )
       );
     };
@@ -1886,6 +1871,116 @@ function DashboardView(_ref8) {
       _trendCard("Ingresos del mes", fmt(_actual.ingresos), _pctIngresos, T.orange, _serieIngresos, /*#__PURE__*/React.createElement(TrendingUp, { size: 14 })),
       _trendCard("Órdenes completadas", _actual.completadas, _pctCompletadas, T.green, _serieCompletadas, /*#__PURE__*/React.createElement(CheckCircle, { size: 14 })),
       _trendCard("Ticket promedio", fmt(Math.round(_actual.ticket)), _pctTicket, T.blue, _serieTicket, /*#__PURE__*/React.createElement(DollarSign, { size: 14 }))
+    );
+  })(),
+
+  // ─── Flujo de caja de los últimos N días ───
+  (function () {
+    var _h = getHoyColombia();
+    var _lbl = [], _ing = [], _egr = [];
+    for (var i = dashRange - 1; i >= 0; i--) {
+      var _dk = _isoAdd(_h, -i);
+      var _c = _repCalc(data, _dk, _dk);
+      _lbl.push(_fechaCorta(_dk));
+      _ing.push(_c.total);
+      _egr.push(_c.te);
+    }
+    var _tot = _ing.reduce(function (a, v) { return a + v; }, 0);
+    var _totE = _egr.reduce(function (a, v) { return a + v; }, 0);
+    var _rangos = [[7, "7 d"], [14, "14 d"], [30, "30 d"], [90, "90 d"]];
+    return /*#__PURE__*/React.createElement(Card, { key: "flujo" },
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" } },
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, color: T.text } },
+            /*#__PURE__*/React.createElement(Activity, { size: 15, color: T.muted }), "Flujo de caja"),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 4 } },
+            fmt(_tot), " ingresos \u00B7 ", fmt(_totE), " egresos")
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", background: T.surface, borderRadius: 9, padding: 3, gap: 3 } },
+          _rangos.map(function (r) {
+            var on = dashRange === r[0];
+            return /*#__PURE__*/React.createElement("button", {
+              key: r[0],
+              onClick: function () { setDashRange(r[0]); },
+              style: {
+                padding: "5px 11px", border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
+                fontSize: 12, fontWeight: 700, background: on ? T.accent : "transparent", color: on ? "#fff" : T.muted
+              }
+            }, r[1]);
+          })
+        )
+      ),
+      /*#__PURE__*/React.createElement(ChartArea, {
+        gid: "dash",
+        height: isMobile ? 180 : 235,
+        labels: _lbl,
+        series: [
+          { name: "Ingresos", color: T.green, values: _ing },
+          { name: "Egresos", color: T.red, values: _egr }
+        ],
+        tipFmt: fmt
+      })
+    );
+  })(),
+
+  // ─── Estado operativo del taller + alertas accionables ───
+  (function () {
+    var _todas = data.repairs || [];
+    var _dist = STATUSES.map(function (st) {
+      return { label: st, value: _todas.filter(function (r) { return r.status === st; }).length, color: S_COLOR[st] || T.muted };
+    }).filter(function (x) { return x.value > 0; });
+
+    var _h = getHoyColombia();
+    // Órdenes abiertas con más de 7 días desde que entraron.
+    var _estancadas = _todas.filter(function (r) {
+      if (["Entregado", "Cancelado"].indexOf(r.status) >= 0) return false;
+      return r.date && _isoDiff(r.date, _h) > 7;
+    });
+
+    var _alertas = [
+      { l: "Listas para entregar", n: ready.length, c: T.green, icon: CheckCircle, go: "repairs" },
+      { l: "Repuestos bajo mínimo", n: lowStock.length, c: T.orange, icon: AlertTriangle, go: "inventory" },
+      { l: "Órdenes estancadas (+7 días)", n: _estancadas.length, c: T.red, icon: Clock, go: "repairs" },
+      { l: "Por cobrar", n: fmt(pending), c: T.blue, icon: Banknote, go: "repairs" }
+    ];
+
+    return /*#__PURE__*/React.createElement("div", {
+      key: "estado",
+      style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }
+    },
+      /*#__PURE__*/React.createElement(Card, null,
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 16 } },
+          /*#__PURE__*/React.createElement(ClipboardList, { size: 15, color: T.muted }), "Estado del taller"),
+        /*#__PURE__*/React.createElement(ChartDonut, {
+          slices: _dist, size: isMobile ? 150 : 168,
+          vFmt: function (n) { return String(n); },
+          centerLabel: "\u00F3rdenes totales", centerValue: String(_todas.length)
+        })
+      ),
+      /*#__PURE__*/React.createElement(Card, null,
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 16 } },
+          /*#__PURE__*/React.createElement(AlertCircle, { size: 15, color: T.muted }), "Requiere atenci\u00F3n"),
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 9 } },
+          _alertas.map(function (a) {
+            return /*#__PURE__*/React.createElement("button", {
+              key: a.l,
+              onClick: function () { setView(a.go); },
+              style: {
+                display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+                padding: "12px 14px", borderRadius: 11, cursor: "pointer", fontFamily: "inherit",
+                background: T.bg, border: "1px solid " + T.border
+              }
+            },
+              /*#__PURE__*/React.createElement("span", {
+                style: { width: 34, height: 34, borderRadius: 9, background: _cAlpha(a.c, 0.13), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }
+              }, /*#__PURE__*/React.createElement(a.icon, { size: 16, color: a.c })),
+              /*#__PURE__*/React.createElement("span", { style: { flex: 1, fontSize: 13.5, color: T.text, fontWeight: 600 } }, a.l),
+              /*#__PURE__*/React.createElement("span", { style: { fontSize: 15, fontWeight: 800, color: a.c } }, a.n),
+              /*#__PURE__*/React.createElement(ChevronRight, { size: 15, color: T.muted })
+            );
+          })
+        )
+      )
     );
   })(),
 
@@ -1943,6 +2038,83 @@ function DashboardView(_ref8) {
           })
         )
       )
+    );
+  })(),
+
+  // ─── Clientes entregados que todavía no han calificado ───
+  (function () {
+    if (!clientId) return null;
+    var yaCalifico = {};
+    (ratings || []).forEach(function (rt) { if (rt && rt.repairId) yaCalifico[rt.repairId] = true; });
+    var pendientes = (data.repairs || []).filter(function (r) {
+      return r.status === "Entregado" && !yaCalifico[r.id] && (r.phone || "").replace(/\D/g, "").length >= 7;
+    }).sort(function (a, b) {
+      return ((b.deliveryDate || b.date) || "").localeCompare((a.deliveryDate || a.date) || "");
+    });
+    var tienda = (settings && settings.storeName) || "ACCE PRO";
+    var totalEntregados = (data.repairs || []).filter(function (r) { return r.status === "Entregado"; }).length;
+    var tasa = totalEntregados > 0 ? Math.round(((ratings || []).length / totalEntregados) * 100) : 0;
+
+    return /*#__PURE__*/React.createElement(Card, { key: "sincalificar" },
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 } },
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, color: T.text } },
+            /*#__PURE__*/React.createElement(Star, { size: 15, color: T.muted }), "Pedir calificación"),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 4 } },
+            pendientes.length > 0
+              ? pendientes.length + (pendientes.length === 1 ? " cliente entregado sin calificar" : " clientes entregados sin calificar")
+              : "Todos tus clientes entregados ya calificaron")
+        ),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function () { showRatingPoster(clientId, settings); },
+          style: {
+            display: "flex", alignItems: "center", gap: 6, padding: "7px 13px", background: T.accentDim,
+            color: T.accent, border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: "inherit"
+          }
+        }, /*#__PURE__*/React.createElement(QrCode, { size: 14 }), "Cartel QR para el mostrador")
+      ),
+
+      totalEntregados > 0 && /*#__PURE__*/React.createElement("div", { style: { marginBottom: 14 } },
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 11.5, color: T.muted, marginBottom: 5, fontWeight: 600 } },
+          /*#__PURE__*/React.createElement("span", null, "Te han calificado"),
+          /*#__PURE__*/React.createElement("span", null, (ratings || []).length + " de " + totalEntregados + " (" + tasa + "%)")
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { height: 6, background: T.border, borderRadius: 3, overflow: "hidden" } },
+          /*#__PURE__*/React.createElement("div", { style: { width: Math.min(100, tasa) + "%", height: "100%", background: "#F59E0B", borderRadius: 3 } })
+        )
+      ),
+
+      pendientes.length === 0
+        ? /*#__PURE__*/React.createElement("div", {
+            style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "18px 0", color: T.muted, fontSize: 13 }
+          }, /*#__PURE__*/React.createElement(CheckCircle, { size: 15 }), "No hay recordatorios pendientes")
+        : /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" } },
+            pendientes.slice(0, 12).map(function (r) {
+              return /*#__PURE__*/React.createElement("div", {
+                key: r.id,
+                style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: T.bg, border: "1px solid " + T.border, borderRadius: 10 }
+              },
+                /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                  /*#__PURE__*/React.createElement("div", { style: { fontSize: 13.5, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.customer || "Cliente"),
+                  /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                    (r.device || "") + " \u00B7 " + (r.deliveryDate || r.date || ""))
+                ),
+                /*#__PURE__*/React.createElement("a", {
+                  href: "https://wa.me/57" + (r.phone || "").replace(/\D/g, "") + "?text=" + encodeURIComponent(_buildRecordatorioCalificacion(r, clientId, tienda)),
+                  target: "_blank", rel: "noopener noreferrer",
+                  style: {
+                    display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", background: "#25D366",
+                    color: "#fff", borderRadius: 8, textDecoration: "none", fontSize: 12.5, fontWeight: 700, flexShrink: 0
+                  }
+                }, /*#__PURE__*/React.createElement(MessageCircle, { size: 13 }), "Pedir")
+              );
+            }),
+            pendientes.length > 12 && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: T.muted, textAlign: "center", paddingTop: 4 } },
+              "y " + (pendientes.length - 12) + " m\u00E1s")
+          ),
+
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: T.muted, marginTop: 12, lineHeight: 1.5 } },
+        "Funciona mejor unas horas despu\u00E9s de la entrega, cuando el cliente ya prob\u00F3 el equipo.")
     );
   })(),
 
@@ -2339,7 +2511,7 @@ function RepairsView(_ref9) {
     }, /*#__PURE__*/React.createElement(Edit2, {
       size: 14
     })), r.phone && /*#__PURE__*/React.createElement("a", {
-      href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=" + encodeURIComponent(buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildRatingUrl(clientId, r) : "")),
+      href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=" + encodeURIComponent(buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildRatingUrl(clientId, r) : "", (data.settings && data.settings.storeName) || "")),
       target: "_blank",
       onClick: function(e){ e.stopPropagation(); },
       title: "Contactar por WhatsApp",
@@ -2855,7 +3027,7 @@ function RepairModal(_ref0) {
         }, "+"),
         // Botón WhatsApp si hay teléfono
         form.phone && /*#__PURE__*/React.createElement("a", {
-          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text="+encodeURIComponent(buildWAMessage(form.customer, form.device, form.status, form.paid, form.cost, form.warrantyDays, (clientId && form.id) ? _buildRatingUrl(clientId, form) : "")),
+          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text="+encodeURIComponent(buildWAMessage(form.customer, form.device, form.status, form.paid, form.cost, form.warrantyDays, (clientId && form.id) ? _buildRatingUrl(clientId, form) : "", (data.settings && data.settings.storeName) || "")),
           target:"_blank",
           title:"Contactar por WhatsApp",
           style:{ width:42, height:42, background:"#1A1A1A", color:"#fff", border:"none", borderRadius:12, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }
@@ -6085,6 +6257,82 @@ function _buildRatingUrl(clientId, r) {
   return base + "?client=" + encodeURIComponent(clientId) + "&r=" + encodeURIComponent(rid);
 }
 
+// ─── Calificaciones: link general, recordatorio y cartel QR ──────────────
+function _buildRatingUrlGeneral(clientId) {
+  return "https://edier27.github.io/Acce7/calificar/?client=" + encodeURIComponent(clientId);
+}
+
+// Mensaje corto de recordatorio: aqui el enlace es lo unico que importa.
+function _buildRecordatorioCalificacion(r, clientId, storeName) {
+  var nombre = (r.customer || "").split(" ")[0] || "";
+  var tienda = (storeName && String(storeName).trim()) || "ACCE PRO";
+  return "Hola " + nombre + ", ¿como le ha ido con su *" + (r.device || "equipo") + "*?"
+    + "\n\nSi quedo conforme, ¿nos regala 10 segundos para calificarnos? Es tocar las estrellas y listo:"
+    + "\n" + _buildRatingUrl(clientId, r)
+    + "\n\n¡Gracias! - *" + tienda + "*";
+}
+
+// Cartel imprimible con el QR del link general, para pegar en el mostrador.
+function showRatingPoster(clientId, settings) {
+  var url = _buildRatingUrlGeneral(clientId);
+  var tienda = (settings && settings.storeName) || "ACCE PRO";
+
+  var overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;z-index:999999;background:rgba(9,9,9,0.75);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);overflow:auto";
+  var box = document.createElement("div");
+  box.style.cssText = "background:#fff;border-radius:24px;padding:30px 26px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,0.3);font-family:'DM Sans',system-ui,sans-serif";
+  box.innerHTML =
+    "<div style='font-size:12px;color:#878787;font-weight:700;letter-spacing:1.2px;text-transform:uppercase'>Cartel para el mostrador</div>" +
+    "<div style='font-size:21px;font-weight:800;color:#131313;margin:6px 0 16px'>Califica nuestro servicio</div>" +
+    "<div id='_rqrbox' style='display:flex;justify-content:center;padding:16px;background:#fff;border-radius:16px;border:1px solid #EEE'></div>" +
+    "<div style='font-size:12.5px;color:#878787;margin-top:16px;line-height:1.55'>Imprimelo y pegalo en el mostrador o en el vidrio. El cliente lo escanea con la camara del celular mientras le entregas el equipo.</div>" +
+    "<div style='display:flex;gap:10px;margin-top:20px'>" +
+      "<button id='_rqrprint' style='flex:1;padding:12px;background:#1A1A1A;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-size:14px;font-family:inherit;color:#fff'>Imprimir cartel</button>" +
+      "<button id='_rqrclose' style='flex:1;padding:12px;background:#fff;border:1.5px solid rgba(18,18,18,0.12);border-radius:12px;cursor:pointer;font-weight:600;font-size:14px;font-family:inherit;color:#131313'>Cerrar</button>" +
+    "</div>";
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  try {
+    new QRCode(document.getElementById("_rqrbox"), { text: url, width: 200, height: 200, colorDark: "#131313", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+  } catch (e) {
+    document.getElementById("_rqrbox").innerHTML = "<div style='color:#888;font-size:13px;padding:40px'>No se pudo generar el QR</div>";
+  }
+
+  var close = function () { overlay.remove(); };
+  document.getElementById("_rqrclose").onclick = close;
+  overlay.onclick = function (e) { if (e.target === overlay) close(); };
+
+  document.getElementById("_rqrprint").onclick = function () {
+    var qrImg = "";
+    var canvas = document.querySelector("#_rqrbox canvas");
+    var img = document.querySelector("#_rqrbox img");
+    if (canvas) qrImg = canvas.toDataURL("image/png");
+    else if (img) qrImg = img.src;
+
+    var estrellas = "";
+    for (var i = 0; i < 5; i++) {
+      estrellas += "<svg width='34' height='34' viewBox='0 0 24 24' fill='#F5B301' style='margin:0 3px'>" +
+        "<polygon points='12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26'/></svg>";
+    }
+
+    var html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Califica nuestro servicio</title>" +
+      "<style>@page{size:A4;margin:14mm}*{margin:0;padding:0;box-sizing:border-box}" +
+      "body{font-family:'DM Sans',Arial,Helvetica,sans-serif;color:#131313;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260mm}" +
+      ".marco{border:4px solid #131313;border-radius:26px;padding:34px 30px;width:100%}" +
+      "</style></head><body><div class='marco'>" +
+      "<div style='font-size:20px;font-weight:700;letter-spacing:.5px;color:#555'>" + _escHtml(tienda) + "</div>" +
+      "<div style='font-size:46px;font-weight:900;line-height:1.1;margin:14px 0 6px'>¿C&oacute;mo te atendimos?</div>" +
+      "<div style='margin:16px 0 10px'>" + estrellas + "</div>" +
+      "<div style='font-size:22px;color:#444;margin-bottom:24px'>Cal&iacute;ficanos, te toma 10 segundos</div>" +
+      (qrImg ? "<img src='" + qrImg + "' style='width:260px;height:260px'>" : "") +
+      "<div style='font-size:24px;font-weight:800;margin-top:20px'>Apunta la c&aacute;mara de tu celular al c&oacute;digo</div>" +
+      "<div style='font-size:15px;color:#777;margin-top:16px;word-break:break-all'>" + _escHtml(url) + "</div>" +
+      "</div></body></html>";
+    _printHTML(html, "normal");
+  };
+}
+
 function showQRModal(clientId, r) {
   var url = _buildTrackUrl(clientId, r);
   var rid = (r.id||"").slice(-6).toUpperCase();
@@ -6341,7 +6589,7 @@ function printRepair(r) {
 // ── COMPARTIR RECIBO POR WHATSAPP (imagen + texto) ─────────────────────────
 function shareRepairReceipt(r, storeName, clientId, notify) {
   var orderId = (r.id || "").slice(-6).toUpperCase();
-  var caption = buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildRatingUrl(clientId, r) : "");
+  var caption = buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildRatingUrl(clientId, r) : "", storeName);
   var waNum = (r.phone || "").replace(/\D/g, "");
   var openWA = function () {
     window.open("https://wa.me/" + (waNum ? "57" + waNum : "") + "?text=" + encodeURIComponent(caption), "_blank");
@@ -9650,263 +9898,1613 @@ function CashflowView(_props) {
 
 
 // ─── REPORTE GENERAL (Diario / Mensual / Por Fecha) ─────────────────────────
-function ReporteView(_props) {
-  var data = _props.data;
-  var fmtR = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── CHART KIT — motor de visualización SVG nativo (sin dependencias) ──────
+// Componentes reutilizables: ChartArea, ChartBars, ChartDonut, ChartRank,
+// ChartHeat, ChartGauge, Sparkline y DeltaPill. Respetan el tema activo (T).
+// ═══════════════════════════════════════════════════════════════════════════
 
-  var hoy = getHoyColombia();
+var CHART_PALETTE = ["#2563EB", "#16A34A", "#D97706", "#DC2626", "#7C3AED", "#0891B2", "#DB2777", "#65A30D", "#EA580C", "#4F46E5"];
 
-  // ── Estados ──
-  var _s1 = useState(hoy),            _sa1 = _slicedToArray(_s1,2), fechaSel = _sa1[0], setFechaSel = _sa1[1];
-  var _s2 = useState("dia"),          _sa2 = _slicedToArray(_s2,2), modo = _sa2[0], setModo = _sa2[1];
-  var _s3 = useState(new Date()),     _sa3 = _slicedToArray(_s3,2), calMes = _sa3[0], setCalMes = _sa3[1];
-  var _s4 = useState(hoy.slice(0,7)), _sa4 = _slicedToArray(_s4,2), mesSel = _sa4[0], setMesSel = _sa4[1];
+// Convierte un HEX a rgba con alfa (para rellenos y fondos suaves).
+function _cAlpha(hex, a) {
+  var h = String(hex || "#2563EB").replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  var r = parseInt(h.slice(0, 2), 16) || 0,
+    g = parseInt(h.slice(2, 4), 16) || 0,
+    b = parseInt(h.slice(4, 6), 16) || 0;
+  return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+}
 
-  // ── Días con actividad (para resaltar en calendario) ──
-  var diasActivos = {};
-  [(data.sales||[]).map(function(x){return x.date;}),
-   (data.repairs||[]).map(function(x){return x.deliveryDate||x.date;}),
-   (data.cashflow||[]).map(function(x){return x.date;})
-  ].forEach(function(arr){ arr.forEach(function(d){ if(d) diasActivos[d]=(diasActivos[d]||0)+1; }); });
+// Formato compacto para ejes: 1.2M, 350k, 900.
+function _cShort(n) {
+  n = Number(n) || 0;
+  var abs = Math.abs(n);
+  var sign = n < 0 ? "-" : "";
+  if (abs >= 1e9) return sign + (abs / 1e9).toFixed(abs >= 1e10 ? 0 : 1).replace(/\.0$/, "") + "B";
+  if (abs >= 1e6) return sign + (abs / 1e6).toFixed(abs >= 1e7 ? 0 : 1).replace(/\.0$/, "") + "M";
+  if (abs >= 1e3) return sign + Math.round(abs / 1e3) + "k";
+  return sign + String(Math.round(abs));
+}
 
-  // ── Calcular resumen para el período seleccionado ──
-  var calcResumen = function(matchFn) {
-    var ventas      = (data.sales||[]).filter(function(s){ return matchFn(s.date); });
-    var reps        = (data.repairs||[]).filter(function(r){ return matchFn(r.deliveryDate||r.date); });
-    var repEntregas = reps.filter(function(r){ return r.status==="Entregado"||r.status==="Listo"; });
-    var ingresos    = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso"&&matchFn(e.date); });
-    var egresos     = (data.cashflow||[]).filter(function(e){ return e.type==="egreso" &&matchFn(e.date); });
-    return {
-      ventas: ventas, reps: repEntregas,
-      ingresos: ingresos, egresos: egresos,
-      tv: ventas.reduce(function(a,s){return a+(Number(s.total)||0);},0),
-      tr: repEntregas.filter(function(r){return r.paid;}).reduce(function(a,r){return a+(Number(r.cost)||0);},0),
-      ti: ingresos.reduce(function(a,e){return a+(Number(e.amount)||0);},0),
-      te: egresos.reduce(function(a,e){return a+(Number(e.amount)||0);},0)
+// Redondea el máximo del eje a un valor "bonito" (1, 2, 2.5, 5 x 10^n).
+function _cNiceMax(max) {
+  if (!isFinite(max) || max <= 0) return 1;
+  var exp = Math.floor(Math.log(max) / Math.LN10);
+  var pow = Math.pow(10, exp);
+  var f = max / pow;
+  var nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+  return nf * pow;
+}
+
+// Mide el ancho real del contenedor para que los SVG sean responsivos.
+function _useMeasure() {
+  var ref = useRef(null);
+  var st = useState(0), w = st[0], setW = st[1];
+  useEffect(function () {
+    var el = ref.current;
+    if (!el) return;
+    var upd = function () {
+      var nw = el.clientWidth || 0;
+      setW(function (prev) { return Math.abs(prev - nw) > 1 ? nw : prev; });
     };
-  };
-
-  var matchDia = function(d){ return d===fechaSel; };
-  var matchMes = function(d){ return (d||"").startsWith(mesSel); };
-  var res = modo==="dia" ? calcResumen(matchDia) : calcResumen(matchMes);
-  var balance = res.tv + res.tr + res.ti - res.te;
-  var totalActs = res.ventas.length + res.reps.length + res.ingresos.length + res.egresos.length;
-
-  // ── Construir calendario ──
-  var CalendarioMes = function() {
-    var año  = calMes.getFullYear();
-    var mes  = calMes.getMonth();
-    var primerDia = new Date(año, mes, 1).getDay();
-    var diasEnMes = new Date(año, mes+1, 0).getDate();
-    var DIAS = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];
-    var MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-
-    var celdas = [];
-    for (var i=0; i<primerDia; i++) celdas.push(null);
-    for (var d=1; d<=diasEnMes; d++) celdas.push(d);
-
-    var navBtn = function(dir) {
-      return /*#__PURE__*/React.createElement("button",{
-        onClick:function(){
-          var nm = new Date(calMes);
-          nm.setMonth(nm.getMonth()+dir);
-          setCalMes(nm);
-        },
-        style:{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px 10px",fontSize:18,fontFamily:"inherit"}
-      }, dir<0?"‹":"›");
-    };
-
-    return /*#__PURE__*/React.createElement("div",{style:{background:T.card,border:"1px solid "+T.border,borderRadius:8,padding:18,userSelect:"none"}},
-      // Navegación mes
-      /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}},
-        navBtn(-1),
-        /*#__PURE__*/React.createElement("span",{style:{fontWeight:800,fontSize:15,color:T.text}}, MESES[mes]+" "+año),
-        navBtn(1)
-      ),
-      // Días semana header
-      /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:6}},
-        DIAS.map(function(d){
-          return /*#__PURE__*/React.createElement("div",{key:d,style:{textAlign:"center",fontSize:11,fontWeight:700,color:T.muted,padding:"4px 0"}},d);
-        })
-      ),
-      // Celdas días
-      /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}},
-        celdas.map(function(d,i){
-          if (!d) return /*#__PURE__*/React.createElement("div",{key:"e"+i});
-          var iso = año+"-"+(String(mes+1).padStart(2,"0"))+"-"+(String(d).padStart(2,"0"));
-          var isSelected = modo==="dia" && fechaSel===iso;
-          var isHoy = iso===hoy;
-          var tieneData = !!diasActivos[iso];
-          var count = diasActivos[iso]||0;
-
-          return /*#__PURE__*/React.createElement("button",{
-            key:iso,
-            onClick:function(){
-              setFechaSel(iso);
-              setModo("dia");
-            },
-            style:{
-              position:"relative", border:"none", borderRadius:9, cursor:"pointer",
-              padding:"8px 2px", fontFamily:"inherit", fontSize:13, fontWeight: isSelected||isHoy ? 800 : 500,
-              background: isSelected ? T.accent : isHoy ? T.accentDim : tieneData ? T.surface : "transparent",
-              color: isSelected ? "#1a1a1a" : isHoy ? T.accent : tieneData ? T.text : T.muted,
-              outline: isSelected ? "2px solid "+T.accent : isHoy ? "1px solid "+T.accent : "none",
-              transition:"all 0.1s"
-            }
-          },
-            d,
-            tieneData&&!isSelected&&/*#__PURE__*/React.createElement("span",{
-              style:{position:"absolute",bottom:2,left:"50%",transform:"translateX(-50%)",width:4,height:4,borderRadius:"50%",background:T.accent,display:"block"}
-            })
-          );
-        })
-      ),
-      // Leyenda
-      /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:14,marginTop:12,fontSize:11,color:T.muted,justifyContent:"center"}},
-        /*#__PURE__*/React.createElement("span",null,"● Con actividad"),
-        /*#__PURE__*/React.createElement("span",{style:{color:T.accent}},"■ Hoy"),
-        /*#__PURE__*/React.createElement("span",{style:{color:T.accent,fontWeight:700}},"■ Seleccionado")
-      )
-    );
-  };
-
-  // ── Función imprimir ──
-  var imprimir = function() {
-    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
-    var titulo, subtitulo;
-    if (modo==="dia") {
-      titulo = "Reporte del Día";
-      subtitulo = new Date(fechaSel+"T12:00:00").toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+    upd();
+    var ro = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(upd);
+      ro.observe(el);
     } else {
-      titulo = "Reporte Mensual";
-      subtitulo = new Date(mesSel+"-15").toLocaleDateString("es-CO",{year:"numeric",month:"long"});
+      window.addEventListener("resize", upd);
     }
-    var tHead = function(cols){ return "<tr>"+cols.map(function(h){return "<th style=\"padding:8px 12px;background:#1a1a1a;color:#fff;text-align:"+(h.right?"right":"left")+";font-size:11px;font-weight:700;text-transform:uppercase\">"+h.l+"</th>";}).join("")+"</tr>"; };
-    var td = "padding:8px 12px;border-bottom:1px solid #eee;font-size:13px";
-    var sec = function(t,tbl){ return "<div style=\"margin-bottom:24px\"><h3 style=\"font-size:14px;font-weight:800;color:#1a1a1a;margin:0 0 8px;border-left:4px solid #1A1A1A;padding-left:10px\">"+t+"</h3>"+tbl+"</div>"; };
-    var empty = function(n){ return "<tr><td colspan=\""+n+"\" style=\"text-align:center;padding:16px;color:#a1a1a1;font-size:13px\">Sin registros</td></tr>"; };
+    return function () {
+      if (ro) { try { ro.disconnect(); } catch (e) {} }
+      else window.removeEventListener("resize", upd);
+    };
+  }, []);
+  return [ref, w];
+}
 
-    var tabV = "<table style=\"width:100%;border-collapse:collapse\"><thead>"+tHead([{l:"#"},{l:"Fecha"},{l:"Cliente"},{l:"Productos"},{l:"Pago"},{l:"Total",right:true}])+"</thead><tbody>"+
-      (res.ventas.length?res.ventas.map(function(s,i){return "<tr style=\"background:"+(i%2?"#fafafa":"#fff")+"\"><td style=\""+td+"\">"+(i+1)+"</td><td style=\""+td+"\">"+s.date+"</td><td style=\""+td+"\">"+(s.customer||"—")+"</td><td style=\""+td+";font-size:12px\">"+(s.items||[]).map(function(it){return it.name+" x"+it.qty;}).join(", ")+"</td><td style=\""+td+"\">"+(s.payment||"—")+"</td><td style=\""+td+";text-align:right;font-weight:700;color:#1A1A1A\">"+fmtR(s.total)+"</td></tr>";}).join(""):empty(6))+
-      "</tbody><tfoot><tr><td colspan=\"5\" style=\""+td+";font-weight:700\">Total</td><td style=\""+td+";text-align:right;font-weight:800;color:#1A1A1A;font-size:15px\">"+fmtR(res.tv)+"</td></tr></tfoot></table>";
+// Caja de tooltip flotante compartida por todos los gráficos.
+function _ChartTip(p) {
+  if (!p.show) return null;
+  var side = p.x > (p.w || 0) * 0.6;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: side ? "auto" : Math.max(0, p.x + 12),
+      right: side ? Math.max(0, (p.w || 0) - p.x + 12) : "auto",
+      top: Math.max(0, (p.y || 0)),
+      pointerEvents: "none",
+      background: T.card,
+      border: "1px solid " + T.border,
+      borderRadius: 10,
+      boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+      padding: "9px 11px",
+      zIndex: 20,
+      minWidth: 120,
+      maxWidth: 230
+    }
+  }, p.children);
+}
 
-    var tabR = "<table style=\"width:100%;border-collapse:collapse\"><thead>"+tHead([{l:"Equipo"},{l:"Cliente"},{l:"Estado"},{l:"Costo",right:true}])+"</thead><tbody>"+
-      (res.reps.length?res.reps.map(function(r,i){return "<tr style=\"background:"+(i%2?"#fafafa":"#fff")+"\"><td style=\""+td+"\">"+(r.device||"—")+"</td><td style=\""+td+"\">"+(r.customer||"—")+"</td><td style=\""+td+"\">"+r.status+"</td><td style=\""+td+";text-align:right;font-weight:700;color:#1A1A1A\">"+fmtR(r.cost)+"</td></tr>";}).join(""):empty(4))+
-      "</tbody><tfoot><tr><td colspan=\"3\" style=\""+td+";font-weight:700\">Cobrado</td><td style=\""+td+";text-align:right;font-weight:800;color:#1A1A1A;font-size:15px\">"+fmtR(res.tr)+"</td></tr></tfoot></table>";
+function _tipTitle(txt) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }
+  }, txt);
+}
 
-    var tabI = "<table style=\"width:100%;border-collapse:collapse\"><thead>"+tHead([{l:"Descripción"},{l:"Categoría"},{l:"Monto",right:true}])+"</thead><tbody>"+
-      (res.ingresos.length?res.ingresos.map(function(e,i){return "<tr style=\"background:"+(i%2?"#fafafa":"#fff")+"\"><td style=\""+td+"\">"+(e.description||"—")+"</td><td style=\""+td+"\">"+(e.category||"—")+"</td><td style=\""+td+";text-align:right;font-weight:700;color:#1A1A1A\">+"+fmtR(e.amount)+"</td></tr>";}).join(""):empty(3))+
-      "</tbody><tfoot><tr><td colspan=\"2\" style=\""+td+";font-weight:700\">Total</td><td style=\""+td+";text-align:right;font-weight:800;color:#1A1A1A;font-size:15px\">"+fmtR(res.ti)+"</td></tr></tfoot></table>";
+function _tipRow(color, label, value) {
+  return /*#__PURE__*/React.createElement("div", {
+    key: label,
+    style: { display: "flex", alignItems: "center", gap: 7, fontSize: 12, marginTop: 3 }
+  },
+    /*#__PURE__*/React.createElement("span", { style: { width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 } }),
+    /*#__PURE__*/React.createElement("span", { style: { color: T.muted, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, label),
+    /*#__PURE__*/React.createElement("span", { style: { color: T.text, fontWeight: 700 } }, value)
+  );
+}
 
-    var tabE = "<table style=\"width:100%;border-collapse:collapse\"><thead>"+tHead([{l:"Descripción"},{l:"Categoría"},{l:"Monto",right:true}])+"</thead><tbody>"+
-      (res.egresos.length?res.egresos.map(function(e,i){return "<tr style=\"background:"+(i%2?"#fafafa":"#fff")+"\"><td style=\""+td+"\">"+(e.description||"—")+"</td><td style=\""+td+"\">"+(e.category||"—")+"</td><td style=\""+td+";text-align:right;font-weight:700;color:#1A1A1A\">-"+fmtR(e.amount)+"</td></tr>";}).join(""):empty(3))+
-      "</tbody><tfoot><tr><td colspan=\"2\" style=\""+td+";font-weight:700\">Total</td><td style=\""+td+";text-align:right;font-weight:800;color:#1A1A1A;font-size:15px\">"+fmtR(res.te)+"</td></tr></tfoot></table>";
+// Leyenda horizontal reutilizable.
+function ChartLegend(p) {
+  var items = p.items || [];
+  if (!items.length) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: p.top === 0 ? 0 : 12 }
+  }, items.map(function (it, i) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: it.name + i,
+      style: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.muted }
+    },
+      /*#__PURE__*/React.createElement("span", { style: { width: 10, height: 10, borderRadius: 3, background: it.color, flexShrink: 0 } }),
+      it.name,
+      it.value != null && /*#__PURE__*/React.createElement("span", { style: { color: T.text, fontWeight: 700 } }, it.value)
+    );
+  }));
+}
 
-    var bColor = balance>=0?"#1A1A1A":"#1A1A1A";
-    var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>"+titulo+"</title>"+
-      "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;padding:28px;color:#1a1a1a}h1{font-size:22px;font-weight:900;margin-bottom:2px}tfoot td{border-top:2px solid #e8e8e8;background:#fafafa}@media print{.no-print{display:none}}</style></head><body>"+
-      "<h1>"+storeName+"</h1><h2 style=\"font-size:14px;color:#727272;font-weight:400;margin-bottom:4px\">"+titulo+"</h2>"+
-      "<p style=\"font-size:12px;color:#a1a1a1;margin-bottom:22px\">"+subtitulo+"</p>"+
-      "<div style=\"display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px\">"+
-      [["Ventas",fmtR(res.tv),"#1A1A1A"],["Reparaciones",fmtR(res.tr),"#404040"],["Ingresos",fmtR(res.ti),"#545454"],["Egresos",fmtR(res.te),"#1A1A1A"]].map(function(x){
-        return "<div style=\"background:#fafafa;border:1px solid #e8e8e8;border-radius:10px;padding:12px 14px\"><div style=\"font-size:11px;font-weight:700;color:#727272;text-transform:uppercase;margin-bottom:4px\">"+x[0]+"</div><div style=\"font-size:17px;font-weight:800;color:"+x[2]+"\">"+x[1]+"</div></div>";
-      }).join("")+"</div>"+
-      sec("Ventas ("+res.ventas.length+")", tabV)+
-      sec("Reparaciones ("+res.reps.length+")", tabR)+
-      sec("Ingresos ("+res.ingresos.length+")", tabI)+
-      sec("Egresos ("+res.egresos.length+")", tabE)+
-      "<div style=\"background:"+(balance>=0?"#ebebeb":"#eaeaea")+";border:2px solid "+bColor+";border-radius:12px;padding:16px 22px;display:flex;justify-content:space-between;align-items:center\">"+
-      "<div><div style=\"font-size:13px;font-weight:700;color:#727272;text-transform:uppercase\">Balance del Período</div></div>"+
-      "<div style=\"font-size:26px;font-weight:900;color:"+bColor+"\">"+fmtR(balance)+"</div></div>"+
-      "<div class=\"no-print\" style=\"text-align:center;margin-top:24px\">"+
-      "<button onclick=\"window.print()\" style=\"padding:12px 36px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:800\">Imprimir</button></div>"+
-      "<p style=\"text-align:center;margin-top:14px;color:#a1a1a1;font-size:11px\">Generado el "+new Date().toLocaleString("es-CO")+"</p></body></html>";
+// Genera una curva suave (Catmull-Rom a Bezier) o una polilinea recta.
+function _cPath(pts, smooth) {
+  if (!pts.length) return "";
+  if (pts.length === 1) return "M" + pts[0][0] + "," + pts[0][1];
+  if (!smooth) {
+    return "M" + pts.map(function (p) { return p[0] + "," + p[1]; }).join(" L");
+  }
+  var d = "M" + pts[0][0] + "," + pts[0][1];
+  for (var i = 0; i < pts.length - 1; i++) {
+    var p0 = pts[i - 1] || pts[i],
+      p1 = pts[i],
+      p2 = pts[i + 1],
+      p3 = pts[i + 2] || p2;
+    var c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    var c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += " C" + c1x + "," + c1y + " " + c2x + "," + c2y + " " + p2[0] + "," + p2[1];
+  }
+  return d;
+}
 
-    _printHTML(html);
+// ─── Gráfico de área / línea multi-serie con ejes, rejilla y tooltip ───────
+function ChartArea(p) {
+  var series = (p.series || []).filter(function (s) { return s && s.values; });
+  var labels = p.labels || [];
+  var H = p.height || 230;
+  var smooth = p.smooth !== false;
+  var fill = p.fill !== false;
+  var yFmt = p.yFmt || _cShort;
+  var tipFmt = p.tipFmt || yFmt;
+  var m = _useMeasure(), wrapRef = m[0], W = m[1] || 640;
+  var hv = useState(-1), hover = hv[0], setHover = hv[1];
+
+  var padL = p.padL != null ? p.padL : 46, padR = 14, padT = 14, padB = 26;
+  var iw = Math.max(10, W - padL - padR);
+  var ih = Math.max(10, H - padT - padB);
+  var n = labels.length || (series[0] ? series[0].values.length : 0);
+
+  var rawMax = 0;
+  series.forEach(function (s) {
+    s.values.forEach(function (v) { if (Number(v) > rawMax) rawMax = Number(v); });
+  });
+  var maxY = _cNiceMax(rawMax);
+  var xAt = function (i) { return padL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw); };
+  var yAt = function (v) { return padT + ih - (Math.max(0, Number(v) || 0) / maxY) * ih; };
+
+  var ticks = [0, 0.25, 0.5, 0.75, 1];
+  // Muestra como maximo ~7 etiquetas en el eje X para que no se amontonen.
+  var step = Math.max(1, Math.ceil(n / (W < 420 ? 4 : 7)));
+
+  var onMove = function (e) {
+    if (n <= 0) return;
+    var box = e.currentTarget.getBoundingClientRect();
+    var rel = e.clientX - box.left - padL;
+    var idx = n <= 1 ? 0 : Math.round((rel / iw) * (n - 1));
+    setHover(Math.max(0, Math.min(n - 1, idx)));
   };
 
-  // ── UI ──
-  var modoBtn = function(id, lbl) {
-    return /*#__PURE__*/React.createElement("button",{
-      onClick:function(){setModo(id);},
-      style:{flex:1,padding:"9px 0",border:"none",borderRadius:9,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,
-        display:"flex",alignItems:"center",justifyContent:"center",gap:6,
-        background:modo===id?T.accent:"transparent",color:modo===id?"#1a1a1a":T.muted,transition:"all 0.15s"}
-    },lbl);
-  };
+  var empty = rawMax === 0;
+  var gid = p.gid || "a";
 
-  return /*#__PURE__*/React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:20,width:"100%"}},
-    // Título + Toggle en la misma fila
-    /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}},
-      /*#__PURE__*/React.createElement("h2",{style:{display:"flex",alignItems:"center",gap:8,fontSize:22,fontWeight:800,color:T.text,letterSpacing:"-0.03em",margin:0}},/*#__PURE__*/React.createElement(BarChart3,{size:20}),"Reporte"),
-      /*#__PURE__*/React.createElement("div",{style:{display:"flex",background:T.surface,borderRadius:12,padding:4,gap:4}},
-        modoBtn("dia",[/*#__PURE__*/React.createElement(CalendarDays,{size:14,key:"i"}),"Por Día"]),
-        modoBtn("mes",[/*#__PURE__*/React.createElement(CalendarDays,{size:14,key:"i"}),"Por Mes"])
+  return /*#__PURE__*/React.createElement("div", { ref: wrapRef, style: { position: "relative", width: "100%" } },
+    /*#__PURE__*/React.createElement("svg", {
+      width: "100%", height: H, viewBox: "0 0 " + W + " " + H, style: { display: "block", overflow: "visible" },
+      onMouseMove: onMove, onMouseLeave: function () { setHover(-1); }
+    },
+      /*#__PURE__*/React.createElement("defs", null, series.map(function (s, si) {
+        var id = "cgrad" + si + "_" + gid;
+        return /*#__PURE__*/React.createElement("linearGradient", { key: id, id: id, x1: "0", y1: "0", x2: "0", y2: "1" },
+          /*#__PURE__*/React.createElement("stop", { offset: "0%", stopColor: s.color, stopOpacity: 0.3 }),
+          /*#__PURE__*/React.createElement("stop", { offset: "100%", stopColor: s.color, stopOpacity: 0.01 })
+        );
+      })),
+      ticks.map(function (t, ti) {
+        var y = padT + ih - t * ih;
+        return /*#__PURE__*/React.createElement("g", { key: "g" + ti },
+          /*#__PURE__*/React.createElement("line", { x1: padL, y1: y, x2: padL + iw, y2: y, stroke: T.border, strokeWidth: 1, strokeDasharray: t === 0 ? "" : "3 4", opacity: t === 0 ? 1 : 0.65 }),
+          /*#__PURE__*/React.createElement("text", { x: padL - 8, y: y + 3.5, textAnchor: "end", fontSize: 10, fill: T.muted, fontWeight: 600 }, yFmt(maxY * t))
+        );
+      }),
+      labels.map(function (lb, i) {
+        if (i % step !== 0 && i !== n - 1) return null;
+        return /*#__PURE__*/React.createElement("text", {
+          key: "x" + i, x: xAt(i), y: H - 8, textAnchor: i === 0 ? "start" : i === n - 1 ? "end" : "middle",
+          fontSize: 10, fill: T.muted, fontWeight: 600
+        }, lb);
+      }),
+      !empty && series.map(function (s, si) {
+        var pts = s.values.map(function (v, i) { return [xAt(i), yAt(v)]; });
+        var line = _cPath(pts, smooth);
+        var area = line + " L" + xAt(n - 1) + "," + (padT + ih) + " L" + xAt(0) + "," + (padT + ih) + " Z";
+        return /*#__PURE__*/React.createElement("g", { key: s.name + si },
+          fill && n > 1 && /*#__PURE__*/React.createElement("path", { d: area, fill: "url(#cgrad" + si + "_" + gid + ")", stroke: "none" }),
+          n > 1 && /*#__PURE__*/React.createElement("path", { d: line, fill: "none", stroke: s.color, strokeWidth: 2.25, strokeLinecap: "round", strokeLinejoin: "round" }),
+          // Con un solo punto no hay línea que dibujar: se marca el valor.
+          n === 1 && /*#__PURE__*/React.createElement("circle", { cx: pts[0][0], cy: pts[0][1], r: 5, fill: s.color })
+        );
+      }),
+      hover >= 0 && !empty && /*#__PURE__*/React.createElement("g", null,
+        /*#__PURE__*/React.createElement("line", { x1: xAt(hover), y1: padT, x2: xAt(hover), y2: padT + ih, stroke: T.muted, strokeWidth: 1, strokeDasharray: "3 3", opacity: 0.6 }),
+        series.map(function (s, si) {
+          return /*#__PURE__*/React.createElement("circle", {
+            key: "pt" + si, cx: xAt(hover), cy: yAt(s.values[hover]), r: 4.5,
+            fill: T.card, stroke: s.color, strokeWidth: 2.5
+          });
+        })
+      ),
+      empty && /*#__PURE__*/React.createElement("text", { x: padL + iw / 2, y: padT + ih / 2, textAnchor: "middle", fontSize: 12, fill: T.muted }, "Sin datos en este período")
+    ),
+    /*#__PURE__*/React.createElement(_ChartTip, { show: hover >= 0 && !empty, x: hover >= 0 ? xAt(hover) : 0, y: 6, w: W },
+      _tipTitle(labels[hover] || ""),
+      series.map(function (s) { return _tipRow(s.color, s.name, tipFmt(s.values[hover])); })
+    ),
+    p.legend !== false && /*#__PURE__*/React.createElement(ChartLegend, {
+      items: series.map(function (s) { return { name: s.name, color: s.color }; })
+    })
+  );
+}
+
+// ─── Barras verticales agrupadas o apiladas con tooltip ───────────────────
+function ChartBars(p) {
+  var groups = p.groups || [];
+  var keys = p.keys || [];
+  var H = p.height || 230;
+  var stacked = !!p.stacked;
+  var yFmt = p.yFmt || _cShort;
+  var tipFmt = p.tipFmt || yFmt;
+  var m = _useMeasure(), wrapRef = m[0], W = m[1] || 640;
+  var hv = useState(-1), hover = hv[0], setHover = hv[1];
+
+  var padL = p.padL != null ? p.padL : 46, padR = 14, padT = 14, padB = 26;
+  var iw = Math.max(10, W - padL - padR);
+  var ih = Math.max(10, H - padT - padB);
+  var n = groups.length;
+
+  var rawMax = 0;
+  groups.forEach(function (g) {
+    if (stacked) {
+      var s = keys.reduce(function (a, k) { return a + (Number(g.values[k.id]) || 0); }, 0);
+      if (s > rawMax) rawMax = s;
+    } else {
+      keys.forEach(function (k) { var v = Number(g.values[k.id]) || 0; if (v > rawMax) rawMax = v; });
+    }
+  });
+  var maxY = _cNiceMax(rawMax);
+  var slot = n ? iw / n : iw;
+  var barPad = Math.min(10, slot * 0.18);
+  var bandW = Math.max(3, slot - barPad * 2);
+  var barW = stacked ? Math.min(44, bandW) : Math.max(3, Math.min(32, bandW / Math.max(1, keys.length) - 2));
+  var ticks = [0, 0.25, 0.5, 0.75, 1];
+  var step = Math.max(1, Math.ceil(n / (W < 420 ? 5 : 9)));
+
+  return /*#__PURE__*/React.createElement("div", { ref: wrapRef, style: { position: "relative", width: "100%" } },
+    /*#__PURE__*/React.createElement("svg", { width: "100%", height: H, viewBox: "0 0 " + W + " " + H, style: { display: "block", overflow: "visible" } },
+      ticks.map(function (t, ti) {
+        var y = padT + ih - t * ih;
+        return /*#__PURE__*/React.createElement("g", { key: "g" + ti },
+          /*#__PURE__*/React.createElement("line", { x1: padL, y1: y, x2: padL + iw, y2: y, stroke: T.border, strokeWidth: 1, strokeDasharray: t === 0 ? "" : "3 4", opacity: t === 0 ? 1 : 0.65 }),
+          /*#__PURE__*/React.createElement("text", { x: padL - 8, y: y + 3.5, textAnchor: "end", fontSize: 10, fill: T.muted, fontWeight: 600 }, yFmt(maxY * t))
+        );
+      }),
+      groups.map(function (g, gi) {
+        var gx = padL + gi * slot;
+        var cx = gx + slot / 2;
+        var bars;
+        if (stacked) {
+          var acc = 0;
+          bars = keys.map(function (k) {
+            var v = Number(g.values[k.id]) || 0;
+            var h = (v / maxY) * ih;
+            var y = padT + ih - acc - h;
+            acc += h;
+            if (h <= 0) return null;
+            return /*#__PURE__*/React.createElement("rect", {
+              key: k.id, x: cx - barW / 2, y: y, width: barW, height: Math.max(1, h),
+              fill: k.color, rx: 3, opacity: hover === gi || hover < 0 ? 1 : 0.35
+            });
+          });
+        } else {
+          var groupW = keys.length * (barW + 2) - 2;
+          bars = keys.map(function (k, ki) {
+            var v = Number(g.values[k.id]) || 0;
+            var h = (v / maxY) * ih;
+            var x = cx - groupW / 2 + ki * (barW + 2);
+            if (h <= 0) return null;
+            return /*#__PURE__*/React.createElement("rect", {
+              key: k.id, x: x, y: padT + ih - h, width: barW, height: Math.max(1, h),
+              fill: k.color, rx: 3, opacity: hover === gi || hover < 0 ? 1 : 0.35
+            });
+          });
+        }
+        return /*#__PURE__*/React.createElement("g", {
+          key: "grp" + gi,
+          onMouseEnter: function () { setHover(gi); },
+          onMouseLeave: function () { setHover(-1); }
+        },
+          /*#__PURE__*/React.createElement("rect", { x: gx, y: padT, width: slot, height: ih, fill: hover === gi ? _cAlpha(T.accent, 0.07) : "transparent" }),
+          bars,
+          (gi % step === 0 || gi === n - 1) && /*#__PURE__*/React.createElement("text", {
+            x: cx, y: H - 8, textAnchor: "middle", fontSize: 10, fill: T.muted, fontWeight: 600
+          }, g.label)
+        );
+      }),
+      rawMax === 0 && /*#__PURE__*/React.createElement("text", { x: padL + iw / 2, y: padT + ih / 2, textAnchor: "middle", fontSize: 12, fill: T.muted }, "Sin datos en este período")
+    ),
+    /*#__PURE__*/React.createElement(_ChartTip, { show: hover >= 0, x: padL + hover * slot + slot / 2, y: 6, w: W },
+      _tipTitle(hover >= 0 ? groups[hover].label : ""),
+      hover >= 0 && keys.map(function (k) { return _tipRow(k.color, k.name, tipFmt(groups[hover].values[k.id] || 0)); })
+    ),
+    p.legend !== false && /*#__PURE__*/React.createElement(ChartLegend, {
+      items: keys.map(function (k) { return { name: k.name, color: k.color }; })
+    })
+  );
+}
+
+// ─── Dona / anillo con valor central y leyenda con porcentajes ────────────
+function ChartDonut(p) {
+  var slices = (p.slices || []).filter(function (s) { return (Number(s.value) || 0) > 0; });
+  var size = p.size || 168;
+  var thick = p.thick || 26;
+  var vFmt = p.vFmt || _cShort;
+  var hv = useState(-1), hover = hv[0], setHover = hv[1];
+
+  var total = slices.reduce(function (a, s) { return a + (Number(s.value) || 0); }, 0);
+  var R = size / 2, r = R - thick / 2;
+  var C = 2 * Math.PI * r;
+  var acc = 0;
+
+  var activeIdx = hover >= 0 && hover < slices.length ? hover : -1;
+  var centerV = activeIdx >= 0 ? vFmt(slices[activeIdx].value) : (p.centerValue != null ? p.centerValue : vFmt(total));
+  var centerL = activeIdx >= 0 ? slices[activeIdx].label : (p.centerLabel || "Total");
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { position: "relative", width: size, height: size, flexShrink: 0 } },
+      /*#__PURE__*/React.createElement("svg", { width: size, height: size, viewBox: "0 0 " + size + " " + size, style: { display: "block", transform: "rotate(-90deg)" } },
+        /*#__PURE__*/React.createElement("circle", { cx: R, cy: R, r: r, fill: "none", stroke: T.border, strokeWidth: thick, opacity: 0.5 }),
+        total > 0 && slices.map(function (s, i) {
+          var frac = (Number(s.value) || 0) / total;
+          var len = frac * C;
+          var el = /*#__PURE__*/React.createElement("circle", {
+            key: s.label + i, cx: R, cy: R, r: r, fill: "none",
+            stroke: s.color, strokeWidth: activeIdx === i ? thick + 5 : thick,
+            strokeDasharray: Math.max(0, len - 1.5) + " " + C,
+            strokeDashoffset: -acc,
+            style: { transition: "stroke-width 0.15s", cursor: "pointer" },
+            opacity: activeIdx < 0 || activeIdx === i ? 1 : 0.32,
+            onMouseEnter: function () { setHover(i); },
+            onMouseLeave: function () { setHover(-1); }
+          });
+          acc += len;
+          return el;
+        })
+      ),
+      /*#__PURE__*/React.createElement("div", {
+        style: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none", padding: thick + 2 }
+      },
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: size > 150 ? 19 : 16, fontWeight: 800, color: T.text, lineHeight: 1.1, textAlign: "center" } }, centerV),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginTop: 4, textAlign: "center", lineHeight: 1.2 } }, centerL)
       )
     ),
-
-    // Layout: calendario + panel derecho
-    /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"minmax(320px,420px) 1fr",gap:20,alignItems:"start"}},
-
-      // ── Izquierda: Calendario o Selector mes ──
-      /*#__PURE__*/React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:12}},
-        modo==="dia" && /*#__PURE__*/React.createElement(CalendarioMes,null),
-        modo==="dia" && /*#__PURE__*/React.createElement("div",{style:{background:T.card,border:"1px solid "+T.border,borderRadius:14,padding:"14px 18px"}},
-          /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:T.muted,marginBottom:4}},"Fecha seleccionada"),
-          /*#__PURE__*/React.createElement("div",{style:{fontSize:16,fontWeight:800,color:T.text}},
-            new Date(fechaSel+"T12:00:00").toLocaleDateString("es-CO",{weekday:"long",year:"numeric",month:"long",day:"numeric"})
-          )
-        ),
-        modo==="mes" && /*#__PURE__*/React.createElement("div",{style:{background:T.card,border:"1px solid "+T.border,borderRadius:8,padding:22}},
-          /*#__PURE__*/React.createElement("div",{style:{fontSize:13,fontWeight:700,color:T.muted,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.06em"}},"Seleccionar Mes"),
-          /*#__PURE__*/React.createElement("input",{type:"month",value:mesSel,onChange:function(e){setMesSel(e.target.value);},
-            style:{background:T.surface,border:"1px solid "+T.border,borderRadius:10,color:T.text,padding:"14px 18px",fontSize:18,fontFamily:"inherit",width:"100%",outline:"none",fontWeight:700}})
-        )
-      ),
-
-      // ── Derecha: Panel resumen ──
-      /*#__PURE__*/React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:14}},
-        // Tarjetas resumen 2x2
-        /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
-          [
-            {l:"Ventas",      v:res.tv, c:T.green,  icon:ShoppingCart, n:res.ventas.length},
-            {l:"Reparaciones",v:res.tr, c:"#404040", icon:Wrench, n:res.reps.length},
-            {l:"Ingresos",    v:res.ti, c:"#545454", icon:ArrowUpCircle,  n:res.ingresos.length},
-            {l:"Egresos",     v:res.te, c:T.red,     icon:ArrowDownCircle,  n:res.egresos.length}
-          ].map(function(x){
-            return /*#__PURE__*/React.createElement("div",{key:x.l,style:{background:T.card,border:"1px solid "+T.border,borderRadius:14,padding:"18px 20px"}},
-              /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",gap:5,fontSize:12,color:T.muted,fontWeight:700,textTransform:"uppercase",marginBottom:6}},/*#__PURE__*/React.createElement(x.icon,{size:13}),x.l),
-              /*#__PURE__*/React.createElement("div",{style:{fontSize:22,fontWeight:800,color:x.c}},fmtR(x.v)),
-              /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:T.muted,marginTop:4}},x.n+" registro"+(x.n===1?"":"s"))
-            );
-          })
-        ),
-        // Balance
-        /*#__PURE__*/React.createElement("div",{style:{background:balance>=0?"rgba(152,152,152,0.10)":"rgba(119,119,119,0.10)",border:"2px solid "+(balance>=0?T.green:T.red),borderRadius:14,padding:"18px 22px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
-          /*#__PURE__*/React.createElement("div",null,
-            /*#__PURE__*/React.createElement("div",{style:{fontSize:12,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em"}},"Balance"),
-            /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:T.muted,marginTop:3}},"Ventas + Reps + Ing − Egr")
-          ),
-          /*#__PURE__*/React.createElement("div",{style:{fontSize:28,fontWeight:900,color:balance>=0?T.green:T.red}},fmtR(balance))
-        ),
-        // Sin datos aviso
-        totalActs===0&&/*#__PURE__*/React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:6,background:T.card,border:"1px dashed "+T.border,borderRadius:14,padding:"22px 18px",textAlign:"center",color:T.muted,fontSize:15}},
-          /*#__PURE__*/React.createElement(Inbox,{size:22}),
-          "Sin registros para este período"
-        ),
-        // Botón imprimir
-        /*#__PURE__*/React.createElement("button",{
-          onClick:imprimir,
-          style:{padding:"16px 0",background:T.accent,border:"none",borderRadius:14,cursor:"pointer",color:"#1a1a1a",fontFamily:"inherit",fontWeight:800,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",gap:10}
+    /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 150, display: "flex", flexDirection: "column", gap: 7 } },
+      total === 0 && /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted } }, "Sin datos en este período"),
+      slices.map(function (s, i) {
+        var pct = total > 0 ? (Number(s.value) / total) * 100 : 0;
+        return /*#__PURE__*/React.createElement("div", {
+          key: s.label + i,
+          onMouseEnter: function () { setHover(i); },
+          onMouseLeave: function () { setHover(-1); },
+          style: { display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "default", opacity: activeIdx < 0 || activeIdx === i ? 1 : 0.5 }
         },
-          /*#__PURE__*/React.createElement(Printer,{size:20}),
-          "Imprimir Reporte "+(modo==="dia"?"del Día":"Mensual")
-        )
-      )
+          /*#__PURE__*/React.createElement("span", { style: { width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 } }),
+          /*#__PURE__*/React.createElement("span", { style: { color: T.muted, flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, s.label),
+          /*#__PURE__*/React.createElement("span", { style: { color: T.text, fontWeight: 700 } }, vFmt(s.value)),
+          /*#__PURE__*/React.createElement("span", { style: { color: T.muted, width: 42, textAlign: "right" } }, pct.toFixed(pct < 10 ? 1 : 0) + "%")
+        );
+      })
     )
   );
 }
 
+// ─── Ranking en barras horizontales (top productos, clientes, etc.) ───────
+function ChartRank(p) {
+  var items = p.items || [];
+  var vFmt = p.vFmt || _cShort;
+  var max = items.reduce(function (a, it) { return Math.max(a, Number(it.value) || 0); }, 0) || 1;
+  if (!items.length) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "28px 0", color: T.muted, fontSize: 13 }
+    }, /*#__PURE__*/React.createElement(Inbox, { size: 16 }), p.emptyText || "Sin datos en este período");
+  }
+  return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 11 } },
+    items.map(function (it, i) {
+      var pct = ((Number(it.value) || 0) / max) * 100;
+      var color = it.color || CHART_PALETTE[i % CHART_PALETTE.length];
+      return /*#__PURE__*/React.createElement("div", { key: it.label + i },
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 } },
+          /*#__PURE__*/React.createElement("span", {
+            style: { fontSize: 10, fontWeight: 800, color: T.muted, width: 16, flexShrink: 0 }
+          }, "#" + (i + 1)),
+          /*#__PURE__*/React.createElement("span", {
+            style: { fontSize: 13, fontWeight: 600, color: T.text, flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
+          }, it.label),
+          it.sub && /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: T.muted, flexShrink: 0 } }, it.sub),
+          /*#__PURE__*/React.createElement("span", { style: { fontSize: 13, fontWeight: 800, color: T.text, flexShrink: 0 } }, vFmt(it.value))
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { height: 7, background: T.border, borderRadius: 4, overflow: "hidden", marginLeft: 24 } },
+          /*#__PURE__*/React.createElement("div", { style: { width: Math.max(2, pct) + "%", height: "100%", background: color, borderRadius: 4, transition: "width 0.4s ease" } })
+        )
+      );
+    })
+  );
+}
+
+// ─── Mapa de calor de calendario (intensidad por día) ─────────────────────
+function ChartHeat(p) {
+  var cells = p.cells || [];
+  var vFmt = p.vFmt || _cShort;
+  var color = p.color || T.accent;
+  var hv = useState(null), hover = hv[0], setHover = hv[1];
+  var max = cells.reduce(function (a, c) { return Math.max(a, Number(c.value) || 0); }, 0);
+  var DOW = ["D", "L", "M", "X", "J", "V", "S"];
+
+  return /*#__PURE__*/React.createElement("div", { style: { position: "relative" } },
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 6 } },
+      DOW.map(function (d, i) {
+        return /*#__PURE__*/React.createElement("div", { key: "h" + i, style: { textAlign: "center", fontSize: 10, fontWeight: 700, color: T.muted } }, d);
+      })
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 } },
+      cells.map(function (c, i) {
+        if (c.blank) return /*#__PURE__*/React.createElement("div", { key: "b" + i });
+        var v = Number(c.value) || 0;
+        var ratio = max > 0 ? v / max : 0;
+        var bg = v > 0 ? _cAlpha(color, 0.16 + ratio * 0.74) : T.surface;
+        var isHover = hover && hover.key === c.key;
+        return /*#__PURE__*/React.createElement("div", {
+          key: c.key,
+          onMouseEnter: function () { setHover(c); },
+          onMouseLeave: function () { setHover(null); },
+          onClick: function () { if (p.onPick) p.onPick(c); },
+          title: c.label + " · " + vFmt(v),
+          style: {
+            minHeight: 34, borderRadius: 7, background: bg,
+            border: "1.5px solid " + (c.selected ? color : isHover ? T.muted : T.border),
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 11, fontWeight: c.today || c.selected ? 800 : 600,
+            color: ratio > 0.5 ? "#fff" : c.today ? color : T.muted,
+            cursor: p.onPick ? "pointer" : "default",
+            transition: "border-color 0.12s"
+          }
+        }, c.day);
+      })
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 10.5, color: T.muted, justifyContent: "flex-end" } },
+      "Menos",
+      [0.1, 0.32, 0.55, 0.78, 1].map(function (s, i) {
+        return /*#__PURE__*/React.createElement("span", { key: i, style: { width: 11, height: 11, borderRadius: 3, background: _cAlpha(color, 0.16 + s * 0.74), border: "1px solid " + T.border, display: "block" } });
+      }),
+      "Más"
+    ),
+    hover && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute", top: -4, left: "50%", transform: "translate(-50%,-100%)",
+        background: T.card, border: "1px solid " + T.border, borderRadius: 8, padding: "6px 10px",
+        fontSize: 11.5, color: T.text, whiteSpace: "nowrap", boxShadow: "0 4px 14px rgba(0,0,0,0.18)", pointerEvents: "none", zIndex: 20
+      }
+    }, hover.label, " · ", /*#__PURE__*/React.createElement("b", null, vFmt(hover.value)))
+  );
+}
+
+// ─── Medidor semicircular (cumplimiento de meta) ──────────────────────────
+function ChartGauge(p) {
+  var pct = Math.max(0, Math.min(1, Number(p.pct) || 0));
+  var size = p.size || 150;
+  var thick = p.thick || 14;
+  var color = p.color || T.accent;
+  var R = size / 2, r = R - thick / 2 - 2;
+  var midY = R;
+  var len = Math.PI * r;
+  var arcD = "M" + (R - r) + "," + midY + " A" + r + "," + r + " 0 0 1 " + (R + r) + "," + midY;
+  return /*#__PURE__*/React.createElement("div", { style: { position: "relative", width: size, height: size / 2 + 34, flexShrink: 0 } },
+    /*#__PURE__*/React.createElement("svg", { width: size, height: size / 2 + 6, viewBox: "0 0 " + size + " " + (size / 2 + 6), style: { display: "block" } },
+      /*#__PURE__*/React.createElement("path", { d: arcD, fill: "none", stroke: T.border, strokeWidth: thick, strokeLinecap: "round" }),
+      /*#__PURE__*/React.createElement("path", {
+        d: arcD, fill: "none", stroke: color, strokeWidth: thick, strokeLinecap: "round",
+        strokeDasharray: (len * pct) + " " + (len * 2),
+        style: { transition: "stroke-dasharray 0.5s ease" }
+      })
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { position: "absolute", left: 0, right: 0, top: size / 2 - 26, textAlign: "center" } },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 21, fontWeight: 800, color: T.text, lineHeight: 1 } }, Math.round(pct * 100) + "%"),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginTop: 5 } }, p.label || "")
+    )
+  );
+}
+
+// ─── Sparkline compacta reutilizable ──────────────────────────────────────
+function Sparkline(p) {
+  var series = p.series || [];
+  var w = p.width || 96, h = p.height || 30;
+  var color = p.color || T.accent;
+  if (!series.length) return null;
+  var max = Math.max.apply(null, series.concat([1]));
+  var min = Math.min.apply(null, series.concat([0]));
+  var range = (max - min) || 1;
+  var pts = series.map(function (v, i) {
+    return [(i / (series.length - 1 || 1)) * w, h - ((v - min) / range) * h];
+  });
+  var line = _cPath(pts, p.smooth !== false);
+  var last = pts[pts.length - 1];
+  return /*#__PURE__*/React.createElement("svg", { viewBox: "0 0 " + w + " " + h, width: w, height: h, style: { display: "block", flexShrink: 0, overflow: "visible" } },
+    p.fill !== false && /*#__PURE__*/React.createElement("path", { d: line + " L" + w + "," + h + " L0," + h + " Z", fill: _cAlpha(color, 0.13), stroke: "none" }),
+    /*#__PURE__*/React.createElement("path", { d: line, fill: "none", stroke: color, strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" }),
+    /*#__PURE__*/React.createElement("circle", { cx: last[0], cy: last[1], r: 2.4, fill: color })
+  );
+}
+
+// ─── Indicador de variación porcentual vs período anterior ────────────────
+function DeltaPill(p) {
+  var pct = Number(p.pct) || 0;
+  var invert = !!p.invert;
+  var good = invert ? pct <= 0 : pct >= 0;
+  var color = pct === 0 ? T.muted : good ? T.green : T.red;
+  var Icon = pct === 0 ? Repeat : pct > 0 ? TrendingUp : TrendingDown;
+  var txt = Math.abs(pct) >= 1000 ? ">999" : String(pct).replace(".", ",");
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 7px", borderRadius: 6,
+      background: _cAlpha(color, 0.12), color: color,
+      fontSize: 11, fontWeight: 800, whiteSpace: "nowrap"
+    }
+  },
+    /*#__PURE__*/React.createElement(Icon, { size: 11 }),
+    (pct > 0 ? "+" : "") + txt + "%",
+    p.suffix && /*#__PURE__*/React.createElement("span", { style: { fontWeight: 600, opacity: 0.85 } }, p.suffix)
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── REPORTES PRO — analítica de negocio con comparación de períodos ──────
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Descarga un CSV (separador ";" + BOM para que Excel en es-CO lo abra bien).
+function _downloadCSV(filename, rows) {
+  var csv = rows.map(function (r) {
+    return r.map(function (c) {
+      var s = String(c == null ? "" : c);
+      return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(";");
+  }).join("\r\n");
+  try {
+    var blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch (e) {}
+    }, 600);
+    return true;
+  } catch (e) { return false; }
+}
+
+// ─── Utilidades de fecha (todo en ISO "YYYY-MM-DD", zona Colombia) ────────
+function _isoAdd(iso, days) {
+  var d = new Date(iso + "T12:00:00");
+  d.setDate(d.getDate() + days);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function _isoOf(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function _isoDiff(a, b) {
+  return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000);
+}
+var _MESES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+var _MESES_LARGO = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+function _fechaLarga(iso) {
+  try {
+    return new Date(iso + "T12:00:00").toLocaleDateString("es-CO", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  } catch (e) { return iso; }
+}
+function _fechaCorta(iso) {
+  var d = new Date(iso + "T12:00:00");
+  return d.getDate() + " " + _MESES_CORTO[d.getMonth()];
+}
+
+// Catálogo de períodos rápidos. Devuelve {desde, hasta}.
+var REP_PERIODOS = [
+  { id: "hoy", label: "Hoy" },
+  { id: "ayer", label: "Ayer" },
+  { id: "7d", label: "7 días" },
+  { id: "30d", label: "30 días" },
+  { id: "mes", label: "Este mes" },
+  { id: "mesAnt", label: "Mes pasado" },
+  { id: "90d", label: "Trimestre" },
+  { id: "anio", label: "Este año" },
+  { id: "rango", label: "Personalizado" }
+];
+
+function _repRango(id, hoy, cDesde, cHasta) {
+  var d = new Date(hoy + "T12:00:00");
+  switch (id) {
+    case "hoy": return { desde: hoy, hasta: hoy };
+    case "ayer": return { desde: _isoAdd(hoy, -1), hasta: _isoAdd(hoy, -1) };
+    case "7d": return { desde: _isoAdd(hoy, -6), hasta: hoy };
+    case "30d": return { desde: _isoAdd(hoy, -29), hasta: hoy };
+    case "90d": return { desde: _isoAdd(hoy, -89), hasta: hoy };
+    case "mes": return { desde: hoy.slice(0, 7) + "-01", hasta: hoy };
+    case "mesAnt":
+      var p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+      var fin = new Date(d.getFullYear(), d.getMonth(), 0);
+      return { desde: _isoOf(p), hasta: _isoOf(fin) };
+    case "anio": return { desde: hoy.slice(0, 4) + "-01-01", hasta: hoy };
+    case "rango": return { desde: cDesde || hoy, hasta: cHasta || hoy };
+    default: return { desde: hoy, hasta: hoy };
+  }
+}
+
+// Período inmediatamente anterior, de la misma duración (para comparar).
+function _repRangoPrevio(r) {
+  var dias = _isoDiff(r.desde, r.hasta) + 1;
+  return { desde: _isoAdd(r.desde, -dias), hasta: _isoAdd(r.desde, -1) };
+}
+
+// Divide el rango en cubos de día / semana / mes según su duración.
+function _repBuckets(desde, hasta) {
+  var dias = _isoDiff(desde, hasta) + 1;
+  var out = [];
+  if (dias <= 45) {
+    for (var i = 0; i < dias; i++) {
+      var k = _isoAdd(desde, i);
+      out.push({ key: k, label: _fechaCorta(k), desde: k, hasta: k });
+    }
+  } else if (dias <= 200) {
+    var cur = desde;
+    while (_isoDiff(cur, hasta) >= 0) {
+      var fin = _isoAdd(cur, 6);
+      if (_isoDiff(fin, hasta) < 0) fin = hasta;
+      out.push({ key: cur, label: _fechaCorta(cur), desde: cur, hasta: fin });
+      cur = _isoAdd(fin, 1);
+    }
+  } else {
+    var d0 = new Date(desde + "T12:00:00");
+    var d1 = new Date(hasta + "T12:00:00");
+    var y = d0.getFullYear(), m = d0.getMonth();
+    while (y < d1.getFullYear() || (y === d1.getFullYear() && m <= d1.getMonth())) {
+      var ini = _isoOf(new Date(y, m, 1));
+      var f = _isoOf(new Date(y, m + 1, 0));
+      out.push({
+        key: ini.slice(0, 7),
+        label: _MESES_CORTO[m] + " " + String(y).slice(2),
+        desde: _isoDiff(ini, desde) > 0 ? desde : ini,
+        hasta: _isoDiff(hasta, f) > 0 ? hasta : f
+      });
+      m++; if (m > 11) { m = 0; y++; }
+    }
+  }
+  return out;
+}
+
+// ─── Motor de cálculo: extrae todas las métricas de un rango de fechas ────
+function _repCalc(data, desde, hasta) {
+  var inRange = function (d) { return !!d && d >= desde && d <= hasta; };
+
+  var ventas = (data.sales || []).filter(function (s) { return inRange(s.date); });
+  var repsTodas = (data.repairs || []).filter(function (r) { return inRange(r.deliveryDate || r.date); });
+  var repsCerradas = repsTodas.filter(function (r) { return r.status === "Entregado" || r.status === "Listo"; });
+  var repsNuevas = (data.repairs || []).filter(function (r) { return inRange(r.date); });
+  var ingresos = (data.cashflow || []).filter(function (e) { return e.type === "ingreso" && inRange(e.date); });
+  var egresos = (data.cashflow || []).filter(function (e) { return e.type === "egreso" && inRange(e.date); });
+
+  // Abonos parciales de reparaciones aún no saldadas (no se duplican con tr).
+  var abonos = [];
+  (data.repairs || []).forEach(function (r) {
+    if (r.paid) return;
+    (r.advances || []).forEach(function (a) {
+      if (inRange(a.date)) abonos.push({ amount: Number(a.amount) || 0, date: a.date, repair: r });
+    });
+  });
+
+  var tv = ventas.reduce(function (a, s) { return a + (Number(s.total) || 0); }, 0);
+  var tr = repsCerradas.filter(function (r) { return r.paid; }).reduce(function (a, r) { return a + (Number(r.cost) || 0); }, 0);
+  var tab = abonos.reduce(function (a, x) { return a + x.amount; }, 0);
+  var ti = ingresos.reduce(function (a, e) { return a + (Number(e.amount) || 0); }, 0);
+  var te = egresos.reduce(function (a, e) { return a + (Number(e.amount) || 0); }, 0);
+  var total = tv + tr + tab + ti;
+  var balance = total - te;
+
+  // Costo estimado de las ventas, usando el costo actual del inventario.
+  var costMap = {};
+  (data.inventory || []).forEach(function (i) { costMap[i.id] = Number(i.cost) || 0; });
+  var costoVentas = 0;
+  ventas.forEach(function (s) {
+    (s.items || []).forEach(function (it) {
+      costoVentas += (costMap[it.invId] || 0) * (Number(it.qty) || 0);
+    });
+  });
+
+  var nOrdenes = ventas.length + repsCerradas.length;
+  var ticket = nOrdenes > 0 ? (tv + tr) / nOrdenes : 0;
+
+  return {
+    desde: desde, hasta: hasta,
+    ventas: ventas, reps: repsCerradas, repsTodas: repsTodas, repsNuevas: repsNuevas,
+    ingresos: ingresos, egresos: egresos, abonos: abonos,
+    tv: tv, tr: tr, tab: tab, ti: ti, te: te,
+    total: total, balance: balance,
+    costoVentas: costoVentas,
+    utilidadVentas: tv - costoVentas,
+    nOrdenes: nOrdenes, ticket: ticket,
+    margen: total > 0 ? (balance / total) * 100 : 0
+  };
+}
+
+// Agrupa una lista en top-N por una clave, sumando un valor.
+function _repTop(list, keyFn, valFn, n, subFn) {
+  var map = {};
+  list.forEach(function (x) {
+    var k = (keyFn(x) || "").toString().trim() || "Sin especificar";
+    if (!map[k]) map[k] = { label: k, value: 0, count: 0 };
+    map[k].value += Number(valFn(x)) || 0;
+    map[k].count += 1;
+  });
+  var arr = Object.keys(map).map(function (k) { return map[k]; });
+  arr.sort(function (a, b) { return b.value - a.value; });
+  arr = arr.slice(0, n || 6);
+  if (subFn) arr.forEach(function (it) { it.sub = subFn(it); });
+  return arr;
+}
+
+function _repPct(cur, prev) {
+  if (prev <= 0) return cur > 0 ? 100 : 0;
+  return Math.round(((cur - prev) / prev) * 1000) / 10;
+}
+
+function ReporteView(_props) {
+  var data = _props.data;
+  var isMobile = !!_props.isMobile;
+  var notify = _props.notify;
+  var fmtR = function (n) {
+    return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(n || 0);
+  };
+  var hoy = getHoyColombia();
+
+  // ── Estado ──
+  var _p = useState("30d"), periodo = _p[0], setPeriodo = _p[1];
+  var _cd = useState(_isoAdd(hoy, -14)), cDesde = _cd[0], setCDesde = _cd[1];
+  var _ch = useState(hoy), cHasta = _ch[0], setCHasta = _ch[1];
+  var _cmp = useState(true), comparar = _cmp[0], setComparar = _cmp[1];
+  var _cal = useState(new Date(hoy + "T12:00:00")), calMes = _cal[0], setCalMes = _cal[1];
+  var _tab = useState("resumen"), tab = _tab[0], setTab = _tab[1];
+  var _det = useState("ventas"), detTab = _det[0], setDetTab = _det[1];
+
+  var rango = _repRango(periodo, hoy, cDesde, cHasta);
+  if (rango.desde > rango.hasta) rango = { desde: rango.hasta, hasta: rango.desde };
+  var prev = _repRangoPrevio(rango);
+  var res = _repCalc(data, rango.desde, rango.hasta);
+  var resPrev = _repCalc(data, prev.desde, prev.hasta);
+  var dias = _isoDiff(rango.desde, rango.hasta) + 1;
+  var totalActs = res.ventas.length + res.reps.length + res.ingresos.length + res.egresos.length + res.abonos.length;
+
+  var etiquetaPeriodo = dias === 1
+    ? _fechaLarga(rango.desde)
+    : _fechaCorta(rango.desde) + " — " + _fechaCorta(rango.hasta) + " (" + dias + " días)";
+
+  // ── Serie temporal del rango (y la del período anterior para comparar) ──
+  var buckets = _repBuckets(rango.desde, rango.hasta);
+  var bucketsPrev = _repBuckets(prev.desde, prev.hasta);
+  var serieIngresos = [], serieEgresos = [], serieVentas = [], serieReps = [], serieOrdenes = [];
+  buckets.forEach(function (b) {
+    var c = _repCalc(data, b.desde, b.hasta);
+    serieIngresos.push(c.total);
+    serieEgresos.push(c.te);
+    serieVentas.push(c.tv);
+    serieReps.push(c.tr + c.tab);
+    serieOrdenes.push(c.nOrdenes);
+  });
+  var seriePrevio = bucketsPrev.map(function (b) { return _repCalc(data, b.desde, b.hasta).total; });
+  // Iguala longitudes para poder superponer ambos períodos.
+  while (seriePrevio.length < serieIngresos.length) seriePrevio.push(0);
+  seriePrevio = seriePrevio.slice(0, serieIngresos.length);
+
+  // ── Rankings ──
+  var itemsVendidos = [];
+  res.ventas.forEach(function (s) {
+    (s.items || []).forEach(function (it) {
+      itemsVendidos.push({ name: it.name, qty: Number(it.qty) || 0, total: Number(it.total) || 0 });
+    });
+  });
+  var topProductos = _repTop(itemsVendidos, function (x) { return x.name; }, function (x) { return x.total; }, 6);
+  (function () {
+    var qtyMap = {};
+    itemsVendidos.forEach(function (x) { qtyMap[x.name] = (qtyMap[x.name] || 0) + x.qty; });
+    topProductos.forEach(function (t) { t.sub = (qtyMap[t.label] || 0) + " und"; });
+  })();
+
+  var clientesMix = res.ventas.map(function (s) { return { c: s.customer, v: Number(s.total) || 0 }; })
+    .concat(res.reps.filter(function (r) { return r.paid; }).map(function (r) { return { c: r.customer, v: Number(r.cost) || 0 }; }));
+  var topClientes = _repTop(clientesMix, function (x) { return x.c; }, function (x) { return x.v; }, 6);
+  topClientes.forEach(function (t) { t.sub = t.count + (t.count === 1 ? " orden" : " órdenes"); });
+
+  var topCategorias = _repTop(res.reps, function (r) { return r.category; }, function (r) { return Number(r.cost) || 0; }, 6);
+  topCategorias.forEach(function (t) { t.sub = t.count + " rep."; });
+
+  var topEgresos = _repTop(res.egresos, function (e) { return e.category; }, function (e) { return Number(e.amount) || 0; }, 6);
+  topEgresos.forEach(function (t, i) { t.color = CHART_PALETTE[(i + 3) % CHART_PALETTE.length]; t.sub = t.count + " mov."; });
+
+  var topTecnicos = _repTop(res.reps, function (r) { return r.technician; }, function (r) { return Number(r.cost) || 0; }, 5);
+  topTecnicos.forEach(function (t) { t.sub = t.count + " rep."; });
+
+  var topMarcas = _repTop(res.repsTodas, function (r) { return (r.device || "").split(" ")[0]; }, function (r) { return 1; }, 6);
+  topMarcas.forEach(function (t) { t.sub = ""; });
+
+  // ── Composición y distribuciones (donas) ──
+  var composicion = [
+    { label: "Ventas de mostrador", value: res.tv, color: CHART_PALETTE[0] },
+    { label: "Reparaciones cobradas", value: res.tr, color: CHART_PALETTE[1] },
+    { label: "Abonos recibidos", value: res.tab, color: CHART_PALETTE[2] },
+    { label: "Otros ingresos", value: res.ti, color: CHART_PALETTE[4] }
+  ];
+  var pagos = _repTop(res.ventas, function (s) { return s.payment; }, function (s) { return Number(s.total) || 0; }, 8);
+  pagos.forEach(function (p, i) { p.color = CHART_PALETTE[i % CHART_PALETTE.length]; });
+
+  var estadosDist = STATUSES.map(function (st) {
+    var list = res.repsTodas.filter(function (r) { return r.status === st; });
+    return { label: st, value: list.length, color: S_COLOR[st] || T.muted };
+  }).filter(function (x) { return x.value > 0; });
+
+  // ── Mapa de calor del mes visible en el calendario ──
+  var calY = calMes.getFullYear(), calM = calMes.getMonth();
+  var primerDia = new Date(calY, calM, 1).getDay();
+  var diasEnMes = new Date(calY, calM + 1, 0).getDate();
+  var heatCells = [];
+  for (var bi = 0; bi < primerDia; bi++) heatCells.push({ blank: true, key: "b" + bi });
+  for (var dd = 1; dd <= diasEnMes; dd++) {
+    var iso = calY + "-" + String(calM + 1).padStart(2, "0") + "-" + String(dd).padStart(2, "0");
+    var cDia = _repCalc(data, iso, iso);
+    heatCells.push({
+      key: iso, day: dd, label: _fechaCorta(iso), value: cDia.total,
+      today: iso === hoy,
+      selected: iso >= rango.desde && iso <= rango.hasta
+    });
+  }
+
+  // ── KPIs con comparación ──
+  var kpis = [
+    { l: "Ingresos totales", v: fmtR(res.total), pct: _repPct(res.total, resPrev.total), color: T.green, icon: Wallet, sub: res.nOrdenes + (res.nOrdenes === 1 ? " orden" : " órdenes") },
+    { l: "Ventas", v: fmtR(res.tv), pct: _repPct(res.tv, resPrev.tv), color: CHART_PALETTE[0], icon: ShoppingCart, sub: res.ventas.length + " ticket" + (res.ventas.length === 1 ? "" : "s") },
+    { l: "Reparaciones", v: fmtR(res.tr + res.tab), pct: _repPct(res.tr + res.tab, resPrev.tr + resPrev.tab), color: CHART_PALETTE[1], icon: Wrench, sub: res.reps.length + " cerrada" + (res.reps.length === 1 ? "" : "s") },
+    { l: "Egresos", v: fmtR(res.te), pct: _repPct(res.te, resPrev.te), color: T.red, icon: ArrowDownCircle, invert: true, sub: res.egresos.length + " movimiento" + (res.egresos.length === 1 ? "" : "s") },
+    { l: "Ticket promedio", v: fmtR(Math.round(res.ticket)), pct: _repPct(res.ticket, resPrev.ticket), color: CHART_PALETTE[4], icon: Receipt, sub: "por orden cerrada" },
+    { l: "Balance", v: fmtR(res.balance), pct: _repPct(res.balance, resPrev.balance), color: res.balance >= 0 ? T.green : T.red, icon: Scale, sub: "margen " + res.margen.toFixed(1).replace(".", ",") + "%" }
+  ];
+
+  // ── Exportar CSV ──
+  var exportarCSV = function () {
+    var rows = [];
+    rows.push(["REPORTE", (data.settings && data.settings.storeName) || "ACCE PRO"]);
+    rows.push(["Periodo", rango.desde + " a " + rango.hasta]);
+    rows.push(["Generado", new Date().toLocaleString("es-CO")]);
+    rows.push([]);
+    rows.push(["RESUMEN", "Actual", "Periodo anterior", "Variacion %"]);
+    rows.push(["Ventas", res.tv, resPrev.tv, _repPct(res.tv, resPrev.tv)]);
+    rows.push(["Reparaciones cobradas", res.tr, resPrev.tr, _repPct(res.tr, resPrev.tr)]);
+    rows.push(["Abonos", res.tab, resPrev.tab, _repPct(res.tab, resPrev.tab)]);
+    rows.push(["Otros ingresos", res.ti, resPrev.ti, _repPct(res.ti, resPrev.ti)]);
+    rows.push(["Ingresos totales", res.total, resPrev.total, _repPct(res.total, resPrev.total)]);
+    rows.push(["Egresos", res.te, resPrev.te, _repPct(res.te, resPrev.te)]);
+    rows.push(["Balance", res.balance, resPrev.balance, _repPct(res.balance, resPrev.balance)]);
+    rows.push(["Ticket promedio", Math.round(res.ticket), Math.round(resPrev.ticket), _repPct(res.ticket, resPrev.ticket)]);
+    rows.push([]);
+    rows.push(["EVOLUCION"]);
+    rows.push(["Periodo", "Ingresos", "Egresos", "Ventas", "Reparaciones", "Ordenes"]);
+    buckets.forEach(function (b, i) {
+      rows.push([b.label, serieIngresos[i], serieEgresos[i], serieVentas[i], serieReps[i], serieOrdenes[i]]);
+    });
+    rows.push([]);
+    rows.push(["VENTAS"]);
+    rows.push(["Fecha", "Cliente", "Pago", "Productos", "Descuento", "Total"]);
+    res.ventas.forEach(function (s) {
+      rows.push([s.date, s.customer || "", s.payment || "", (s.items || []).map(function (it) { return it.name + " x" + it.qty; }).join(" | "), s.discount || 0, s.total || 0]);
+    });
+    rows.push([]);
+    rows.push(["REPARACIONES"]);
+    rows.push(["Fecha", "Cliente", "Equipo", "Problema", "Categoria", "Tecnico", "Estado", "Pagado", "Costo"]);
+    res.reps.forEach(function (r) {
+      rows.push([r.deliveryDate || r.date, r.customer || "", r.device || "", r.problem || "", r.category || "", r.technician || "", r.status, r.paid ? "Si" : "No", r.cost || 0]);
+    });
+    rows.push([]);
+    rows.push(["MOVIMIENTOS DE CAJA"]);
+    rows.push(["Fecha", "Tipo", "Categoria", "Descripcion", "Monto"]);
+    res.ingresos.concat(res.egresos).sort(function (a, b) { return (a.date || "").localeCompare(b.date || ""); }).forEach(function (e) {
+      rows.push([e.date, e.type, e.category || "", e.description || "", e.amount || 0]);
+    });
+
+    var ok = _downloadCSV("reporte_" + rango.desde + "_" + rango.hasta + ".csv", rows);
+    if (notify) notify(ok ? "CSV descargado" : "No se pudo generar el CSV", ok ? "success" : "error");
+  };
+
+  // ── Imprimir (informe ejecutivo con comparación y rankings) ──
+  var imprimir = function () {
+    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
+    var esc = _escHtml;
+    var td = "padding:8px 12px;border-bottom:1px solid #eee;font-size:13px";
+    var tHead = function (cols) {
+      return "<tr>" + cols.map(function (h) {
+        return "<th style=\"padding:8px 12px;background:#1a1a1a;color:#fff;text-align:" + (h.right ? "right" : "left") + ";font-size:11px;font-weight:700;text-transform:uppercase\">" + esc(h.l) + "</th>";
+      }).join("") + "</tr>";
+    };
+    var sec = function (t, inner) {
+      return "<div style=\"margin-bottom:24px\"><h3 style=\"font-size:14px;font-weight:800;color:#1a1a1a;margin:0 0 8px;border-left:4px solid #1A1A1A;padding-left:10px\">" + esc(t) + "</h3>" + inner + "</div>";
+    };
+    var empty = function (n) { return "<tr><td colspan=\"" + n + "\" style=\"text-align:center;padding:16px;color:#a1a1a1;font-size:13px\">Sin registros</td></tr>"; };
+    var pctTxt = function (p) {
+      var s = (p > 0 ? "+" : "") + String(p).replace(".", ",") + "%";
+      return "<span style=\"font-size:11px;font-weight:700;color:" + (p >= 0 ? "#166534" : "#991B1B") + "\">" + s + "</span>";
+    };
+
+    var kpiHtml = "<div style=\"display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px\">" +
+      [["Ingresos totales", res.total, resPrev.total], ["Ventas", res.tv, resPrev.tv], ["Reparaciones", res.tr + res.tab, resPrev.tr + resPrev.tab],
+       ["Egresos", res.te, resPrev.te], ["Ticket promedio", Math.round(res.ticket), Math.round(resPrev.ticket)], ["Balance", res.balance, resPrev.balance]]
+      .map(function (x) {
+        return "<div style=\"background:#fafafa;border:1px solid #e8e8e8;border-radius:10px;padding:12px 14px\">" +
+          "<div style=\"font-size:11px;font-weight:700;color:#727272;text-transform:uppercase;margin-bottom:4px\">" + esc(x[0]) + "</div>" +
+          "<div style=\"font-size:17px;font-weight:800;color:#1A1A1A\">" + fmtR(x[1]) + "</div>" +
+          "<div style=\"margin-top:3px\">" + pctTxt(_repPct(x[1], x[2])) + " <span style=\"font-size:10px;color:#a1a1a1\">vs período anterior</span></div>" +
+          "</div>";
+      }).join("") + "</div>";
+
+    var rankHtml = function (titulo, items, esMoneda) {
+      if (!items.length) return "";
+      var max = items[0].value || 1;
+      return "<div style=\"flex:1;min-width:240px\"><div style=\"font-size:12px;font-weight:800;color:#1a1a1a;margin-bottom:8px\">" + esc(titulo) + "</div>" +
+        items.map(function (it, i) {
+          var pct = Math.max(2, (it.value / max) * 100);
+          return "<div style=\"margin-bottom:7px\"><div style=\"display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px\">" +
+            "<span style=\"color:#404040\">" + (i + 1) + ". " + esc(it.label) + "</span>" +
+            "<b>" + (esMoneda ? fmtR(it.value) : it.value) + "</b></div>" +
+            "<div style=\"height:5px;background:#eee;border-radius:3px\"><div style=\"width:" + pct + "%;height:100%;background:#1a1a1a;border-radius:3px\"></div></div></div>";
+        }).join("") + "</div>";
+    };
+
+    var evoHtml = "<table style=\"width:100%;border-collapse:collapse\"><thead>" +
+      tHead([{ l: "Período" }, { l: "Ingresos", right: true }, { l: "Egresos", right: true }, { l: "Órdenes", right: true }]) +
+      "</thead><tbody>" + buckets.map(function (b, i) {
+        return "<tr style=\"background:" + (i % 2 ? "#fafafa" : "#fff") + "\"><td style=\"" + td + "\">" + esc(b.label) + "</td>" +
+          "<td style=\"" + td + ";text-align:right\">" + fmtR(serieIngresos[i]) + "</td>" +
+          "<td style=\"" + td + ";text-align:right\">" + fmtR(serieEgresos[i]) + "</td>" +
+          "<td style=\"" + td + ";text-align:right\">" + serieOrdenes[i] + "</td></tr>";
+      }).join("") + "</tbody></table>";
+
+    var tabV = "<table style=\"width:100%;border-collapse:collapse\"><thead>" + tHead([{ l: "Fecha" }, { l: "Cliente" }, { l: "Productos" }, { l: "Pago" }, { l: "Total", right: true }]) + "</thead><tbody>" +
+      (res.ventas.length ? res.ventas.map(function (s, i) {
+        return "<tr style=\"background:" + (i % 2 ? "#fafafa" : "#fff") + "\"><td style=\"" + td + "\">" + esc(s.date) + "</td><td style=\"" + td + "\">" + esc(s.customer || "—") + "</td><td style=\"" + td + ";font-size:12px\">" + esc((s.items || []).map(function (it) { return it.name + " x" + it.qty; }).join(", ")) + "</td><td style=\"" + td + "\">" + esc(s.payment || "—") + "</td><td style=\"" + td + ";text-align:right;font-weight:700\">" + fmtR(s.total) + "</td></tr>";
+      }).join("") : empty(5)) +
+      "</tbody><tfoot><tr><td colspan=\"4\" style=\"" + td + ";font-weight:700\">Total</td><td style=\"" + td + ";text-align:right;font-weight:800;font-size:15px\">" + fmtR(res.tv) + "</td></tr></tfoot></table>";
+
+    var tabR = "<table style=\"width:100%;border-collapse:collapse\"><thead>" + tHead([{ l: "Equipo" }, { l: "Cliente" }, { l: "Categoría" }, { l: "Estado" }, { l: "Costo", right: true }]) + "</thead><tbody>" +
+      (res.reps.length ? res.reps.map(function (r, i) {
+        return "<tr style=\"background:" + (i % 2 ? "#fafafa" : "#fff") + "\"><td style=\"" + td + "\">" + esc(r.device || "—") + "</td><td style=\"" + td + "\">" + esc(r.customer || "—") + "</td><td style=\"" + td + "\">" + esc(r.category || "—") + "</td><td style=\"" + td + "\">" + esc(r.status) + "</td><td style=\"" + td + ";text-align:right;font-weight:700\">" + fmtR(r.cost) + "</td></tr>";
+      }).join("") : empty(5)) +
+      "</tbody><tfoot><tr><td colspan=\"4\" style=\"" + td + ";font-weight:700\">Cobrado</td><td style=\"" + td + ";text-align:right;font-weight:800;font-size:15px\">" + fmtR(res.tr) + "</td></tr></tfoot></table>";
+
+    var movs = res.ingresos.concat(res.egresos).sort(function (a, b) { return (a.date || "").localeCompare(b.date || ""); });
+    var tabC = "<table style=\"width:100%;border-collapse:collapse\"><thead>" + tHead([{ l: "Fecha" }, { l: "Tipo" }, { l: "Descripción" }, { l: "Categoría" }, { l: "Monto", right: true }]) + "</thead><tbody>" +
+      (movs.length ? movs.map(function (e, i) {
+        return "<tr style=\"background:" + (i % 2 ? "#fafafa" : "#fff") + "\"><td style=\"" + td + "\">" + esc(e.date) + "</td><td style=\"" + td + "\">" + (e.type === "ingreso" ? "Ingreso" : "Egreso") + "</td><td style=\"" + td + "\">" + esc(e.description || "—") + "</td><td style=\"" + td + "\">" + esc(e.category || "—") + "</td><td style=\"" + td + ";text-align:right;font-weight:700\">" + (e.type === "ingreso" ? "+" : "−") + fmtR(e.amount) + "</td></tr>";
+      }).join("") : empty(5)) + "</tbody></table>";
+
+    var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Reporte</title>" +
+      "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;padding:28px;color:#1a1a1a}h1{font-size:22px;font-weight:900;margin-bottom:2px}tfoot td{border-top:2px solid #e8e8e8;background:#fafafa}@media print{.no-print{display:none}}</style></head><body>" +
+      "<h1>" + esc(storeName) + "</h1>" +
+      "<h2 style=\"font-size:14px;color:#727272;font-weight:400;margin-bottom:4px\">Informe de gestión</h2>" +
+      "<p style=\"font-size:12px;color:#a1a1a1;margin-bottom:22px\">" + esc(etiquetaPeriodo) + " · comparado con " + esc(prev.desde + " a " + prev.hasta) + "</p>" +
+      kpiHtml +
+      sec("Evolución del período", evoHtml) +
+      sec("Rankings", "<div style=\"display:flex;gap:26px;flex-wrap:wrap\">" + rankHtml("Top productos", topProductos, true) + rankHtml("Top clientes", topClientes, true) + rankHtml("Top categorías de reparación", topCategorias, true) + "</div>") +
+      sec("Ventas (" + res.ventas.length + ")", tabV) +
+      sec("Reparaciones (" + res.reps.length + ")", tabR) +
+      sec("Movimientos de caja (" + movs.length + ")", tabC) +
+      "<div style=\"background:#ebebeb;border:2px solid #1A1A1A;border-radius:12px;padding:16px 22px;display:flex;justify-content:space-between;align-items:center\">" +
+      "<div><div style=\"font-size:13px;font-weight:700;color:#727272;text-transform:uppercase\">Balance del período</div>" +
+      "<div style=\"font-size:11px;color:#a1a1a1;margin-top:2px\">Ventas + reparaciones + abonos + otros ingresos − egresos</div></div>" +
+      "<div style=\"font-size:26px;font-weight:900\">" + fmtR(res.balance) + "</div></div>" +
+      "<div class=\"no-print\" style=\"text-align:center;margin-top:24px\">" +
+      "<button onclick=\"window.print()\" style=\"padding:12px 36px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:800\">Imprimir</button></div>" +
+      "<p style=\"text-align:center;margin-top:14px;color:#a1a1a1;font-size:11px\">Generado el " + new Date().toLocaleString("es-CO") + "</p></body></html>";
+
+    _printHTML(html);
+  };
+
+  // ── Bloques de UI reutilizables ──
+  var chip = function (id, label) {
+    var on = periodo === id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: id,
+      onClick: function () { setPeriodo(id); },
+      style: {
+        padding: "7px 13px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
+        fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
+        border: "1px solid " + (on ? T.accent : T.border),
+        background: on ? T.accent : T.card,
+        color: on ? "#fff" : T.muted,
+        transition: "all 0.15s"
+      }
+    }, label);
+  };
+
+  var panel = function (titulo, icono, contenido, extra) {
+    return /*#__PURE__*/React.createElement(Card, { style: { padding: 20 } },
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 16 } },
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14.5, color: T.text } },
+          /*#__PURE__*/React.createElement(icono, { size: 15, color: T.muted }), titulo),
+        extra || null
+      ),
+      contenido
+    );
+  };
+
+  var tabBtn = function (id, label, icon, cur, setter) {
+    var on = cur === id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: id,
+      onClick: function () { setter(id); },
+      style: {
+        flex: isMobile ? "1 1 0" : "0 0 auto", minWidth: 0, padding: isMobile ? "9px 6px" : "9px 16px",
+        border: "none", borderRadius: 9, cursor: "pointer",
+        fontFamily: "inherit", fontWeight: 700, fontSize: isMobile ? 12.5 : 13.5,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+        background: on ? T.accent : "transparent", color: on ? "#fff" : T.muted, transition: "all 0.15s"
+      }
+    }, icon ? /*#__PURE__*/React.createElement(icon, { size: 14 }) : null, label);
+  };
+
+  var g2 = isMobile ? "1fr" : "1fr 1fr";
+
+  // ── Pestaña RESUMEN ──
+  var vistaResumen = /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 16 } },
+    // KPIs
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit,minmax(190px,1fr))", gap: 12 } },
+      kpis.map(function (k) {
+        return /*#__PURE__*/React.createElement("div", {
+          key: k.l,
+          style: { background: T.card, border: "1px solid " + T.border, borderRadius: 12, padding: "15px 16px", position: "relative", overflow: "hidden" }
+        },
+          /*#__PURE__*/React.createElement("div", { style: { position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: k.color } }),
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 8 } },
+            /*#__PURE__*/React.createElement(k.icon, { size: 13, color: k.color }), k.l),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: isMobile ? 17 : 19, fontWeight: 800, color: T.text, lineHeight: 1.15, wordBreak: "break-word" } }, k.v),
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, marginTop: 8, flexWrap: "wrap" } },
+            comparar && /*#__PURE__*/React.createElement(DeltaPill, { pct: k.pct, invert: k.invert }),
+            /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: T.muted } }, k.sub))
+        );
+      })
+    ),
+
+    // Evolución
+    panel("Evolución de ingresos", TrendingUp,
+      // Con 1 o 2 cubos (p.ej. "Hoy") una línea no dice nada: se usan barras.
+      buckets.length <= 2
+        ? /*#__PURE__*/React.createElement(ChartBars, {
+            height: isMobile ? 190 : 250,
+            groups: buckets.map(function (b, i) {
+              return { label: b.label, values: { ing: serieIngresos[i], prev: seriePrevio[i], egr: serieEgresos[i] } };
+            }),
+            keys: [{ id: "ing", name: "Ingresos", color: T.green }]
+              .concat(comparar ? [{ id: "prev", name: "Período anterior", color: T.muted }] : [])
+              .concat([{ id: "egr", name: "Egresos", color: T.red }]),
+            tipFmt: fmtR
+          })
+        : /*#__PURE__*/React.createElement(ChartArea, {
+            gid: "evo",
+            height: isMobile ? 190 : 250,
+            labels: buckets.map(function (b) { return b.label; }),
+            series: [
+              { name: "Ingresos", color: T.green, values: serieIngresos }
+            ].concat(comparar ? [{ name: "Período anterior", color: T.muted, values: seriePrevio }] : [])
+              .concat([{ name: "Egresos", color: T.red, values: serieEgresos }]),
+            yFmt: _cShort,
+            tipFmt: fmtR
+          }),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: function () { setComparar(!comparar); },
+        style: {
+          display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, cursor: "pointer",
+          fontFamily: "inherit", fontSize: 11.5, fontWeight: 700,
+          border: "1px solid " + (comparar ? T.accent : T.border),
+          background: comparar ? T.accentDim : "transparent", color: comparar ? T.accent : T.muted
+        }
+      }, /*#__PURE__*/React.createElement(Repeat, { size: 12 }), "Comparar")
+    ),
+
+    // Composición + Ingresos vs egresos
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: g2, gap: 16 } },
+      panel("Composición de ingresos", PieChart,
+        /*#__PURE__*/React.createElement(ChartDonut, {
+          slices: composicion, vFmt: fmtR, size: isMobile ? 150 : 168,
+          centerLabel: "Ingresos", centerValue: fmtR(res.total)
+        })
+      ),
+      panel("Ingresos vs egresos", BarChart3,
+        /*#__PURE__*/React.createElement(ChartBars, {
+          height: isMobile ? 190 : 230,
+          groups: buckets.map(function (b, i) {
+            return { label: b.label, values: { ing: serieIngresos[i], egr: serieEgresos[i] } };
+          }),
+          keys: [{ id: "ing", name: "Ingresos", color: T.green }, { id: "egr", name: "Egresos", color: T.red }],
+          tipFmt: fmtR
+        })
+      )
+    ),
+
+    // Rankings
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: g2, gap: 16 } },
+      panel("Top productos vendidos", ShoppingBag, /*#__PURE__*/React.createElement(ChartRank, { items: topProductos, vFmt: fmtR })),
+      panel("Top clientes", Users, /*#__PURE__*/React.createElement(ChartRank, { items: topClientes, vFmt: fmtR }))
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: g2, gap: 16 } },
+      panel("Reparaciones por categoría", Wrench, /*#__PURE__*/React.createElement(ChartRank, { items: topCategorias, vFmt: fmtR })),
+      panel("Egresos por categoría", ArrowDownCircle, /*#__PURE__*/React.createElement(ChartRank, { items: topEgresos, vFmt: fmtR }))
+    ),
+
+    // Estados + métodos de pago
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: g2, gap: 16 } },
+      panel("Estado de las reparaciones", ClipboardList,
+        /*#__PURE__*/React.createElement(ChartDonut, {
+          slices: estadosDist, vFmt: function (n) { return String(n); }, size: isMobile ? 150 : 168,
+          centerLabel: "órdenes", centerValue: String(res.repsTodas.length)
+        })
+      ),
+      panel("Métodos de pago", CreditCard,
+        /*#__PURE__*/React.createElement(ChartDonut, {
+          slices: pagos, vFmt: fmtR, size: isMobile ? 150 : 168,
+          centerLabel: "en ventas", centerValue: fmtR(res.tv)
+        })
+      )
+    ),
+
+    // Técnicos + marcas
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: g2, gap: 16 } },
+      panel("Producción por técnico", ShieldCheck, /*#__PURE__*/React.createElement(ChartRank, { items: topTecnicos, vFmt: fmtR })),
+      panel("Marcas más atendidas", Smartphone, /*#__PURE__*/React.createElement(ChartRank, { items: topMarcas, vFmt: function (n) { return n + " eq."; } }))
+    ),
+
+    // Rentabilidad estimada
+    panel("Rentabilidad estimada de mostrador", Scale,
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" } },
+        /*#__PURE__*/React.createElement(ChartGauge, {
+          pct: res.tv > 0 ? res.utilidadVentas / res.tv : 0,
+          label: "margen bruto",
+          color: res.utilidadVentas >= 0 ? T.green : T.red,
+          size: isMobile ? 130 : 150
+        }),
+        /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 190, display: "flex", flexDirection: "column", gap: 9 } },
+          [["Ventas brutas", fmtR(res.tv), T.text],
+           ["Costo estimado", "− " + fmtR(res.costoVentas), T.red],
+           ["Utilidad estimada", fmtR(res.utilidadVentas), res.utilidadVentas >= 0 ? T.green : T.red]].map(function (row) {
+            return /*#__PURE__*/React.createElement("div", { key: row[0], style: { display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13 } },
+              /*#__PURE__*/React.createElement("span", { style: { color: T.muted } }, row[0]),
+              /*#__PURE__*/React.createElement("span", { style: { fontWeight: 800, color: row[2] } }, row[1]));
+          }),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginTop: 4, lineHeight: 1.4 } },
+            "Calculado con el costo actual registrado en el inventario para cada producto vendido.")
+        )
+      )
+    ),
+
+    totalActs === 0 && /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: T.card, border: "1px dashed " + T.border, borderRadius: 14, padding: "28px 18px", textAlign: "center", color: T.muted, fontSize: 14 }
+    }, /*#__PURE__*/React.createElement(Inbox, { size: 24 }), "Sin registros para este período")
+  );
+
+  // ── Pestaña CALENDARIO ──
+  var navMes = function (dir) {
+    return /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        var nm = new Date(calMes);
+        nm.setMonth(nm.getMonth() + dir);
+        setCalMes(nm);
+      },
+      style: { background: "none", border: "1px solid " + T.border, borderRadius: 8, cursor: "pointer", color: T.muted, padding: "4px 12px", fontSize: 16, fontFamily: "inherit", lineHeight: 1.3 }
+    }, dir < 0 ? "‹" : "›");
+  };
+  var mesIngresos = heatCells.reduce(function (a, c) { return a + (c.blank ? 0 : c.value); }, 0);
+  var mejorDia = heatCells.filter(function (c) { return !c.blank; }).slice().sort(function (a, b) { return b.value - a.value; })[0];
+
+  var vistaCalendario = /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(320px,440px) 1fr", gap: 16, alignItems: "start" } },
+    panel(_MESES_LARGO[calM] + " " + calY, CalendarDays,
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement(ChartHeat, {
+          cells: heatCells, vFmt: fmtR, color: T.accent,
+          onPick: function (c) {
+            setPeriodo("rango");
+            setCDesde(c.key);
+            setCHasta(c.key);
+          }
+        }),
+        /*#__PURE__*/React.createElement("div", { style: { marginTop: 14, paddingTop: 12, borderTop: "1px solid " + T.border, display: "flex", flexDirection: "column", gap: 7, fontSize: 12.5 } },
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } },
+            /*#__PURE__*/React.createElement("span", { style: { color: T.muted } }, "Ingresos del mes"),
+            /*#__PURE__*/React.createElement("b", { style: { color: T.text } }, fmtR(mesIngresos))),
+          mejorDia && mejorDia.value > 0 && /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } },
+            /*#__PURE__*/React.createElement("span", { style: { color: T.muted } }, "Mejor día"),
+            /*#__PURE__*/React.createElement("b", { style: { color: T.text } }, mejorDia.label + " · " + fmtR(mejorDia.value))),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginTop: 2 } }, "Toca un día para analizarlo en el resumen.")
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6 } }, navMes(-1), navMes(1))
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 16 } },
+      panel("Órdenes por período", ClipboardList,
+        /*#__PURE__*/React.createElement(ChartBars, {
+          height: isMobile ? 180 : 220,
+          groups: buckets.map(function (b, i) { return { label: b.label, values: { o: serieOrdenes[i] } }; }),
+          keys: [{ id: "o", name: "Órdenes cerradas", color: T.accent }],
+          yFmt: function (n) { return String(Math.round(n)); },
+          tipFmt: function (n) { return String(Math.round(n)); }
+        })
+      ),
+      panel("Ventas vs reparaciones", Repeat,
+        /*#__PURE__*/React.createElement(ChartBars, {
+          height: isMobile ? 180 : 220,
+          stacked: true,
+          groups: buckets.map(function (b, i) { return { label: b.label, values: { v: serieVentas[i], r: serieReps[i] } }; }),
+          keys: [{ id: "v", name: "Ventas", color: CHART_PALETTE[0] }, { id: "r", name: "Reparaciones", color: CHART_PALETTE[1] }],
+          tipFmt: fmtR
+        })
+      )
+    )
+  );
+
+  // ── Pestaña DETALLE ──
+  var thS = { padding: "9px 12px", fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "left", borderBottom: "1px solid " + T.border, whiteSpace: "nowrap" };
+  var tdS = { padding: "10px 12px", fontSize: 13, color: T.text, borderBottom: "1px solid " + T.border };
+  var tabla = function (cols, rows) {
+    if (!rows.length) {
+      return /*#__PURE__*/React.createElement("div", {
+        style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "34px 0", color: T.muted, fontSize: 13.5 }
+      }, /*#__PURE__*/React.createElement(Inbox, { size: 16 }), "Sin registros en este período");
+    }
+    return /*#__PURE__*/React.createElement("div", { style: { overflowX: "auto" } },
+      /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", minWidth: 520 } },
+        /*#__PURE__*/React.createElement("thead", null,
+          /*#__PURE__*/React.createElement("tr", null, cols.map(function (c, i) {
+            return /*#__PURE__*/React.createElement("th", { key: i, style: _objectSpread(_objectSpread({}, thS), {}, { textAlign: c.right ? "right" : "left" }) }, c.l);
+          }))),
+        /*#__PURE__*/React.createElement("tbody", null, rows.map(function (r, ri) {
+          return /*#__PURE__*/React.createElement("tr", { key: ri },
+            r.map(function (cell, ci) {
+              return /*#__PURE__*/React.createElement("td", {
+                key: ci,
+                style: _objectSpread(_objectSpread({}, tdS), {}, { textAlign: cols[ci].right ? "right" : "left", fontWeight: cols[ci].right ? 700 : 400 })
+              }, cell);
+            }));
+        }))
+      )
+    );
+  };
+
+  var movimientos = res.ingresos.concat(res.egresos).sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+  var detalles = {
+    ventas: {
+      label: "Ventas", icon: ShoppingCart, n: res.ventas.length,
+      node: tabla([{ l: "Fecha" }, { l: "Cliente" }, { l: "Productos" }, { l: "Pago" }, { l: "Total", right: true }],
+        res.ventas.slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).map(function (s) {
+          return [s.date, s.customer || "—", (s.items || []).map(function (it) { return it.name + " x" + it.qty; }).join(", ") || "—", s.payment || "—", fmtR(s.total)];
+        }))
+    },
+    reparaciones: {
+      label: "Reparaciones", icon: Wrench, n: res.reps.length,
+      node: tabla([{ l: "Fecha" }, { l: "Cliente" }, { l: "Equipo" }, { l: "Categoría" }, { l: "Estado" }, { l: "Costo", right: true }],
+        res.reps.slice().sort(function (a, b) { return ((b.deliveryDate || b.date) || "").localeCompare((a.deliveryDate || a.date) || ""); }).map(function (r) {
+          return [r.deliveryDate || r.date, r.customer || "—", r.device || "—", r.category || "—",
+            /*#__PURE__*/React.createElement(StatusBadge, { status: r.status }), fmtR(r.cost)];
+        }))
+    },
+    caja: {
+      label: "Caja", icon: Wallet, n: movimientos.length,
+      node: tabla([{ l: "Fecha" }, { l: "Tipo" }, { l: "Descripción" }, { l: "Categoría" }, { l: "Monto", right: true }],
+        movimientos.map(function (e) {
+          return [e.date,
+            /*#__PURE__*/React.createElement(Badge, {
+              label: e.type === "ingreso" ? "Ingreso" : "Egreso",
+              color: e.type === "ingreso" ? T.green : T.red,
+              bg: e.type === "ingreso" ? "rgba(22,163,74,0.1)" : "rgba(220,38,38,0.1)"
+            }),
+            e.description || "—", e.category || "—",
+            /*#__PURE__*/React.createElement("span", { style: { color: e.type === "ingreso" ? T.green : T.red } }, (e.type === "ingreso" ? "+" : "−") + fmtR(e.amount))];
+        }))
+    },
+    abonos: {
+      label: "Abonos", icon: Banknote, n: res.abonos.length,
+      node: tabla([{ l: "Fecha" }, { l: "Cliente" }, { l: "Equipo" }, { l: "Monto", right: true }],
+        res.abonos.slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).map(function (a) {
+          return [a.date, (a.repair && a.repair.customer) || "—", (a.repair && a.repair.device) || "—", fmtR(a.amount)];
+        }))
+    }
+  };
+
+  var vistaDetalle = /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexWrap: "wrap", background: T.surface, borderRadius: 12, padding: 4, gap: 4 } },
+      Object.keys(detalles).map(function (k) {
+        var d = detalles[k];
+        return tabBtn(k, d.label + " (" + d.n + ")", d.icon, detTab, setDetTab);
+      })
+    ),
+    /*#__PURE__*/React.createElement(Card, { style: { padding: 0, overflow: "hidden" } }, detalles[detTab].node)
+  );
+
+  // ── Render ──
+  return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 18, width: "100%" } },
+    // Cabecera
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 } },
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("h2", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: isMobile ? 19 : 22, fontWeight: 800, color: T.text, letterSpacing: "-0.03em", margin: 0 } },
+          /*#__PURE__*/React.createElement(BarChart3, { size: 20 }), "Reportes"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 5, textTransform: "capitalize" } }, etiquetaPeriodo)
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+        /*#__PURE__*/React.createElement("button", {
+          onClick: exportarCSV,
+          style: { display: "flex", alignItems: "center", gap: 7, padding: "10px 15px", background: T.card, border: "1px solid " + T.border, borderRadius: 10, cursor: "pointer", color: T.text, fontFamily: "inherit", fontWeight: 700, fontSize: 13 }
+        }, /*#__PURE__*/React.createElement(Download, { size: 15 }), "Exportar CSV"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: imprimir,
+          style: { display: "flex", alignItems: "center", gap: 7, padding: "10px 17px", background: T.accent, border: "none", borderRadius: 10, cursor: "pointer", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 13 }
+        }, /*#__PURE__*/React.createElement(Printer, { size: 15 }), "Imprimir informe")
+      )
+    ),
+
+    // Selector de período
+    /*#__PURE__*/React.createElement(Card, { style: { padding: 14 } },
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } },
+        REP_PERIODOS.map(function (p) { return chip(p.id, p.label); })
+      ),
+      periodo === "rango" && /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14, alignItems: "flex-end" } },
+        [["Desde", cDesde, setCDesde], ["Hasta", cHasta, setCHasta]].map(function (f) {
+          return /*#__PURE__*/React.createElement("div", { key: f[0], style: { flex: "1 1 150px" } },
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 } }, f[0]),
+            /*#__PURE__*/React.createElement("input", {
+              type: "date", value: f[1], max: hoy,
+              onChange: function (e) { f[2](e.target.value); },
+              style: { background: T.surface, border: "1px solid " + T.border, borderRadius: 10, color: T.text, padding: "10px 12px", fontSize: 14, fontFamily: "inherit", width: "100%", outline: "none", fontWeight: 600 }
+            }));
+        })
+      )
+    ),
+
+    // Pestañas
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexWrap: "wrap", background: T.surface, borderRadius: 12, padding: 4, gap: 4 } },
+      tabBtn("resumen", "Resumen", BarChart3, tab, setTab),
+      tabBtn("calendario", "Calendario", CalendarDays, tab, setTab),
+      tabBtn("detalle", "Detalle", ClipboardList, tab, setTab)
+    ),
+
+    tab === "resumen" && vistaResumen,
+    tab === "calendario" && vistaCalendario,
+    tab === "detalle" && vistaDetalle
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── PEDIDOS A PROVEEDOR → RECEPCIÓN AUTOMÁTICA EN INVENTARIO ─────────────
+// Dos caminos que terminan en la misma pantalla de confirmación:
+//   1. Pedido registrado: lo que le enviaste al proveedor por WhatsApp.
+//   2. Factura leída por IA: foto o PDF que manda el proveedor.
+// ═══════════════════════════════════════════════════════════════════════════
+
+var PED_STATUS = {
+  enviado:   { label: "Enviado",   color: "#D97706", bg: "rgba(217,119,6,0.12)" },
+  recibido:  { label: "Recibido",  color: "#16A34A", bg: "rgba(22,163,74,0.12)" },
+  cancelado: { label: "Cancelado", color: "#DC2626", bg: "rgba(220,38,38,0.12)" }
+};
+
+// Interpreta un numero que puede venir como texto de una factura.
+// En Colombia "92.000" son noventa y dos mil, no 92: Number() se equivocaria.
+function _numCO(v) {
+  if (typeof v === "number") return isFinite(v) ? v : 0;
+  var s = String(v == null ? "" : v).replace(/[^0-9.,-]/g, "").trim();
+  if (!s) return 0;
+  var tienePunto = s.indexOf(".") >= 0, tieneComa = s.indexOf(",") >= 0;
+  if (tienePunto && tieneComa) {
+    // El ultimo separador que aparece es el decimal.
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) s = s.replace(/\./g, "").replace(",", ".");
+    else s = s.replace(/,/g, "");
+  } else if (tienePunto) {
+    // Grupos exactos de 3 => separador de miles.
+    if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+  } else if (tieneComa) {
+    if (/^-?\d{1,3}(,\d{3})+$/.test(s)) s = s.replace(/,/g, "");
+    else s = s.replace(",", ".");
+  }
+  var n = Number(s);
+  return isFinite(n) ? n : 0;
+}
+
+function _pedTotal(items) {
+  return (items || []).reduce(function (a, l) {
+    return a + (Number(l.qty) || 0) * (Number(l.cost) || 0);
+  }, 0);
+}
+
+// Normaliza un nombre para poder compararlo (sin tildes, sin signos).
+function _normName(s) {
+  return String(s || "").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ").trim();
+}
+
+// Busca en el inventario el repuesto que corresponde a un nombre de factura.
+// Primero exacto; si no, una coincidencia parcial suficientemente parecida.
+function _matchInv(name, inventory) {
+  var n = _normName(name);
+  if (!n || n.length < 3) return null;
+  var exact = null, partial = null;
+  (inventory || []).forEach(function (i) {
+    var m = _normName(i.name);
+    if (!m) return;
+    if (m === n) { if (!exact) exact = i; return; }
+    if (!partial) {
+      var largo = m.length >= n.length ? m : n;
+      var corto = m.length >= n.length ? n : m;
+      if (corto.length >= 5 && largo.indexOf(corto) >= 0 && corto.length / largo.length >= 0.6) partial = i;
+    }
+  });
+  return exact || partial;
+}
+
+// Aplica una recepción al inventario. Suma unidades si el repuesto ya existe
+// (actualizando el costo a esta compra) y lo crea si es nuevo.
+// El precio de venta NO se toca: se deja en 0 para los nuevos.
+function _aplicarRecepcion(data, lineas, opts) {
+  opts = opts || {};
+  var inventory = (data.inventory || []).slice();
+  var creados = [], sumados = [];
+
+  (lineas || []).forEach(function (l) {
+    var nombre = String(l.name || "").trim();
+    var qty = Number(l.qty) || 0;
+    var cost = Number(l.cost) || 0;
+    if (!nombre || qty <= 0) return;
+
+    var idx = l.matchId ? inventory.findIndex(function (i) { return i.id === l.matchId; }) : -1;
+    if (idx >= 0) {
+      var it = inventory[idx];
+      inventory[idx] = _objectSpread(_objectSpread({}, it), {}, {
+        qty: (Number(it.qty) || 0) + qty,
+        cost: cost > 0 ? cost : (Number(it.cost) || 0)
+      });
+      sumados.push(nombre);
+    } else {
+      inventory.push({
+        id: uid(),
+        name: nombre,
+        category: l.category || "Otros",
+        brand: l.brand || "",
+        qty: qty,
+        minQty: 1,
+        cost: cost,
+        price: 0
+      });
+      creados.push(nombre);
+    }
+  });
+
+  var nd = _objectSpread(_objectSpread({}, data), {}, { inventory: inventory });
+  var total = _pedTotal(lineas);
+
+  if (opts.registrarEgreso && total > 0) {
+    var cf = (data.cashflow || []).slice();
+    cf.unshift({
+      id: "egr_" + Date.now(),
+      type: "egreso",
+      amount: total,
+      description: opts.descripcion || "Compra de inventario",
+      category: "Compra inventario",
+      date: opts.fecha || getHoyColombia(),
+      notes: opts.notas || ""
+    });
+    nd.cashflow = cf;
+  }
+
+  return { data: nd, creados: creados, sumados: sumados, total: total };
+}
+
+// ─── Lectura de factura con Gemini (reutiliza la clave del chat IA) ───────
+var _IA_KEY_STORE = "acce_ai_key";
+
+var _FACTURA_PROMPT =
+  "Eres un lector de facturas de compra de un taller de reparacion de celulares. " +
+  "Extrae UNICAMENTE las lineas de producto/repuesto de la factura de la imagen. " +
+  "Devuelve SOLO un objeto JSON con esta forma exacta: " +
+  '{"proveedor":"","fecha":"","items":[{"name":"","qty":1,"cost":0}]}. ' +
+  "Reglas: 'name' es la descripcion del repuesto tal como aparece; " +
+  "'qty' es la cantidad de unidades (numero entero); " +
+  "'cost' es el precio UNITARIO de compra como numero entero, sin puntos, comas ni simbolos de moneda; " +
+  "si la factura solo muestra el valor total de la linea, divide ese total entre la cantidad; " +
+  "'fecha' en formato YYYY-MM-DD si la ves, si no cadena vacia. " +
+  "IGNORA por completo fletes, impuestos, IVA, descuentos globales, subtotales y totales: solo productos. " +
+  "Si un dato no se puede leer usa 0 o cadena vacia. NO inventes productos que no esten en la imagen.";
+
+function _leerFacturaIA(file) {
+  return new Promise(function (resolve, reject) {
+    var apiKey = null;
+    try { apiKey = localStorage.getItem(_IA_KEY_STORE); } catch (e) {}
+    if (!apiKey) { reject(new Error("SIN_CLAVE")); return; }
+
+    var esImagen = String(file.type || "").indexOf("image/") === 0;
+    var prep = esImagen
+      ? _compressImageFile(file, 1600, 0.82).then(function (b) { return { blob: b, mime: "image/jpeg" }; })
+      : Promise.resolve({ blob: file, mime: file.type || "application/pdf" });
+
+    prep.then(function (p) {
+      if (p.blob.size > 9 * 1024 * 1024) {
+        throw new Error("El archivo pesa mas de 9 MB. Toma la foto con menos resolucion o usa un PDF mas liviano.");
+      }
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error("No se pudo leer el archivo.")); };
+      reader.onload = function () {
+        var b64 = String(reader.result).split(",")[1];
+        fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              role: "user",
+              parts: [
+                { inline_data: { mime_type: p.mime, data: b64 } },
+                { text: _FACTURA_PROMPT }
+              ]
+            }],
+            generationConfig: {
+              temperature: 0,
+              maxOutputTokens: 4096,
+              responseMimeType: "application/json"
+            }
+          })
+        })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (e) { throw e; });
+          return res.json();
+        })
+        .then(function (json) {
+          var txt = "";
+          try { txt = json.candidates[0].content.parts[0].text; } catch (e) {}
+          if (!txt) throw new Error("La IA no devolvio nada legible. Intenta con una foto mas nitida.");
+          // Por si responde envuelto en ```json ... ```
+          txt = txt.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "").trim();
+          var parsed;
+          try { parsed = JSON.parse(txt); }
+          catch (e) { throw new Error("No se pudo interpretar la respuesta de la IA. Intenta de nuevo."); }
+          var items = (parsed && parsed.items) || [];
+          if (!items.length) throw new Error("No se reconocio ningun producto en la factura.");
+          resolve({
+            proveedor: (parsed.proveedor || "").toString().trim(),
+            fecha: (parsed.fecha || "").toString().trim(),
+            items: items.map(function (it) {
+              return {
+                name: String(it.name || "").trim(),
+                qty: Math.max(0, Math.round(_numCO(it.qty))),
+                cost: Math.max(0, Math.round(_numCO(it.cost)))
+              };
+            }).filter(function (it) { return it.name && it.qty > 0; })
+          });
+        })
+        .catch(function (err) {
+          if (err && err.error && err.error.message) reject(new Error(err.error.message));
+          else reject(err instanceof Error ? err : new Error("Error al conectar con la IA."));
+        });
+      };
+      reader.readAsDataURL(p.blob);
+    }).catch(reject);
+  });
+}
 
 // ─── Proveedores View ────────────────────────────────────────────────────────
 var ACC_TYPES = ["Nequi","Daviplata","Bancolombia Ahorros","Bancolombia Corriente","Davivienda Ahorros","Banco de Bogotá","Banco Popular","AV Villas","Efecty","Otro"];
@@ -9924,6 +11522,11 @@ function ProveedoresView(_pRef) {
   var _ce1 = useState(null), _ce1a = _slicedToArray(_ce1, 2), courierEditId = _ce1a[0], setCourierEditId = _ce1a[1];
   var _sf1 = useState({ tipo: "devolucion", providerId: "", customerId: "", destinatario: "", telefono: "", direccion: "", contenido: "", notas: "" }),
     _sf1a = _slicedToArray(_sf1, 2), shipForm = _sf1a[0], setShipForm = _sf1a[1];
+  // ── Pedidos estructurados + recepción en inventario ──
+  var _prc = useState(null), _prca = _slicedToArray(_prc, 2), recepcion = _prca[0], setRecepcion = _prca[1];
+  var _pnl = useState({ name: "", qty: "1", cost: "" }), _pnla = _slicedToArray(_pnl, 2), newLine = _pnla[0], setNewLine = _pnla[1];
+  var _pia = useState(false), _piaa = _slicedToArray(_pia, 2), iaLeyendo = _piaa[0], setIaLeyendo = _piaa[1];
+  var facturaRef = useRef(null);
 
   useEffect(function() { try { localStorage.setItem("acce_order_drafts", JSON.stringify(orderDrafts)); } catch(e) {} }, [orderDrafts]);
 
@@ -9971,16 +11574,184 @@ function ProveedoresView(_pRef) {
     save(Object.assign({}, data, { providers: providers.filter(function(p) { return p.id !== id; }) }));
     notify("Proveedor eliminado");
   };
-  var openOrder = function(p) { setModal({ mode: "order", provider: p }); };
+  // Los borradores viejos eran texto plano; ahora son {notas, items}.
+  var _draftOf = function (pid) {
+    var d = orderDrafts[pid];
+    if (typeof d === "string") return { notas: d, items: [] };
+    return { notas: (d && d.notas) || "", items: (d && d.items) || [] };
+  };
+  var _setDraft = function (pid, patch) {
+    setOrderDrafts(function (all) {
+      var cur = all[pid];
+      cur = (typeof cur === "string") ? { notas: cur, items: [] } : _objectSpread({ notas: "", items: [] }, cur || {});
+      var nd = _objectSpread({}, all);
+      nd[pid] = _objectSpread(_objectSpread({}, cur), patch);
+      return nd;
+    });
+  };
+  var addLine = function (pid) {
+    var n = String(newLine.name || "").trim();
+    var q = Number(newLine.qty) || 0;
+    if (!n) { notify("Escribe el nombre del repuesto", "error"); return; }
+    if (q <= 0) { notify("La cantidad debe ser mayor a 0", "error"); return; }
+    _setDraft(pid, { items: _draftOf(pid).items.concat([{ id: uid(), name: n, qty: q, cost: Number(newLine.cost) || 0 }]) });
+    setNewLine({ name: "", qty: "1", cost: "" });
+  };
+  var removeLine = function (pid, lid) {
+    _setDraft(pid, { items: _draftOf(pid).items.filter(function (l) { return l.id !== lid; }) });
+  };
+
+  // ── Recepción: convierte líneas en movimientos de inventario ──
+  var _lineaRecepcion = function (l) {
+    var m = _matchInv(l.name, data.inventory || []);
+    return {
+      id: uid(), name: l.name, qty: String(l.qty || ""), cost: String(l.cost || ""),
+      matchId: m ? m.id : null, matchName: m ? m.name : "", matchQty: m ? (Number(m.qty) || 0) : 0
+    };
+  };
+  var abrirRecepcionPedido = function (ped) {
+    setRecepcion({
+      pedidoId: ped.id,
+      titulo: "Recibir pedido de " + ped.providerName,
+      descripcion: "Compra a " + ped.providerName,
+      fecha: getHoyColombia(),
+      registrarEgreso: true,
+      lineas: (ped.items || []).map(_lineaRecepcion)
+    });
+  };
+  var elegirFactura = function () { if (facturaRef.current) facturaRef.current.click(); };
+  var onFacturaFile = function (e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setIaLeyendo(true);
+    _leerFacturaIA(file).then(function (r) {
+      setIaLeyendo(false);
+      setRecepcion({
+        pedidoId: null,
+        titulo: "Factura le\u00EDda" + (r.proveedor ? " \u2014 " + r.proveedor : ""),
+        descripcion: "Compra de inventario" + (r.proveedor ? " \u2014 " + r.proveedor : ""),
+        fecha: /^\d{4}-\d{2}-\d{2}$/.test(r.fecha) ? r.fecha : getHoyColombia(),
+        registrarEgreso: true,
+        lineas: r.items.map(_lineaRecepcion)
+      });
+      notify(r.items.length + " productos le\u00EDdos de la factura");
+    }).catch(function (err) {
+      setIaLeyendo(false);
+      if (err && err.message === "SIN_CLAVE") {
+        notify("Primero configura tu clave de IA en el chat (bot\u00F3n flotante)", "error");
+        return;
+      }
+      notify((err && err.message) || "No se pudo leer la factura", "error");
+    });
+  };
+  var setLinea = function (lid, k, v) {
+    setRecepcion(function (rc) {
+      if (!rc) return rc;
+      return _objectSpread(_objectSpread({}, rc), {}, {
+        lineas: rc.lineas.map(function (l) {
+          if (l.id !== lid) return l;
+          var nl = _objectSpread(_objectSpread({}, l), _defineProperty({}, k, v));
+          if (k === "name") {
+            var m = _matchInv(v, data.inventory || []);
+            nl.matchId = m ? m.id : null;
+            nl.matchName = m ? m.name : "";
+            nl.matchQty = m ? (Number(m.qty) || 0) : 0;
+          }
+          return nl;
+        })
+      });
+    });
+  };
+  var quitarLineaRec = function (lid) {
+    setRecepcion(function (rc) {
+      return rc ? _objectSpread(_objectSpread({}, rc), {}, { lineas: rc.lineas.filter(function (l) { return l.id !== lid; }) }) : rc;
+    });
+  };
+  var confirmarRecepcion = function () {
+    var lineas = (recepcion.lineas || []).filter(function (l) {
+      return String(l.name || "").trim() && (Number(l.qty) || 0) > 0;
+    });
+    if (!lineas.length) { notify("No hay l\u00EDneas v\u00E1lidas para registrar", "error"); return; }
+    var r = _aplicarRecepcion(data, lineas, {
+      registrarEgreso: recepcion.registrarEgreso,
+      descripcion: recepcion.descripcion,
+      fecha: recepcion.fecha || getHoyColombia()
+    });
+    var nd = r.data;
+    if (recepcion.pedidoId) {
+      nd = _objectSpread(_objectSpread({}, nd), {}, {
+        pedidos: (nd.pedidos || []).map(function (p) {
+          return p.id === recepcion.pedidoId
+            ? _objectSpread(_objectSpread({}, p), {}, { status: "recibido", receivedDate: getHoyColombia() })
+            : p;
+        })
+      });
+    }
+    save(nd);
+    setRecepcion(null);
+    notify(r.sumados.length + " actualizados \u00B7 " + r.creados.length + " nuevos en inventario");
+  };
+  var cambiarEstadoPedido = function (id, status) {
+    save(_objectSpread(_objectSpread({}, data), {}, {
+      pedidos: (data.pedidos || []).map(function (p) {
+        return p.id === id ? _objectSpread(_objectSpread({}, p), {}, { status: status }) : p;
+      })
+    }));
+    notify(status === "cancelado" ? "Pedido cancelado" : "Pedido actualizado");
+  };
+  var borrarPedido = function (id) {
+    if (!confirm("\u00BFEliminar este pedido del historial?")) return;
+    save(_objectSpread(_objectSpread({}, data), {}, {
+      pedidos: (data.pedidos || []).filter(function (p) { return p.id !== id; })
+    }));
+    notify("Pedido eliminado");
+  };
+  var reenviarPedido = function (ped) {
+    var prov = providers.find(function (p) { return p.id === ped.providerId; });
+    if (!prov) { notify("Ese proveedor ya no existe", "error"); return; }
+    window.open("https://wa.me/" + prov.whatsapp + "?text=" + encodeURIComponent(_pedidoMensaje(ped)), "_blank");
+  };
+  var _pedidoMensaje = function (ped) {
+    var storeName = ((data.settings && data.settings.storeName) || "GLOBALACCE").toUpperCase();
+    var cuerpo = (ped.items || []).map(function (l, i) {
+      var linea = (i + 1) + ". " + l.name + "  x" + l.qty;
+      if ((Number(l.cost) || 0) > 0) linea += "   (" + fmt(l.cost) + " c/u)";
+      return linea;
+    }).join("\n");
+    var msg = "*PEDIDO - " + storeName + "*\n\n" + cuerpo;
+    if ((Number(ped.total) || 0) > 0) msg += "\n\nTotal estimado: " + fmt(ped.total);
+    if (ped.notes) msg += "\n\nNotas: " + ped.notes;
+    return msg + "\n\n_Enviado desde ACCE PRO_";
+  };
+
+  var openOrder = function(p) { setNewLine({ name: "", qty: "1", cost: "" }); setModal({ mode: "order", provider: p }); };
   var sendOrder = function() {
     var prov = modal.provider;
-    var draft = (orderDrafts[prov.id] || "").trim();
-    if (!draft) { notify("Escribe lo que necesitas pedir"); return; }
+    var d = _draftOf(prov.id);
+    var items = (d.items || []).filter(function (l) {
+      return String(l.name || "").trim() && (Number(l.qty) || 0) > 0;
+    });
+    if (!items.length) { notify("Agrega al menos un producto al pedido", "error"); return; }
+    var pedido = {
+      id: uid(),
+      providerId: prov.id,
+      providerName: prov.name,
+      date: getHoyColombia(),
+      status: "enviado",
+      items: items.map(function (l) {
+        return { id: l.id || uid(), name: String(l.name).trim(), qty: Number(l.qty) || 0, cost: Number(l.cost) || 0 };
+      }),
+      notes: (d.notas || "").trim(),
+      total: _pedTotal(items)
+    };
     // No se incluyen cuentas bancarias ni dirección en el mensaje — son datos internos del taller.
-    var msg = "*PEDIDO - GLOBALACCE*\n\n" + draft + "\n\n_Enviado desde ACCE PRO_";
-    window.open("https://wa.me/" + prov.whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
-    setOrderDrafts(function(d) { var nd = Object.assign({}, d); delete nd[prov.id]; return nd; });
+    save(_objectSpread(_objectSpread({}, data), {}, { pedidos: [pedido].concat(data.pedidos || []) }));
+    window.open("https://wa.me/" + prov.whatsapp + "?text=" + encodeURIComponent(_pedidoMensaje(pedido)), "_blank");
+    setOrderDrafts(function(d2) { var nd = Object.assign({}, d2); delete nd[prov.id]; return nd; });
     setModal(null);
+    setSubView("pedidos");
+    notify("Pedido enviado y registrado");
   };
 
   // ── Devoluciones a proveedor ──────────────────────────────
@@ -10079,7 +11850,7 @@ function ProveedoresView(_pRef) {
   return /*#__PURE__*/React.createElement("div", null,
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 } },
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 4, background: T.surface, border: "1px solid " + T.border, borderRadius: 10, padding: 4 } },
-        [{ id: "proveedores", label: "Proveedores", icon: Package }, { id: "encomiendas", label: "Encomiendas", icon: Send }].map(function(tab) {
+        [{ id: "proveedores", label: "Proveedores", icon: Package }, { id: "pedidos", label: "Pedidos", icon: ClipboardList }, { id: "encomiendas", label: "Encomiendas", icon: Send }].map(function(tab) {
           var active = subView === tab.id;
           return /*#__PURE__*/React.createElement("button", {
             key: tab.id,
@@ -10094,7 +11865,22 @@ function ProveedoresView(_pRef) {
       ),
       subView === "proveedores"
         ? /*#__PURE__*/React.createElement(Btn, { icon: /*#__PURE__*/React.createElement(Plus, { size: 15 }), onClick: openAdd }, "Añadir Proveedor")
+        : subView === "pedidos"
+        ? /*#__PURE__*/React.createElement(Btn, {
+            icon: /*#__PURE__*/React.createElement(iaLeyendo ? Loader2 : Sparkles, { size: 15 }),
+            onClick: elegirFactura, disabled: iaLeyendo
+          }, iaLeyendo ? "Leyendo factura..." : "Leer factura con IA")
         : /*#__PURE__*/React.createElement(Btn, { icon: /*#__PURE__*/React.createElement(Plus, { size: 15 }), onClick: openAddCourier }, "Añadir Empresa")
+    ),
+    /*#__PURE__*/React.createElement("input", {
+      ref: facturaRef, type: "file", accept: "image/*,application/pdf",
+      onChange: onFacturaFile, style: { display: "none" }
+    }),
+    // Autocompletado con lo que ya existe en inventario (lo usan pedido y recepción)
+    /*#__PURE__*/React.createElement("datalist", { id: "_ped_inv_list" },
+      (data.inventory || []).map(function (i) {
+        return /*#__PURE__*/React.createElement("option", { key: i.id, value: i.name });
+      })
     ),
     subView === "proveedores" && providers.length === 0 && /*#__PURE__*/React.createElement("div", {
       style: { textAlign: "center", padding: "48px 24px", color: T.muted, background: T.surface, borderRadius: 14, border: "1px dashed " + T.border }
@@ -10161,6 +11947,79 @@ function ProveedoresView(_pRef) {
     ),
 
     // ── Vista de Encomiendas ──────────────────────────────
+    subView === "pedidos" && (function () {
+      var lista = (data.pedidos || []).slice().sort(function (a, b) {
+        return (b.date || "").localeCompare(a.date || "") || (b.id || "").localeCompare(a.id || "");
+      });
+      if (!lista.length) {
+        return /*#__PURE__*/React.createElement("div", {
+          style: { textAlign: "center", padding: "48px 24px", color: T.muted, background: T.surface, borderRadius: 14, border: "1px dashed " + T.border }
+        },
+          /*#__PURE__*/React.createElement(ClipboardList, { size: 40, style: { marginBottom: 12, opacity: 0.6 } }),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 600, marginBottom: 6 } }, "Sin pedidos registrados"),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, maxWidth: 420, margin: "0 auto", lineHeight: 1.5 } },
+            "Env\u00EDale un pedido a un proveedor desde la pesta\u00F1a Proveedores y queda registrado aqu\u00ED. Cuando llegue la mercanc\u00EDa, con un bot\u00F3n la sumas al inventario.")
+        );
+      }
+      return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+        lista.map(function (ped) {
+          var st = PED_STATUS[ped.status] || PED_STATUS.enviado;
+          var nItems = (ped.items || []).length;
+          return /*#__PURE__*/React.createElement("div", {
+            key: ped.id,
+            style: { background: T.surface, border: "1px solid " + T.border, borderRadius: 14, padding: "16px 18px" }
+          },
+            /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" } },
+              /*#__PURE__*/React.createElement("div", { style: { minWidth: 0 } },
+                /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+                  /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 15, color: T.text } }, ped.providerName || "Proveedor"),
+                  /*#__PURE__*/React.createElement(Badge, { label: st.label, color: st.color, bg: st.bg })
+                ),
+                /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, marginTop: 4 } },
+                  ped.date + " \u00B7 " + nItems + (nItems === 1 ? " producto" : " productos") +
+                  ((Number(ped.total) || 0) > 0 ? " \u00B7 " + fmt(ped.total) : "") +
+                  (ped.receivedDate ? " \u00B7 recibido " + ped.receivedDate : "")
+                )
+              ),
+              /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+                ped.status === "enviado" && /*#__PURE__*/React.createElement(Btn, {
+                  small: true, icon: /*#__PURE__*/React.createElement(Check, { size: 13 }),
+                  onClick: function () { abrirRecepcionPedido(ped); }
+                }, "Recibir"),
+                ped.status === "enviado" && /*#__PURE__*/React.createElement(Btn, {
+                  small: true, variant: "ghost", icon: /*#__PURE__*/React.createElement(Send, { size: 13 }),
+                  onClick: function () { reenviarPedido(ped); }
+                }, "Reenviar"),
+                ped.status === "enviado" && /*#__PURE__*/React.createElement(Btn, {
+                  small: true, variant: "ghost", icon: /*#__PURE__*/React.createElement(XCircle, { size: 13 }),
+                  onClick: function () { cambiarEstadoPedido(ped.id, "cancelado"); }
+                }, "Cancelar"),
+                ped.status !== "enviado" && /*#__PURE__*/React.createElement(Btn, {
+                  small: true, variant: "ghost", icon: /*#__PURE__*/React.createElement(Trash2, { size: 13 }),
+                  onClick: function () { borrarPedido(ped.id); }
+                }, "Eliminar")
+              )
+            ),
+            nItems > 0 && /*#__PURE__*/React.createElement("div", {
+              style: { marginTop: 12, paddingTop: 11, borderTop: "1px solid " + T.border, display: "flex", flexDirection: "column", gap: 5 }
+            },
+              (ped.items || []).map(function (l, li) {
+                return /*#__PURE__*/React.createElement("div", {
+                  key: l.id || li,
+                  style: { display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13, color: T.text }
+                },
+                  /*#__PURE__*/React.createElement("span", { style: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, l.name),
+                  /*#__PURE__*/React.createElement("span", { style: { color: T.muted, flexShrink: 0 } },
+                    "x" + l.qty + ((Number(l.cost) || 0) > 0 ? "  \u00B7  " + fmt(l.cost) : ""))
+                );
+              }),
+              ped.notes && /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, fontStyle: "italic", marginTop: 4 } }, ped.notes)
+            )
+          );
+        })
+      );
+    })(),
+
     subView === "encomiendas" && couriers.length === 0 && /*#__PURE__*/React.createElement("div", {
       style: { textAlign: "center", padding: "48px 24px", color: T.muted, background: T.surface, borderRadius: 14, border: "1px dashed " + T.border }
     },
@@ -10298,21 +12157,237 @@ function ProveedoresView(_pRef) {
             );
           })
         ),
-        /*#__PURE__*/React.createElement("textarea", {
-          value: orderDrafts[modal.provider.id] || "",
-          onChange: function(e) { var pid = modal.provider.id; setOrderDrafts(function(d) { return Object.assign({}, d, { [pid]: e.target.value }); }); },
-          placeholder: "Escribe aquí los productos que necesitas pedir...\n\nEjemplo:\n- 2 pantallas iPhone 11 originales\n- 1 batería Samsung A32\n- 3 flex de carga tipo C",
-          style: {
-            width: "100%", minHeight: 180, padding: "12px 14px", background: T.bg,
-            border: "1px solid " + T.border, borderRadius: 10, color: T.text,
-            fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", outline: "none"
-          }
-        }),
-        /*#__PURE__*/React.createElement("button", {
-          onClick: sendOrder,
-          style: { background: "#1A1A1A", color: "#fff", border: "none", borderRadius: 10, padding: "12px 0", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }
-        }, /*#__PURE__*/React.createElement(Send, { size: 14 }), "Enviar por WhatsApp")
+        (function () {
+          var pid = modal.provider.id;
+          var draft = _draftOf(pid);
+          var total = _pedTotal(draft.items);
+          var numStyle = _objectSpread(_objectSpread({}, inputStyle), {}, { width: 78, textAlign: "right" });
+          return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" } }, "Productos del pedido"),
+
+            draft.items.length > 0 && /*#__PURE__*/React.createElement("div", {
+              style: { display: "flex", flexDirection: "column", gap: 6, background: T.bg, border: "1px solid " + T.border, borderRadius: 10, padding: 10 }
+            },
+              draft.items.map(function (l) {
+                return /*#__PURE__*/React.createElement("div", {
+                  key: l.id,
+                  style: { display: "flex", alignItems: "center", gap: 10, fontSize: 13 }
+                },
+                  /*#__PURE__*/React.createElement("span", { style: { flex: 1, minWidth: 0, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, l.name),
+                  /*#__PURE__*/React.createElement("span", { style: { color: T.muted, flexShrink: 0 } }, "x" + l.qty),
+                  /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, color: T.text, flexShrink: 0, minWidth: 72, textAlign: "right" } },
+                    (Number(l.cost) || 0) > 0 ? fmt((Number(l.cost) || 0) * (Number(l.qty) || 0)) : "\u2014"),
+                  /*#__PURE__*/React.createElement("button", {
+                    onClick: function () { removeLine(pid, l.id); },
+                    title: "Quitar",
+                    style: { background: "none", border: "none", cursor: "pointer", color: T.muted, padding: 2, display: "flex", flexShrink: 0 }
+                  }, /*#__PURE__*/React.createElement(X, { size: 14 }))
+                );
+              }),
+              total > 0 && /*#__PURE__*/React.createElement("div", {
+                style: { display: "flex", justifyContent: "space-between", borderTop: "1px solid " + T.border, paddingTop: 8, marginTop: 2, fontSize: 13 }
+              },
+                /*#__PURE__*/React.createElement("span", { style: { color: T.muted, fontWeight: 600 } }, "Total estimado"),
+                /*#__PURE__*/React.createElement("span", { style: { fontWeight: 800, color: T.text } }, fmt(total))
+              )
+            ),
+
+            // Fila para agregar
+            /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" } },
+              /*#__PURE__*/React.createElement("div", { style: { flex: "1 1 160px", minWidth: 0 } },
+                /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 600 } }, "Repuesto"),
+                /*#__PURE__*/React.createElement("input", {
+                  list: "_ped_inv_list", value: newLine.name, placeholder: "Pantalla iPhone 11",
+                  onChange: function (e) { var v = e.target.value; setNewLine(function (n) { return _objectSpread(_objectSpread({}, n), {}, { name: v }); }); },
+                  onKeyDown: function (e) { if (e.key === "Enter") addLine(pid); },
+                  style: inputStyle
+                })
+              ),
+              /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 600 } }, "Cant."),
+                /*#__PURE__*/React.createElement("input", {
+                  type: "number", min: "1", value: newLine.qty,
+                  onChange: function (e) { var v = e.target.value; setNewLine(function (n) { return _objectSpread(_objectSpread({}, n), {}, { qty: v }); }); },
+                  onKeyDown: function (e) { if (e.key === "Enter") addLine(pid); },
+                  style: _objectSpread(_objectSpread({}, numStyle), {}, { width: 66 })
+                })
+              ),
+              /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 600 } }, "Precio compra"),
+                /*#__PURE__*/React.createElement("input", {
+                  type: "number", min: "0", value: newLine.cost, placeholder: "0",
+                  onChange: function (e) { var v = e.target.value; setNewLine(function (n) { return _objectSpread(_objectSpread({}, n), {}, { cost: v }); }); },
+                  onKeyDown: function (e) { if (e.key === "Enter") addLine(pid); },
+                  style: numStyle
+                })
+              ),
+              /*#__PURE__*/React.createElement(Btn, {
+                icon: /*#__PURE__*/React.createElement(Plus, { size: 14 }),
+                onClick: function () { addLine(pid); },
+                style: { height: 36 }
+              }, "Agregar")
+            ),
+
+            /*#__PURE__*/React.createElement("textarea", {
+              value: draft.notas,
+              onChange: function (e) { var v = e.target.value; _setDraft(pid, { notas: v }); },
+              placeholder: "Notas para el proveedor (opcional): forma de pago, urgencia, referencia\u2026",
+              style: {
+                width: "100%", minHeight: 62, padding: "10px 12px", background: T.bg,
+                border: "1px solid " + T.border, borderRadius: 10, color: T.text,
+                fontSize: 13, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", outline: "none"
+              }
+            }),
+
+            /*#__PURE__*/React.createElement("button", {
+              onClick: sendOrder,
+              style: { background: "#1A1A1A", color: "#fff", border: "none", borderRadius: 10, padding: "12px 0", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }
+            }, /*#__PURE__*/React.createElement(Send, { size: 14 }), "Enviar por WhatsApp y registrar"),
+
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: T.muted, textAlign: "center", lineHeight: 1.5 } },
+              "Queda guardado en Pedidos. Cuando llegue la mercanc\u00EDa lo marcas como recibido y se suma solo al inventario.")
+          );
+        })()
       )
+    ),
+
+    recepcion && /*#__PURE__*/React.createElement(ModalWrap, {
+      title: recepcion.titulo,
+      onClose: function () { setRecepcion(null); }
+    },
+      (function () {
+        var lineas = recepcion.lineas || [];
+        var total = _pedTotal(lineas.map(function (l) { return { qty: l.qty, cost: l.cost }; }));
+        var nuevos = lineas.filter(function (l) { return !l.matchId && String(l.name || "").trim(); }).length;
+        var suma = lineas.filter(function (l) { return l.matchId; }).length;
+        // Repuestos nuevos sin costo: se pueden guardar, pero el margen del
+        // reporte los veria como si hubieran salido gratis.
+        var sinCosto = lineas.filter(function (l) {
+          return !l.matchId && String(l.name || "").trim() && (Number(l.cost) || 0) <= 0;
+        });
+        var numStyle = _objectSpread(_objectSpread({}, inputStyle), {}, { textAlign: "right" });
+        return /*#__PURE__*/React.createElement("div", { style: { padding: "18px 22px", display: "flex", flexDirection: "column", gap: 14 } },
+          /*#__PURE__*/React.createElement("div", {
+            style: { fontSize: 12.5, color: T.muted, lineHeight: 1.5, background: T.bg, border: "1px solid " + T.border, borderRadius: 10, padding: "10px 12px" }
+          }, "Revisa las cantidades y los precios de compra antes de guardar. Lo que ya existe se suma al stock y actualiza su costo; lo nuevo se crea como repuesto. El precio de venta queda en 0 para que lo pongas t\u00FA."),
+
+          /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 340, overflowY: "auto" } },
+            lineas.length === 0 && /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", color: T.muted, fontSize: 13, padding: "18px 0" } }, "No quedan l\u00EDneas."),
+            lineas.map(function (l) {
+              return /*#__PURE__*/React.createElement("div", {
+                key: l.id,
+                style: { background: T.bg, border: "1px solid " + T.border, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8 }
+              },
+                /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
+                  /*#__PURE__*/React.createElement("input", {
+                    list: "_ped_inv_list", value: l.name,
+                    onChange: function (e) { setLinea(l.id, "name", e.target.value); },
+                    style: _objectSpread(_objectSpread({}, inputStyle), {}, { flex: 1 })
+                  }),
+                  /*#__PURE__*/React.createElement("button", {
+                    onClick: function () { quitarLineaRec(l.id); }, title: "Quitar l\u00EDnea",
+                    style: { background: "none", border: "none", cursor: "pointer", color: T.muted, padding: 2, display: "flex", flexShrink: 0 }
+                  }, /*#__PURE__*/React.createElement(X, { size: 15 }))
+                ),
+                /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" } },
+                  /*#__PURE__*/React.createElement("div", { style: { width: 76 } },
+                    /*#__PURE__*/React.createElement("div", { style: { fontSize: 10.5, color: T.muted, marginBottom: 3, fontWeight: 600 } }, "Cantidad"),
+                    /*#__PURE__*/React.createElement("input", {
+                      type: "number", min: "0", value: l.qty,
+                      onChange: function (e) { setLinea(l.id, "qty", e.target.value); },
+                      style: numStyle
+                    })
+                  ),
+                  /*#__PURE__*/React.createElement("div", { style: { width: 110 } },
+                    /*#__PURE__*/React.createElement("div", { style: { fontSize: 10.5, color: T.muted, marginBottom: 3, fontWeight: 600 } }, "Precio compra"),
+                    /*#__PURE__*/React.createElement("input", {
+                      type: "number", min: "0", value: l.cost,
+                      onChange: function (e) { setLinea(l.id, "cost", e.target.value); },
+                      style: numStyle
+                    })
+                  ),
+                  /*#__PURE__*/React.createElement("div", { style: { flex: "1 1 130px", minWidth: 0, fontSize: 11.5, paddingBottom: 9 } },
+                    l.matchId
+                      ? /*#__PURE__*/React.createElement("span", { style: { color: T.green, display: "flex", alignItems: "center", gap: 4 } },
+                          /*#__PURE__*/React.createElement(RefreshCw, { size: 11 }),
+                          /*#__PURE__*/React.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                            "Suma a \u00AB" + l.matchName + "\u00BB (ten\u00EDas " + l.matchQty + ")"))
+                      : /*#__PURE__*/React.createElement("span", { style: { color: T.accent, display: "flex", alignItems: "center", gap: 4 } },
+                          /*#__PURE__*/React.createElement(Plus, { size: 11 }), "Repuesto nuevo")
+                  )
+                )
+              );
+            })
+          ),
+
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function () {
+              setRecepcion(function (rc) {
+                return rc ? _objectSpread(_objectSpread({}, rc), {}, {
+                  lineas: rc.lineas.concat([{ id: uid(), name: "", qty: "1", cost: "", matchId: null, matchName: "", matchQty: 0 }])
+                }) : rc;
+              });
+            },
+            style: { background: "none", border: "1px dashed " + T.border, borderRadius: 9, padding: "9px 0", cursor: "pointer", color: T.muted, fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }
+          }, /*#__PURE__*/React.createElement(Plus, { size: 13 }), "Agregar l\u00EDnea que falt\u00F3"),
+
+          /*#__PURE__*/React.createElement("div", {
+            style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, borderTop: "1px solid " + T.border, paddingTop: 12 }
+          },
+            /*#__PURE__*/React.createElement("span", { style: { fontSize: 12.5, color: T.muted } },
+              suma + " a sumar \u00B7 " + nuevos + " nuevo" + (nuevos === 1 ? "" : "s")),
+            /*#__PURE__*/React.createElement("span", { style: { fontSize: 18, fontWeight: 800, color: T.text } }, fmt(total))
+          ),
+
+          sinCosto.length > 0 && /*#__PURE__*/React.createElement("div", {
+            style: {
+              display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12, lineHeight: 1.5,
+              background: _cAlpha(T.orange, 0.1), border: "1px solid " + _cAlpha(T.orange, 0.35),
+              borderRadius: 10, padding: "10px 12px", color: T.text
+            }
+          },
+            /*#__PURE__*/React.createElement(AlertTriangle, { size: 15, color: T.orange, style: { flexShrink: 0, marginTop: 1 } }),
+            /*#__PURE__*/React.createElement("span", null,
+              /*#__PURE__*/React.createElement("b", null,
+                sinCosto.length === 1 ? "1 repuesto nuevo sin precio de compra" : sinCosto.length + " repuestos nuevos sin precio de compra"),
+              ": " + sinCosto.slice(0, 3).map(function (l) { return l.name; }).join(", ") +
+              (sinCosto.length > 3 ? " y " + (sinCosto.length - 3) + " más" : "") +
+              ". Puedes guardarlos así y ponerles el costo después en Inventario, pero hasta entonces el reporte de rentabilidad los contará como si te hubieran salido gratis."
+            )
+          ),
+
+          /*#__PURE__*/React.createElement("label", {
+            style: { display: "flex", alignItems: "center", gap: 9, fontSize: 13, color: T.text, cursor: "pointer" }
+          },
+            /*#__PURE__*/React.createElement("input", {
+              type: "checkbox", checked: !!recepcion.registrarEgreso,
+              onChange: function (e) {
+                var v = e.target.checked;
+                setRecepcion(function (rc) { return rc ? _objectSpread(_objectSpread({}, rc), {}, { registrarEgreso: v }) : rc; });
+              },
+              style: { width: 16, height: 16, cursor: "pointer" }
+            }),
+            "Registrar el egreso en Caja (" + fmt(total) + ")"
+          ),
+
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 600 } }, "Fecha de la compra"),
+            /*#__PURE__*/React.createElement("input", {
+              type: "date", value: recepcion.fecha || getHoyColombia(),
+              onChange: function (e) {
+                var v = e.target.value;
+                setRecepcion(function (rc) { return rc ? _objectSpread(_objectSpread({}, rc), {}, { fecha: v }) : rc; });
+              },
+              style: inputStyle
+            })
+          ),
+
+          /*#__PURE__*/React.createElement("button", {
+            onClick: confirmarRecepcion,
+            style: { background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px 0", fontWeight: 800, fontSize: 14.5, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit" }
+          }, /*#__PURE__*/React.createElement(Check, { size: 16 }), "Guardar en inventario")
+        );
+      })()
     ),
 
     modal && modal.mode === "return" && /*#__PURE__*/React.createElement(ModalWrap, {
@@ -11442,7 +13517,7 @@ function App(_appProps) {
       className: "trp-scroll",
       style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24, paddingBottom: isMobile ? 78 : 24 }
     },
-    view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify }),
+    view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify, clientId: clientId }),
     view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
     view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
     view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
@@ -11452,7 +13527,7 @@ function App(_appProps) {
     view === "facturas" && /*#__PURE__*/React.createElement(FacturasView, { data: data, save: save, notify: notify, settings: settings }),
     view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout }),
     view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
-    view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data }),
+    view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data, isMobile: isMobile, notify: notify }),
     view === "proveedores" && /*#__PURE__*/React.createElement(ProveedoresView, { data: data, save: save, notify: notify }),
     view === "documentos" && /*#__PURE__*/React.createElement(DocumentosView, { data: data, save: save, notify: notify, clientId: clientId })
     ),
