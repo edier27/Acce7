@@ -2955,6 +2955,7 @@ function RepairModal(_ref0) {
           )
         : /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted, textAlign: "center", padding: "10px 0" } }, "Sin fotos \xB7 usa el bot\xF3n para agregar desde la c\xE1mara")
     ),
+    /*#__PURE__*/React.createElement(RepairExtraActions, { repair: form, clientId: clientId, storeName: window.__acceStoreName }),
     /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
@@ -3271,6 +3272,8 @@ function RepairModal(_ref0) {
         ))
       )
     ),
+
+    /*#__PURE__*/React.createElement(ChecklistRecepcion, { form: form, set: set }),
 
     /*#__PURE__*/React.createElement(Field, { label:"Notas / Diagnóstico", value:form.notes, onChange:function(v){return set("notes",v);}, textarea:true, placeholder:"Diagnóstico, repuestos usados, observaciones..." }),
 
@@ -12679,6 +12682,820 @@ function DocumentosView(_ref) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// MÓDULO GESTIÓN PRO
+// Checklist de recepción + firma, IMEI, etiqueta QR, cierre de caja,
+// cotizaciones, cuentas por cobrar, garantías, equipos olvidados,
+// base de soluciones, empleados/roles/comisiones y respaldo.
+// Todo vive en `data` (se sincroniza igual que el resto del taller).
+// ═══════════════════════════════════════════════════════════════════
+var _gh = React.createElement;
+function _gIco(name, size) {
+  var C = (typeof _LucideReact !== "undefined" && (_LucideReact[name] || _LucideReact.Circle)) || null;
+  return C ? _gh(C, { size: size || 15 }) : null;
+}
+function _gDigits(p) { return String(p || "").replace(/\D/g, ""); }
+function _gWa(phone, text) {
+  var d = _gDigits(phone);
+  if (d.length === 10) d = "57" + d;
+  return "https://wa.me/" + d + "?text=" + encodeURIComponent(text);
+}
+function _gAddDays(iso, n) {
+  var d = new Date((iso || getHoyColombia()) + "T12:00:00");
+  d.setDate(d.getDate() + (Number(n) || 0));
+  return d.toISOString().slice(0, 10);
+}
+function _gDiff(a, b) { // días de a → b
+  if (!a || !b) return 0;
+  return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000);
+}
+function _gRepAbonado(r) { return (r.advances || []).reduce(function (s, a) { return s + (Number(a.amount) || 0); }, 0); }
+function _gRepPendiente(r) {
+  if (!r || r.paid || r.status === "Cancelado") return 0;
+  return Math.max(0, (Number(r.cost) || 0) - _gRepAbonado(r));
+}
+function _gPrint(title, bodyHtml, extraCss) {
+  var w = window.open("", "_blank");
+  if (!w) { alert("Permite las ventanas emergentes para imprimir"); return; }
+  w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>" + _escHtml(title) + "</title><style>" +
+    "body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;font-size:13px}h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:18px 0 6px;border-bottom:1px solid #ccc;padding-bottom:3px}" +
+    "table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:5px 7px;text-align:left;font-size:12px}th{background:#f3f3f3}.muted{color:#666}.r{text-align:right}" +
+    (extraCss || "") + "</style></head><body>" + bodyHtml +
+    "<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>");
+  w.document.close();
+}
+function _gQrDataUrl(text, size) {
+  if (typeof QRCode === "undefined") return "";
+  try {
+    var tmp = document.createElement("div");
+    new QRCode(tmp, { text: text, width: size || 120, height: size || 120, correctLevel: QRCode.CorrectLevel.M });
+    var c = tmp.querySelector("canvas"), i = tmp.querySelector("img");
+    return c ? c.toDataURL("image/png") : (i ? i.src : "");
+  } catch (e) { return ""; }
+}
+function _gOrderCode(r) { return (r.id || "").slice(-6).toUpperCase(); }
+var _gCard = { background: T.card, border: "1px solid " + T.border, borderRadius: 10, padding: 14 };
+var _gLbl = { fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 5 };
+function _gEmpty(txt) { return _gh("div", { style: { textAlign: "center", color: T.muted, padding: "34px 10px", fontSize: 14 } }, txt); }
+function _gKpi(label, value, color) {
+  return _gh("div", { style: Object.assign({}, _gCard, { flex: "1 1 150px" }) },
+    _gh("div", { style: { fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" } }, label),
+    _gh("div", { style: { fontSize: 20, fontWeight: 800, color: color || T.text, marginTop: 4 } }, value));
+}
+
+// ─── 1. CHECKLIST DE RECEPCIÓN ──────────────────────────────────────
+var CHK_ITEMS = ["Pantalla / display", "Táctil", "Cámara trasera", "Cámara frontal", "Carga", "Batería", "Altavoz / audio", "Micrófono", "Señal / SIM", "WiFi / Bluetooth", "Huella / Face ID", "Botones", "Vibración", "Sensor de proximidad"];
+var CHK_ACCES = ["SIM", "Memoria SD", "Forro / estuche", "Cargador", "Cable", "Caja", "Vidrio templado", "Lápiz"];
+var CHK_STATES = { ok: { l: "Funciona", c: "#16A34A" }, falla: { l: "Falla", c: "#DC2626" }, nr: { l: "No revisado", c: "#9CA3AF" } };
+function _chkNext(s) { return s === "ok" ? "falla" : s === "falla" ? "nr" : "ok"; }
+
+function SignaturePad(props) {
+  var ref = useRef(null);
+  var drawing = useRef(false);
+  useEffect(function () {
+    var c = ref.current; if (!c) return;
+    var ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    if (props.value) { var im = new Image(); im.onload = function () { ctx.drawImage(im, 0, 0, c.width, c.height); }; im.src = props.value; }
+  }, []);
+  var pos = function (e) {
+    var r = ref.current.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (ref.current.width / r.width), y: (e.clientY - r.top) * (ref.current.height / r.height) };
+  };
+  var down = function (e) { e.preventDefault(); drawing.current = true; var p = pos(e); var ctx = ref.current.getContext("2d"); ctx.beginPath(); ctx.moveTo(p.x, p.y); try { ref.current.setPointerCapture(e.pointerId); } catch (x) {} };
+  var move = function (e) {
+    if (!drawing.current) return; e.preventDefault();
+    var p = pos(e); var ctx = ref.current.getContext("2d");
+    ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.strokeStyle = "#111"; ctx.lineTo(p.x, p.y); ctx.stroke();
+  };
+  var up = function () {
+    if (!drawing.current) return; drawing.current = false;
+    // Se reduce a 300x90 para no inflar el documento del taller en Firestore.
+    var s = document.createElement("canvas"); s.width = 300; s.height = 90;
+    s.getContext("2d").drawImage(ref.current, 0, 0, 300, 90);
+    props.onChange(s.toDataURL("image/png"));
+  };
+  var clear = function () { var c = ref.current, ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); props.onChange(""); };
+  return _gh("div", null,
+    _gh("canvas", { ref: ref, width: 600, height: 180, onPointerDown: down, onPointerMove: move, onPointerUp: up, onPointerLeave: up,
+      style: { width: "100%", height: 130, background: "#fff", border: "1px dashed " + T.border, borderRadius: 8, touchAction: "none", cursor: "crosshair", display: "block" } }),
+    _gh("div", { style: { display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: T.muted } },
+      _gh("span", null, "El cliente firma aquí con el dedo o el mouse"),
+      _gh("button", { type: "button", onClick: clear, style: { background: "none", border: "none", color: T.red, cursor: "pointer", fontSize: 12, fontWeight: 700 } }, "Borrar firma")));
+}
+
+function ChecklistRecepcion(props) {
+  var form = props.form, set = props.set;
+  var chk = form.checklist || {};
+  var acc = form.accesorios || [];
+  var _o = useState(!!(form.checklist || form.firma)), open = _o[0], setOpen = _o[1];
+  var fallas = CHK_ITEMS.filter(function (k) { return chk[k] === "falla"; }).length;
+  var setAll = function (v) { var n = {}; CHK_ITEMS.forEach(function (k) { n[k] = v; }); set("checklist", n); };
+  return _gh("div", { style: { background: T.surface, border: "1px solid " + T.border, borderRadius: 14, padding: 14 } },
+    _gh("button", { type: "button", onClick: function () { setOpen(!open); },
+      style: { display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit", color: T.text } },
+      _gh("span", { style: { display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 14 } }, _gIco("ClipboardCheck", 14), "Checklist de recepción y firma"),
+      _gh("span", { style: { fontSize: 12, color: T.muted } }, (form.checklist ? (fallas + " falla(s) · ") : "") + (form.firma ? "Firmado" : "Sin firma") + (open ? "  ▲" : "  ▼"))),
+    open && _gh("div", { style: { marginTop: 12, display: "flex", flexDirection: "column", gap: 12 } },
+      _gh("div", null,
+        _gh("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
+          _gh("span", { style: _gLbl }, "Estado de funciones (toca para cambiar)"),
+          _gh("span", { style: { display: "flex", gap: 6 } },
+            _gh("button", { type: "button", onClick: function () { setAll("ok"); }, style: { fontSize: 11, background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: T.text } }, "Todo funciona"),
+            _gh("button", { type: "button", onClick: function () { setAll("nr"); }, style: { fontSize: 11, background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: T.text } }, "No enciende"))),
+        _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 6 } },
+          CHK_ITEMS.map(function (k) {
+            var s = chk[k] || "nr", st = CHK_STATES[s];
+            return _gh("button", { key: k, type: "button",
+              onClick: function () { var n = Object.assign({}, chk); n[k] = _chkNext(s); set("checklist", n); },
+              style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, padding: "7px 9px", borderRadius: 8, border: "1px solid " + st.c + "55", background: st.c + "12", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: T.text, textAlign: "left" } },
+              _gh("span", null, k), _gh("span", { style: { fontWeight: 700, color: st.c, fontSize: 11, whiteSpace: "nowrap" } }, st.l));
+          }))),
+      _gh("div", null,
+        _gh("span", { style: _gLbl }, "Accesorios que deja el cliente"),
+        _gh("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+          CHK_ACCES.map(function (a) {
+            var on = acc.indexOf(a) >= 0;
+            return _gh("button", { key: a, type: "button",
+              onClick: function () { set("accesorios", on ? acc.filter(function (x) { return x !== a; }) : acc.concat([a])); },
+              style: { padding: "6px 11px", borderRadius: 20, border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accent : "transparent", color: on ? "#fff" : T.text, fontSize: 12, cursor: "pointer", fontFamily: "inherit" } }, a);
+          }))),
+      _gh("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+        _gh(Field, { label: "IMEI / Serial", value: form.imei || "", onChange: function (v) { set("imei", v); }, placeholder: "15 dígitos (*#06#)" }),
+        _gh("div", { style: { display: "flex", alignItems: "flex-end" } }, _gh(ImeiCheckBtn, { imei: form.imei, onResult: function (v) { set("imeiEstado", v); }, estado: form.imeiEstado }))),
+      _gh(Field, { label: "Estado físico (rayones, golpes, humedad...)", value: form.estadoFisico || "", onChange: function (v) { set("estadoFisico", v); }, textarea: true, rows: 2, placeholder: "Ej: rayón esquina superior, tapa trasera despegada" }),
+      _gh("div", null,
+        _gh("span", { style: _gLbl }, "Firma del cliente (acepta condiciones de recepción)"),
+        _gh(SignaturePad, { value: form.firma, onChange: function (v) { set("firma", v); set("firmaFecha", v ? new Date().toISOString() : ""); } }))));
+}
+
+// Botón de consulta IMEI: copia el número y abre la consulta oficial (CRC).
+function ImeiCheckBtn(props) {
+  var imei = _gDigits(props.imei);
+  var valido = imei.length >= 14 && imei.length <= 16;
+  var luhn = function (s) {
+    if (s.length !== 15) return true;
+    var sum = 0;
+    for (var i = 0; i < 15; i++) { var d = Number(s[i]); if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; } sum += d; }
+    return sum % 10 === 0;
+  };
+  var abrir = function () {
+    try { navigator.clipboard && navigator.clipboard.writeText(imei); } catch (e) {}
+    window.open("https://www.imeicolombia.com.co/", "_blank");
+  };
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 5, width: "100%" } },
+    _gh("div", { style: { display: "flex", gap: 6 } },
+      _gh(Btn, { small: true, variant: "ghost", disabled: !valido, onClick: abrir, icon: _gIco("ShieldCheck", 13) }, "Consultar IMEI"),
+      props.onResult && _gh("select", { value: props.estado || "", onChange: function (e) { props.onResult(e.target.value); },
+        style: Object.assign({}, IS, { padding: "6px 8px", fontSize: 12, width: "auto", flex: 1 }) },
+        _gh("option", { value: "" }, "Resultado..."), _gh("option", { value: "limpio" }, "Sin reporte"), _gh("option", { value: "reportado" }, "REPORTADO"))),
+    imei && !luhn(imei) && _gh("div", { style: { fontSize: 11, color: T.red } }, "El IMEI no pasa la verificación (revisa los dígitos)"),
+    props.estado === "reportado" && _gh("div", { style: { fontSize: 11, color: T.red, fontWeight: 700 } }, "Equipo reportado: no lo reciba ni lo compre"),
+    valido && _gh("div", { style: { fontSize: 10, color: T.muted } }, "Se copia el IMEI; pégalo en la página oficial"));
+}
+
+function _printActaRecepcion(r, storeName) {
+  var chk = r.checklist || {};
+  var rows = CHK_ITEMS.map(function (k) { var s = CHK_STATES[chk[k] || "nr"]; return "<tr><td>" + _escHtml(k) + "</td><td style='color:" + s.c + ";font-weight:700'>" + s.l + "</td></tr>"; }).join("");
+  var html = "<h1>" + _escHtml(storeName || "ACCE PRO") + " — Acta de recepción</h1>" +
+    "<div class='muted'>Orden #" + _gOrderCode(r) + " · " + _escHtml(r.date || "") + "</div>" +
+    "<h2>Cliente y equipo</h2><table><tr><th>Cliente</th><td>" + _escHtml(r.customer) + "</td><th>Teléfono</th><td>" + _escHtml(r.phone || "") + "</td></tr>" +
+    "<tr><th>Equipo</th><td>" + _escHtml(r.device) + "</td><th>IMEI</th><td>" + _escHtml(r.imei || "—") + "</td></tr>" +
+    "<tr><th>Falla reportada</th><td colspan='3'>" + _escHtml(r.problem) + "</td></tr></table>" +
+    "<h2>Estado de funciones al recibir</h2><table>" + rows + "</table>" +
+    "<h2>Accesorios</h2><div>" + (_escHtml((r.accesorios || []).join(", ")) || "Ninguno") + "</div>" +
+    "<h2>Estado físico</h2><div>" + (_escHtml(r.estadoFisico || "") || "Sin observaciones") + "</div>" +
+    "<p class='muted' style='margin-top:18px;font-size:11px'>El cliente declara que el equipo se recibe en las condiciones descritas. El taller no responde por fallas no reportadas en esta acta ni por información almacenada en el equipo. Equipos no reclamados después de 90 días podrán considerarse abandonados.</p>" +
+    "<div style='display:flex;gap:40px;margin-top:20px'><div style='flex:1;text-align:center'>" +
+    (r.firma ? "<img src='" + r.firma + "' style='height:70px'>" : "<div style='height:70px'></div>") +
+    "<div style='border-top:1px solid #999;font-size:11px'>Firma cliente</div></div><div style='flex:1;text-align:center'><div style='height:70px'></div><div style='border-top:1px solid #999;font-size:11px'>Recibido por " + _escHtml(r.technician || "") + "</div></div></div>";
+  _gPrint("Acta " + _gOrderCode(r), html);
+}
+
+// ─── ETIQUETA QR para pegar en el equipo ───────────────────────────
+function _printEtiquetaQR(r, clientId) {
+  var url = clientId ? _buildTrackUrl(clientId, r) : _gOrderCode(r);
+  var qr = _gQrDataUrl(url, 140);
+  var html = "<div class='lab'>" + (qr ? "<img src='" + qr + "'>" : "") +
+    "<div><div class='code'>#" + _gOrderCode(r) + "</div><div class='b'>" + _escHtml(r.customer) + "</div><div>" + _escHtml(r.device) + "</div>" +
+    "<div class='muted'>" + _escHtml(r.problem) + "</div><div class='muted'>" + _escHtml(r.date || "") + (r.phone ? " · " + _escHtml(r.phone) : "") + "</div></div></div>";
+  _gPrint("Etiqueta " + _gOrderCode(r), html, "body{margin:4mm}.lab{display:flex;gap:8px;align-items:center;border:1px dashed #999;padding:6px;width:62mm}.lab img{width:24mm;height:24mm}.code{font-size:18px;font-weight:800;letter-spacing:1px}.b{font-weight:700}@page{size:auto;margin:3mm}");
+}
+
+// ─── Barra de acciones extra en el detalle de una orden ─────────────
+function RepairExtraActions(props) {
+  var r = props.repair;
+  var tieneChk = r.checklist || r.firma || r.accesorios;
+  return _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+    _gh(Btn, { small: true, variant: "ghost", icon: _gIco("ClipboardCheck", 13), onClick: function () { _printActaRecepcion(r, props.storeName); } }, tieneChk ? "Acta de recepción" : "Acta (sin checklist)"),
+    _gh(Btn, { small: true, variant: "ghost", icon: _gIco("QrCode", 13), onClick: function () { _printEtiquetaQR(r, props.clientId); } }, "Etiqueta QR"),
+    r.imeiEstado === "reportado" && _gh("span", { style: { color: T.red, fontWeight: 800, fontSize: 12, alignSelf: "center" } }, "IMEI REPORTADO"),
+    r.warrantyOf && _gh("span", { style: { color: T.orange, fontWeight: 700, fontSize: 12, alignSelf: "center" } }, "Reingreso por garantía"));
+}
+
+// ─── 2. CIERRE DE CAJA ──────────────────────────────────────────────
+function _gMovimientosDia(data, fecha) {
+  var porMetodo = {};
+  var add = function (m, v) { m = m || "Efectivo"; porMetodo[m] = (porMetodo[m] || 0) + (Number(v) || 0); };
+  var ventas = (data.sales || []).filter(function (s) { return s.date === fecha; });
+  ventas.forEach(function (s) { add(s.payment, s.total); });
+  var abonos = [];
+  (data.repairs || []).forEach(function (r) { (r.advances || []).forEach(function (a) { if (a.date === fecha) { abonos.push({ r: r, a: a }); add(/nequi|davi|transf|tarjeta/i.test(a.note || "") ? (a.note.match(/nequi|daviplata|transferencia|tarjeta/i) || ["Efectivo"])[0].replace(/^./, function (c) { return c.toUpperCase(); }) : "Efectivo", a.amount); } }); });
+  var cf = (data.cashflow || []).filter(function (e) { return e.date === fecha; });
+  var ingCaja = cf.filter(function (e) { return e.type === "ingreso"; }).reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+  var egrCaja = cf.filter(function (e) { return e.type === "egreso"; }).reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+  return { porMetodo: porMetodo, ventas: ventas, abonos: abonos, ingCaja: ingCaja, egrCaja: egrCaja, cf: cf };
+}
+
+function CierreCajaTab(props) {
+  var data = props.data, save = props.save, notify = props.notify, empleado = props.empleado;
+  var cierres = data.cierresCaja || [];
+  var _f = useState(getHoyColombia()), fecha = _f[0], setFecha = _f[1];
+  var ultimo = cierres.slice().sort(function (a, b) { return b.fecha.localeCompare(a.fecha); })[0];
+  var _b = useState(""), base = _b[0], setBase = _b[1];
+  var _c = useState(""), contado = _c[0], setContado = _c[1];
+  var _i = useState(false), inclCaja = _i[0], setInclCaja = _i[1];
+  var _n = useState(""), notas = _n[0], setNotas = _n[1];
+  var mov = _gMovimientosDia(data, fecha);
+  var efectivoVentas = mov.porMetodo["Efectivo"] || 0;
+  var esperado = (Number(base) || 0) + efectivoVentas + (inclCaja ? mov.ingCaja : 0) - mov.egrCaja;
+  var diff = contado === "" ? null : (Number(contado) || 0) - esperado;
+  var yaCerrado = cierres.find(function (c) { return c.fecha === fecha; });
+
+  var cerrar = function () {
+    if (contado === "") { notify("Ingresa el efectivo contado", "error"); return; }
+    if (yaCerrado && !confirm("Ya existe un cierre para " + fecha + ". ¿Reemplazarlo?")) return;
+    var c = { id: uid(), fecha: fecha, base: Number(base) || 0, porMetodo: mov.porMetodo, ingCaja: mov.ingCaja, egrCaja: mov.egrCaja, inclCaja: inclCaja,
+      esperado: esperado, contado: Number(contado) || 0, diferencia: diff, notas: notas, por: empleado ? empleado.nombre : "Dueño", creado: new Date().toISOString() };
+    save(Object.assign({}, data, { cierresCaja: [c].concat(cierres.filter(function (x) { return x.fecha !== fecha; })) }));
+    notify("Caja cerrada · diferencia " + fmt(diff));
+    setContado(""); setNotas("");
+  };
+  var imprimir = function (c) {
+    var met = Object.keys(c.porMetodo || {}).map(function (k) { return "<tr><td>" + _escHtml(k) + "</td><td class='r'>" + fmt(c.porMetodo[k]) + "</td></tr>"; }).join("");
+    _gPrint("Cierre " + c.fecha, "<h1>Cierre de caja — " + _escHtml(c.fecha) + "</h1><div class='muted'>Por " + _escHtml(c.por) + "</div>" +
+      "<h2>Ventas y abonos por medio de pago</h2><table>" + (met || "<tr><td>Sin movimientos</td></tr>") + "</table>" +
+      "<h2>Arqueo de efectivo</h2><table><tr><td>Base inicial</td><td class='r'>" + fmt(c.base) + "</td></tr><tr><td>Ingresos manuales de caja " + (c.inclCaja ? "" : "(no incluidos)") + "</td><td class='r'>" + fmt(c.ingCaja) + "</td></tr><tr><td>Egresos</td><td class='r'>-" + fmt(c.egrCaja) + "</td></tr>" +
+      "<tr><th>Esperado</th><th class='r'>" + fmt(c.esperado) + "</th></tr><tr><th>Contado</th><th class='r'>" + fmt(c.contado) + "</th></tr><tr><th>Diferencia</th><th class='r'>" + fmt(c.diferencia) + "</th></tr></table>" +
+      (c.notas ? "<h2>Notas</h2><div>" + _escHtml(c.notas) + "</div>" : ""));
+  };
+
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10 } },
+        _gh(Field, { label: "Fecha del cierre", type: "date", value: fecha, onChange: setFecha }),
+        _gh(Field, { label: "Base inicial (efectivo)", type: "number", value: base, onChange: setBase, placeholder: ultimo ? String(ultimo.contado) : "0" }),
+        _gh(Field, { label: "Efectivo contado", type: "number", value: contado, onChange: setContado, placeholder: "Lo que hay en el cajón" })),
+      ultimo && base === "" && _gh("button", { onClick: function () { setBase(String(ultimo.contado)); }, style: { marginTop: 6, background: "none", border: "none", color: T.accent, cursor: "pointer", fontSize: 12, padding: 0 } }, "Usar como base lo contado el " + ultimo.fecha + " (" + fmt(ultimo.contado) + ")"),
+      _gh("div", { style: { display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 } },
+        Object.keys(mov.porMetodo).length === 0 ? _gh("div", { style: { color: T.muted, fontSize: 13 } }, "Sin ventas ni abonos registrados este día") :
+        Object.keys(mov.porMetodo).map(function (k) { return _gKpi(k, fmt(mov.porMetodo[k])); }),
+        _gKpi("Egresos del día", fmt(mov.egrCaja), T.red)),
+      _gh("label", { style: { display: "flex", gap: 8, alignItems: "center", fontSize: 13, marginTop: 10, color: T.text } },
+        _gh("input", { type: "checkbox", checked: inclCaja, onChange: function (e) { setInclCaja(e.target.checked); } }),
+        "Sumar ingresos manuales de Caja (" + fmt(mov.ingCaja) + ") — actívalo solo si NO son las mismas ventas ya registradas"),
+      _gh("div", { style: { display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 } },
+        _gKpi("Efectivo esperado", fmt(esperado)),
+        diff !== null && _gKpi(diff === 0 ? "Cuadra exacto" : diff > 0 ? "Sobrante" : "Faltante", fmt(Math.abs(diff)), diff === 0 ? T.green : diff > 0 ? T.yellow : T.red)),
+      _gh("div", { style: { marginTop: 10 } }, _gh(Field, { label: "Notas del cierre", value: notas, onChange: setNotas, placeholder: "Ej: faltante por vuelto mal dado" })),
+      _gh("div", { style: { marginTop: 12 } }, _gh(Btn, { onClick: cerrar, icon: _gIco("Lock", 14) }, yaCerrado ? "Reemplazar cierre" : "Cerrar caja"))),
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { fontWeight: 700, marginBottom: 10 } }, "Historial de cierres"),
+      cierres.length === 0 ? _gEmpty("Aún no hay cierres") :
+      cierres.slice().sort(function (a, b) { return b.fecha.localeCompare(a.fecha); }).slice(0, 60).map(function (c) {
+        return _gh("div", { key: c.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + T.border, fontSize: 13, gap: 8 } },
+          _gh("div", null, _gh("strong", null, c.fecha), _gh("span", { style: { color: T.muted, marginLeft: 8 } }, "Contado " + fmt(c.contado) + " · " + c.por)),
+          _gh("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+            _gh("span", { style: { fontWeight: 800, color: c.diferencia === 0 ? T.green : c.diferencia > 0 ? T.yellow : T.red } }, (c.diferencia > 0 ? "+" : "") + fmt(c.diferencia)),
+            _gh(Btn, { small: true, variant: "ghost", onClick: function () { imprimir(c); } }, "Imprimir")));
+      })));
+}
+
+// ─── 3. COTIZACIONES ────────────────────────────────────────────────
+var COT_EST = { Pendiente: "#D97706", Aprobada: "#16A34A", Rechazada: "#DC2626", Convertida: "#4F46E5" };
+function CotizacionesTab(props) {
+  var data = props.data, save = props.save, notify = props.notify, storeName = props.storeName || "ACCE PRO";
+  var cots = data.cotizaciones || [];
+  var _m = useState(null), edit = _m[0], setEdit = _m[1];
+  var _q = useState("todas"), filtro = _q[0], setFiltro = _q[1];
+  var nuevo = function () {
+    var n = cots.reduce(function (m, c) { return Math.max(m, Number(c.numero) || 0); }, 0) + 1;
+    setEdit({ id: uid(), numero: n, date: getHoyColombia(), validDays: 8, customer: "", phone: "", device: "", problem: "", items: [{ desc: "", qty: 1, price: 0 }], notes: "", estado: "Pendiente", _new: true });
+  };
+  var total = function (c) { return (c.items || []).reduce(function (s, i) { return s + (Number(i.qty) || 0) * (Number(i.price) || 0); }, 0); };
+  var persist = function (list) { save(Object.assign({}, data, { cotizaciones: list })); };
+  var guardar = function () {
+    if (!edit.customer.trim()) { notify("Falta el cliente", "error"); return; }
+    var c = Object.assign({}, edit, { total: total(edit), items: edit.items.filter(function (i) { return i.desc.trim(); }) });
+    delete c._new;
+    persist(edit._new ? [c].concat(cots) : cots.map(function (x) { return x.id === c.id ? c : x; }));
+    notify("Cotización guardada"); setEdit(null);
+  };
+  var setEstado = function (c, e) { persist(cots.map(function (x) { return x.id === c.id ? Object.assign({}, x, { estado: e, estadoFecha: getHoyColombia() }) : x; })); };
+  var msg = function (c) {
+    var lines = (c.items || []).map(function (i) { return "• " + i.desc + (Number(i.qty) > 1 ? " x" + i.qty : "") + ": " + fmt(i.qty * i.price); }).join("\n");
+    return "Hola " + c.customer + ", le compartimos la cotización *#" + c.numero + "* de *" + storeName + "*" + (c.device ? " para su *" + c.device + "*" : "") + ":\n\n" + lines +
+      "\n\n*TOTAL: " + fmt(total(c)) + "*\nVálida hasta el " + _gAddDays(c.date, c.validDays) + "." + (c.notes ? "\n\n" + c.notes : "") +
+      "\n\n¿Autoriza la reparación? Responda *SI* para aprobarla o *NO* para rechazarla.";
+  };
+  var convertir = function (c) {
+    var rep = { id: uid(), customer: c.customer, phone: c.phone, device: c.device || "Equipo", problem: c.problem || (c.items[0] && c.items[0].desc) || "Según cotización",
+      category: "", status: "Recibido", cost: total(c), paid: false, date: getHoyColombia(), technician: "", warrantyDays: 15, advances: [],
+      notes: "Cotización #" + c.numero + ": " + (c.items || []).map(function (i) { return i.desc; }).join(", "), cotizacionId: c.id };
+    save(Object.assign({}, data, { repairs: (data.repairs || []).concat([rep]), cotizaciones: cots.map(function (x) { return x.id === c.id ? Object.assign({}, x, { estado: "Convertida", repairId: rep.id }) : x; }) }));
+    notify("Orden de reparación creada desde la cotización");
+  };
+  var imprimir = function (c) {
+    var rows = (c.items || []).map(function (i) { return "<tr><td>" + _escHtml(i.desc) + "</td><td class='r'>" + _escHtml(i.qty) + "</td><td class='r'>" + fmt(i.price) + "</td><td class='r'>" + fmt(i.qty * i.price) + "</td></tr>"; }).join("");
+    _gPrint("Cotización " + c.numero, "<h1>" + _escHtml(storeName) + "</h1><div class='muted'>Cotización #" + c.numero + " · " + _escHtml(c.date) + " · válida hasta " + _gAddDays(c.date, c.validDays) + "</div>" +
+      "<h2>Cliente</h2><div>" + _escHtml(c.customer) + " · " + _escHtml(c.phone || "") + "</div><div>" + _escHtml(c.device || "") + (c.problem ? " — " + _escHtml(c.problem) : "") + "</div>" +
+      "<h2>Detalle</h2><table><tr><th>Descripción</th><th class='r'>Cant.</th><th class='r'>Valor</th><th class='r'>Subtotal</th></tr>" + rows + "<tr><th colspan='3'>TOTAL</th><th class='r'>" + fmt(total(c)) + "</th></tr></table>" +
+      (c.notes ? "<p>" + _escHtml(c.notes) + "</p>" : "") + "<div style='margin-top:50px;width:45%;border-top:1px solid #999;font-size:11px;text-align:center'>Aprobado por el cliente</div>");
+  };
+
+  if (edit) {
+    var setE = function (k, v) { setEdit(function (e) { var n = Object.assign({}, e); n[k] = v; return n; }); };
+    var setItem = function (i, k, v) { setEdit(function (e) { var it = e.items.slice(); it[i] = Object.assign({}, it[i]); it[i][k] = v; return Object.assign({}, e, { items: it }); }); };
+    return _gh("div", { style: _gCard },
+      _gh("div", { style: { fontWeight: 800, fontSize: 16, marginBottom: 12 } }, (edit._new ? "Nueva cotización #" : "Cotización #") + edit.numero),
+      _gh("datalist", { id: "_cot_cust" }, (data.customers || []).map(function (c) { return _gh("option", { key: c.id, value: c.name }); })),
+      _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 10 } },
+        _gh("div", null, _gh("span", { style: _gLbl }, "Cliente *"),
+          _gh("input", { list: "_cot_cust", value: edit.customer, style: IS, onChange: function (e) {
+            var v = e.target.value; setE("customer", v);
+            var c = (data.customers || []).find(function (x) { return x.name === v; }) || (data.repairs || []).slice().reverse().find(function (x) { return x.customer === v && x.phone; }); if (c && c.phone) setE("phone", c.phone);
+          } })),
+        _gh(Field, { label: "Teléfono", value: edit.phone, onChange: function (v) { setE("phone", v); } }),
+        _gh(Field, { label: "Equipo", value: edit.device, onChange: function (v) { setE("device", v); }, placeholder: "iPhone 12" }),
+        _gh(Field, { label: "Falla", value: edit.problem, onChange: function (v) { setE("problem", v); } }),
+        _gh(Field, { label: "Fecha", type: "date", value: edit.date, onChange: function (v) { setE("date", v); } }),
+        _gh(Field, { label: "Validez (días)", type: "number", value: edit.validDays, onChange: function (v) { setE("validDays", Number(v) || 0); } })),
+      _gh("span", { style: Object.assign({}, _gLbl, { marginTop: 14 }) }, "Ítems"),
+      _gh("datalist", { id: "_cot_inv" }, (data.inventory || []).map(function (i) { return _gh("option", { key: i.id, value: i.name }); })),
+      edit.items.map(function (it, i) {
+        return _gh("div", { key: i, style: { display: "flex", gap: 6, marginBottom: 6 } },
+          _gh("input", { list: "_cot_inv", placeholder: "Repuesto o servicio", value: it.desc, style: Object.assign({}, IS, { flex: 3 }), onChange: function (e) {
+            var v = e.target.value; setItem(i, "desc", v);
+            var inv = (data.inventory || []).find(function (x) { return x.name === v; }); if (inv && !Number(it.price)) setItem(i, "price", Number(inv.price) || 0);
+          } }),
+          _gh("input", { type: "number", value: it.qty, style: Object.assign({}, IS, { flex: 1, minWidth: 55 }), onChange: function (e) { setItem(i, "qty", Number(e.target.value) || 0); } }),
+          _gh("input", { type: "number", value: it.price, style: Object.assign({}, IS, { flex: 2 }), onChange: function (e) { setItem(i, "price", Number(e.target.value) || 0); } }),
+          _gh("button", { onClick: function () { setE("items", edit.items.filter(function (_, j) { return j !== i; })); }, style: { background: "none", border: "none", color: T.red, fontSize: 18, cursor: "pointer" } }, "×"));
+      }),
+      _gh("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0 12px" } },
+        _gh(Btn, { small: true, variant: "ghost", icon: _gIco("Plus", 13), onClick: function () { setE("items", edit.items.concat([{ desc: "", qty: 1, price: 0 }])); } }, "Agregar ítem"),
+        _gh("strong", { style: { fontSize: 17 } }, "Total " + fmt(total(edit)))),
+      _gh(Field, { label: "Notas / condiciones", value: edit.notes, onChange: function (v) { setE("notes", v); }, textarea: true, rows: 2, placeholder: "Ej: incluye mano de obra, garantía 30 días" }),
+      _gh("div", { style: { display: "flex", gap: 8, marginTop: 12 } },
+        _gh(Btn, { onClick: guardar, icon: _gIco("Check", 14) }, "Guardar"),
+        _gh(Btn, { variant: "ghost", onClick: function () { setEdit(null); } }, "Cancelar")));
+  }
+
+  var lista = cots.filter(function (c) { return filtro === "todas" || c.estado === filtro; });
+  var pend = cots.filter(function (c) { return c.estado === "Pendiente"; });
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    _gh("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
+      _gKpi("Pendientes", pend.length + " · " + fmt(pend.reduce(function (s, c) { return s + total(c); }, 0)), T.yellow),
+      _gKpi("Tasa de aprobación", (function () { var d = cots.filter(function (c) { return c.estado !== "Pendiente"; }); var ok = d.filter(function (c) { return c.estado !== "Rechazada"; }).length; return d.length ? Math.round(ok * 100 / d.length) + "%" : "—"; })())),
+    _gh("div", { style: { display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
+      _gh("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, ["todas", "Pendiente", "Aprobada", "Rechazada", "Convertida"].map(function (f) {
+        return _gh("button", { key: f, onClick: function () { setFiltro(f); }, style: { padding: "6px 12px", borderRadius: 16, border: "1px solid " + T.border, background: filtro === f ? T.accent : "transparent", color: filtro === f ? "#fff" : T.text, cursor: "pointer", fontSize: 12, fontFamily: "inherit" } }, f === "todas" ? "Todas" : f);
+      })),
+      _gh(Btn, { onClick: nuevo, icon: _gIco("Plus", 14) }, "Nueva cotización")),
+    lista.length === 0 ? _gEmpty("No hay cotizaciones") : lista.map(function (c) {
+      var vencida = c.estado === "Pendiente" && _gAddDays(c.date, c.validDays) < getHoyColombia();
+      return _gh("div", { key: c.id, style: _gCard },
+        _gh("div", { style: { display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
+          _gh("div", null,
+            _gh("div", { style: { fontWeight: 700 } }, "#" + c.numero + " · " + c.customer),
+            _gh("div", { style: { fontSize: 12, color: T.muted } }, (c.device || "") + " · " + c.date + (vencida ? " · VENCIDA" : ""))),
+          _gh("div", { style: { textAlign: "right" } },
+            _gh("div", { style: { fontWeight: 800 } }, fmt(total(c))),
+            _gh("span", { style: { fontSize: 11, fontWeight: 700, color: COT_EST[c.estado] } }, c.estado))),
+        _gh("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 } },
+          c.phone && _gh("a", { href: _gWa(c.phone, msg(c)), target: "_blank", rel: "noopener", style: { textDecoration: "none" } }, _gh(Btn, { small: true, variant: "ghost", icon: _gIco("MessageCircle", 13) }, "Enviar WhatsApp")),
+          _gh(Btn, { small: true, variant: "ghost", onClick: function () { imprimir(c); } }, "PDF / Imprimir"),
+          c.estado === "Pendiente" && _gh(Btn, { small: true, variant: "success", onClick: function () { setEstado(c, "Aprobada"); } }, "Aprobó"),
+          c.estado === "Pendiente" && _gh(Btn, { small: true, variant: "ghost", onClick: function () { setEstado(c, "Rechazada"); } }, "Rechazó"),
+          c.estado === "Aprobada" && _gh(Btn, { small: true, onClick: function () { convertir(c); } }, "Crear orden de reparación"),
+          c.estado !== "Convertida" && _gh(Btn, { small: true, variant: "ghost", onClick: function () { setEdit(Object.assign({}, c, { items: (c.items || []).slice() })); } }, "Editar"),
+          _gh(Btn, { small: true, variant: "ghost", onClick: function () { if (confirm("¿Eliminar cotización #" + c.numero + "?")) persist(cots.filter(function (x) { return x.id !== c.id; })); } }, "Eliminar")));
+    }));
+}
+
+// ─── 4. CUENTAS POR COBRAR ──────────────────────────────────────────
+function PorCobrarTab(props) {
+  var data = props.data, storeName = props.storeName || "ACCE PRO";
+  var hoy = getHoyColombia();
+  var deudas = [];
+  (data.repairs || []).forEach(function (r) {
+    var p = _gRepPendiente(r);
+    // Solo lo ya entregado (o listo) es deuda real; lo que está en taller aún se cobra al entregar.
+    if (p > 0 && (r.status === "Entregado" || r.status === "Listo")) deudas.push({ tipo: "Reparación", ref: r.device, customer: r.customer, phone: r.phone, saldo: p, fecha: r.deliveryDate || r.date, status: r.status });
+  });
+  (data.facturas || []).forEach(function (f) {
+    var s = typeof _facturaSaldo === "function" ? _facturaSaldo(f) : 0;
+    if (s > 0) deudas.push({ tipo: "Factura", ref: "Factura " + (f.numero || ""), customer: (f.cliente && f.cliente.nombre) || "Cliente", phone: (f.cliente && (f.cliente.telefono || f.cliente.phone)) || "", saldo: s, fecha: f.date || f.fecha });
+  });
+  var grupos = {};
+  deudas.forEach(function (d) { var k = (d.customer || "").trim().toLowerCase(); if (!grupos[k]) grupos[k] = { customer: d.customer, phone: d.phone, items: [], total: 0, oldest: d.fecha }; var g = grupos[k]; g.items.push(d); g.total += d.saldo; if (!g.phone) g.phone = d.phone; if (d.fecha && d.fecha < g.oldest) g.oldest = d.fecha; });
+  var lista = Object.keys(grupos).map(function (k) { return grupos[k]; }).sort(function (a, b) { return b.total - a.total; });
+  var total = lista.reduce(function (s, g) { return s + g.total; }, 0);
+  var viejas = lista.filter(function (g) { return _gDiff(g.oldest, hoy) > 30; });
+  var enTaller = (data.repairs || []).filter(function (r) { return !["Entregado", "Listo", "Cancelado"].includes(r.status); }).reduce(function (s, r) { return s + _gRepPendiente(r); }, 0);
+  var msg = function (g) {
+    return "Hola " + g.customer + ", le saluda *" + storeName + "*. Le recordamos amablemente que tiene un saldo pendiente de *" + fmt(g.total) + "*:\n" +
+      g.items.map(function (d) { return "• " + d.ref + ": " + fmt(d.saldo); }).join("\n") + "\n\nPuede pagar en el local o por transferencia. ¡Muchas gracias!";
+  };
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    _gh("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
+      _gKpi("Total por cobrar", fmt(total), T.red), _gKpi("Clientes que deben", String(lista.length)), _gKpi("Más de 30 días", String(viejas.length), T.yellow), _gKpi("Saldo de equipos en taller", fmt(enTaller), T.muted)),
+    lista.length === 0 ? _gEmpty("Nadie le debe. ¡Excelente!") : lista.map(function (g, i) {
+      var dias = _gDiff(g.oldest, hoy);
+      return _gh("div", { key: i, style: _gCard },
+        _gh("div", { style: { display: "flex", justifyContent: "space-between", gap: 8 } },
+          _gh("div", null, _gh("div", { style: { fontWeight: 700 } }, g.customer), _gh("div", { style: { fontSize: 12, color: dias > 30 ? T.red : T.muted } }, "Debe desde hace " + dias + " día(s)" + (g.phone ? " · " + g.phone : ""))),
+          _gh("div", { style: { fontWeight: 800, fontSize: 17, color: T.red } }, fmt(g.total))),
+        _gh("div", { style: { fontSize: 12, color: T.muted, marginTop: 6 } }, g.items.map(function (d) { return d.tipo + ": " + d.ref + " (" + fmt(d.saldo) + ")"; }).join(" · ")),
+        g.phone && _gh("a", { href: _gWa(g.phone, msg(g)), target: "_blank", rel: "noopener", style: { textDecoration: "none", display: "inline-block", marginTop: 8 } }, _gh(Btn, { small: true, variant: "ghost", icon: _gIco("MessageCircle", 13) }, "Recordar pago por WhatsApp")));
+    }));
+}
+
+// ─── 5. GARANTÍAS ───────────────────────────────────────────────────
+function GarantiasTab(props) {
+  var data = props.data, save = props.save, notify = props.notify, goRepairs = props.goRepairs;
+  var hoy = getHoyColombia();
+  var _q = useState(""), q = _q[0], setQ = _q[1];
+  var reps = data.repairs || [];
+  var entregadas = reps.filter(function (r) { return r.status === "Entregado" && (Number(r.warrantyDays) || 0) > 0; }).map(function (r) {
+    var desde = r.deliveryDate || r.date; var vence = _gAddDays(desde, r.warrantyDays);
+    return Object.assign({}, r, { _vence: vence, _restan: _gDiff(hoy, vence) });
+  });
+  var vigentes = entregadas.filter(function (r) { return r._restan >= 0; }).sort(function (a, b) { return a._restan - b._restan; });
+  var reingresos = reps.filter(function (r) { return r.warrantyOf; });
+  var entregadasTot = reps.filter(function (r) { return r.status === "Entregado"; }).length;
+  var stat = function (key) {
+    var m = {};
+    reingresos.forEach(function (r) { var o = reps.find(function (x) { return x.id === r.warrantyOf; }) || r; var k = (key === "tec" ? o.technician : o.category) || "Sin dato"; m[k] = (m[k] || 0) + 1; });
+    return Object.keys(m).map(function (k) { return [k, m[k]]; }).sort(function (a, b) { return b[1] - a[1]; });
+  };
+  var reingresar = function (r) {
+    var motivo = prompt("Motivo del reingreso por garantía:", r.problem);
+    if (motivo === null) return;
+    var nuevo = { id: uid(), customer: r.customer, phone: r.phone, device: r.device, problem: "GARANTÍA: " + (motivo || r.problem), category: r.category, status: "Recibido",
+      cost: 0, paid: true, date: hoy, technician: r.technician, warrantyDays: 0, advances: [], imei: r.imei, notes: "Reingreso de la orden #" + _gOrderCode(r) + " entregada el " + (r.deliveryDate || r.date), warrantyOf: r.id };
+    save(Object.assign({}, data, { repairs: reps.concat([nuevo]) }));
+    notify("Reingreso por garantía creado en Reparaciones");
+  };
+  var busc = q.trim().toLowerCase();
+  var matches = busc.length >= 2 ? entregadas.filter(function (r) { return (r.customer || "").toLowerCase().includes(busc) || (r.phone || "").includes(busc) || (r.imei || "").includes(busc) || _gOrderCode(r).toLowerCase() === busc; }) : [];
+  var fila = function (r) {
+    return _gh("div", { key: r.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid " + T.border, fontSize: 13 } },
+      _gh("div", null, _gh("strong", null, r.customer), _gh("span", { style: { color: T.muted } }, " · " + r.device + " · #" + _gOrderCode(r)),
+        _gh("div", { style: { fontSize: 11, color: r._restan < 0 ? T.muted : r._restan <= 3 ? T.yellow : T.green } }, r._restan < 0 ? "Garantía vencida el " + r._vence : "Vence " + r._vence + " (" + r._restan + " días)")),
+      r._restan >= 0 && _gh(Btn, { small: true, variant: "ghost", onClick: function () { reingresar(r); } }, "Reingreso"));
+  };
+  var ranking = function (title, rows) {
+    return _gh("div", { style: Object.assign({}, _gCard, { flex: "1 1 240px" }) }, _gh("div", { style: { fontWeight: 700, marginBottom: 8 } }, title),
+      rows.length === 0 ? _gh("div", { style: { color: T.muted, fontSize: 13 } }, "Sin reingresos") :
+      rows.map(function (x) { return _gh("div", { key: x[0], style: { display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" } }, _gh("span", null, x[0]), _gh("strong", null, x[1])); }));
+  };
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    _gh("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
+      _gKpi("Garantías vigentes", String(vigentes.length), T.green),
+      _gKpi("Vencen en 3 días", String(vigentes.filter(function (r) { return r._restan <= 3; }).length), T.yellow),
+      _gKpi("Reingresos", String(reingresos.length), T.red),
+      _gKpi("Tasa de reingreso", entregadasTot ? (Math.round(reingresos.length * 1000 / entregadasTot) / 10) + "%" : "—")),
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { fontWeight: 700, marginBottom: 8 } }, "¿Cliente volvió con el equipo? Búscalo"),
+      _gh("input", { value: q, onChange: function (e) { setQ(e.target.value); }, placeholder: "Nombre, teléfono, IMEI o código de orden", style: IS }),
+      matches.map(fila), busc.length >= 2 && matches.length === 0 && _gh("div", { style: { color: T.muted, fontSize: 13, marginTop: 8 } }, "No hay entregas con garantía que coincidan")),
+    _gh("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } }, ranking("Reingresos por técnico", stat("tec")), ranking("Reingresos por tipo de reparación", stat("cat"))),
+    _gh("div", { style: _gCard }, _gh("div", { style: { fontWeight: 700, marginBottom: 6 } }, "Garantías vigentes (próximas a vencer primero)"),
+      vigentes.length === 0 ? _gEmpty("No hay garantías vigentes") : vigentes.slice(0, 80).map(fila)));
+}
+
+// ─── 6. EQUIPOS OLVIDADOS ───────────────────────────────────────────
+function OlvidadosTab(props) {
+  var data = props.data, save = props.save, storeName = props.storeName || "ACCE PRO";
+  var _d = useState(15), min = _d[0], setMin = _d[1];
+  var hoy = getHoyColombia();
+  var lista = (data.repairs || []).filter(function (r) { return r.status === "Listo"; }).map(function (r) {
+    return Object.assign({}, r, { _dias: _gDiff(r.readyDate || r.date, hoy) });
+  }).filter(function (r) { return r._dias >= min; }).sort(function (a, b) { return b._dias - a._dias; });
+  var valor = lista.reduce(function (s, r) { return s + _gRepPendiente(r); }, 0);
+  var msg = function (r) {
+    return "Hola " + r.customer + ", le saluda *" + storeName + "*. Su equipo *" + r.device + "* está listo desde hace " + r._dias + " días y aún no lo ha recogido." +
+      (_gRepPendiente(r) > 0 ? " Saldo pendiente: *" + fmt(_gRepPendiente(r)) + "*." : "") + "\n\nLo esperamos en nuestro horario de atención. Recuerde que después de 90 días los equipos se consideran abandonados.";
+  };
+  var marcar = function (r) {
+    save(Object.assign({}, data, { repairs: (data.repairs || []).map(function (x) { return x.id === r.id ? Object.assign({}, x, { remindersSent: (x.remindersSent || []).concat([hoy]) }) : x; }) }));
+  };
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    _gh("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "stretch" } },
+      _gKpi("Equipos sin recoger", String(lista.length), T.yellow), _gKpi("Dinero parado", fmt(valor), T.red),
+      _gh("div", { style: Object.assign({}, _gCard, { flex: "1 1 150px" }) }, _gh("span", { style: _gLbl }, "Mínimo de días"),
+        _gh("select", { value: min, onChange: function (e) { setMin(Number(e.target.value)); }, style: IS }, [7, 15, 30, 60, 90].map(function (n) { return _gh("option", { key: n, value: n }, n + " días"); })))),
+    lista.length === 0 ? _gEmpty("No hay equipos olvidados") : lista.map(function (r) {
+      var last = (r.remindersSent || []).slice(-1)[0];
+      return _gh("div", { key: r.id, style: _gCard },
+        _gh("div", { style: { display: "flex", justifyContent: "space-between", gap: 8 } },
+          _gh("div", null, _gh("div", { style: { fontWeight: 700 } }, r.customer + " · " + r.device),
+            _gh("div", { style: { fontSize: 12, color: r._dias >= 90 ? T.red : T.muted } }, r._dias + " días listo" + (last ? " · último recordatorio " + last : " · sin recordatorios"))),
+          _gh("strong", null, fmt(_gRepPendiente(r)))),
+        r.phone && _gh("a", { href: _gWa(r.phone, msg(r)), target: "_blank", rel: "noopener", onClick: function () { marcar(r); }, style: { textDecoration: "none", display: "inline-block", marginTop: 8 } },
+          _gh(Btn, { small: true, variant: "ghost", icon: _gIco("MessageCircle", 13) }, "Recordar por WhatsApp")));
+    }));
+}
+
+// ─── 7. BASE DE SOLUCIONES ──────────────────────────────────────────
+function SolucionesTab(props) {
+  var data = props.data, save = props.save, notify = props.notify;
+  var sols = data.soluciones || [];
+  var _q = useState(""), q = _q[0], setQ = _q[1];
+  var _e = useState(null), edit = _e[0], setEdit = _e[1];
+  var norm = function (s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); };
+  var words = norm(q).split(/\s+/).filter(Boolean);
+  // Sugerencias automáticas: reparaciones entregadas con notas que aún no están en la base.
+  var hist = words.length ? (data.repairs || []).filter(function (r) {
+    if (r.status !== "Entregado" || !r.notes) return false;
+    var t = norm([r.device, r.problem, r.category, r.notes].join(" "));
+    return words.every(function (w) { return t.indexOf(w) >= 0; });
+  }).slice(0, 8) : [];
+  var lista = sols.filter(function (s) { var t = norm([s.modelo, s.falla, s.solucion, s.tags].join(" ")); return words.every(function (w) { return t.indexOf(w) >= 0; }); })
+    .sort(function (a, b) { return (b.usos || 0) - (a.usos || 0); });
+  var guardar = function () {
+    if (!edit.falla.trim() || !edit.solucion.trim()) { notify("Escribe la falla y la solución", "error"); return; }
+    var nu = edit._new; var s = Object.assign({}, edit); delete s._new;
+    save(Object.assign({}, data, { soluciones: nu ? [s].concat(sols) : sols.map(function (x) { return x.id === s.id ? s : x; }) }));
+    notify("Solución guardada"); setEdit(null);
+  };
+  var usar = function (s) { save(Object.assign({}, data, { soluciones: sols.map(function (x) { return x.id === s.id ? Object.assign({}, x, { usos: (x.usos || 0) + 1 }) : x; }) })); notify("Marcada como útil"); };
+  if (edit) {
+    var setE = function (k, v) { setEdit(function (e) { var n = Object.assign({}, e); n[k] = v; return n; }); };
+    return _gh("div", { style: Object.assign({}, _gCard, { display: "flex", flexDirection: "column", gap: 10 }) },
+      _gh("div", { style: { fontWeight: 800 } }, edit._new ? "Nueva solución" : "Editar solución"),
+      _gh(Field, { label: "Modelo(s)", value: edit.modelo, onChange: function (v) { setE("modelo", v); }, placeholder: "Samsung A32 / A52" }),
+      _gh(Field, { label: "Falla / síntoma *", value: edit.falla, onChange: function (v) { setE("falla", v); }, placeholder: "No carga, se calienta el puerto" }),
+      _gh(Field, { label: "Solución *", value: edit.solucion, onChange: function (v) { setE("solucion", v); }, textarea: true, rows: 4, placeholder: "Pasos, repuesto, medición..." }),
+      _gh(Field, { label: "Repuesto usado", value: edit.repuesto, onChange: function (v) { setE("repuesto", v); } }),
+      _gh(Field, { label: "Etiquetas", value: edit.tags, onChange: function (v) { setE("tags", v); }, placeholder: "carga, pin, corto" }),
+      _gh("div", { style: { display: "flex", gap: 8 } }, _gh(Btn, { onClick: guardar, icon: _gIco("Check", 14) }, "Guardar"), _gh(Btn, { variant: "ghost", onClick: function () { setEdit(null); } }, "Cancelar")));
+  }
+  var blank = function (x) { return Object.assign({ id: uid(), modelo: "", falla: "", solucion: "", repuesto: "", tags: "", usos: 0, fecha: getHoyColombia(), _new: true }, x || {}); };
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    _gh("div", { style: { display: "flex", gap: 8 } },
+      _gh("input", { value: q, onChange: function (e) { setQ(e.target.value); }, placeholder: "Busca: modelo, falla o palabra clave (ej. a32 no carga)", style: Object.assign({}, IS, { flex: 1 }) }),
+      _gh(Btn, { onClick: function () { setEdit(blank()); }, icon: _gIco("Plus", 14) }, "Nueva")),
+    lista.length === 0 && hist.length === 0 && _gEmpty(sols.length ? "Sin resultados" : "Guarda aquí las soluciones que encuentres para reutilizarlas después"),
+    lista.map(function (s) {
+      return _gh("div", { key: s.id, style: _gCard },
+        _gh("div", { style: { display: "flex", justifyContent: "space-between", gap: 8 } },
+          _gh("div", { style: { fontWeight: 700 } }, (s.modelo ? s.modelo + " — " : "") + s.falla),
+          _gh("span", { style: { fontSize: 11, color: T.muted } }, (s.usos || 0) + " usos")),
+        _gh("div", { style: { fontSize: 13, whiteSpace: "pre-wrap", marginTop: 6 } }, s.solucion),
+        s.repuesto && _gh("div", { style: { fontSize: 12, color: T.muted, marginTop: 4 } }, "Repuesto: " + s.repuesto),
+        _gh("div", { style: { display: "flex", gap: 6, marginTop: 8 } },
+          _gh(Btn, { small: true, variant: "ghost", onClick: function () { usar(s); } }, "Me sirvió"),
+          _gh(Btn, { small: true, variant: "ghost", onClick: function () { setEdit(Object.assign({}, s)); } }, "Editar"),
+          _gh(Btn, { small: true, variant: "ghost", onClick: function () { if (confirm("¿Eliminar?")) save(Object.assign({}, data, { soluciones: sols.filter(function (x) { return x.id !== s.id; }) })); } }, "Eliminar")));
+    }),
+    hist.length > 0 && _gh("div", { style: _gCard },
+      _gh("div", { style: { fontWeight: 700, marginBottom: 6 } }, "En tu historial de reparaciones"),
+      hist.map(function (r) {
+        return _gh("div", { key: r.id, style: { padding: "7px 0", borderBottom: "1px solid " + T.border, fontSize: 13 } },
+          _gh("div", null, _gh("strong", null, r.device), " — " + r.problem + " · " + r.date),
+          _gh("div", { style: { color: T.muted } }, r.notes),
+          _gh("button", { onClick: function () { setEdit(blank({ modelo: r.device, falla: r.problem, solucion: r.notes, tags: r.category || "" })); }, style: { background: "none", border: "none", color: T.accent, cursor: "pointer", padding: 0, fontSize: 12, marginTop: 3 } }, "Guardar como solución"));
+      })));
+}
+
+// ─── 8. EMPLEADOS, ROLES Y PRODUCTIVIDAD ────────────────────────────
+var ROLES = {
+  admin:   { l: "Administrador", views: null },
+  cajero:  { l: "Cajero / ventas", views: ["dashboard", "repairs", "products", "celulares", "customers", "sales", "facturas", "caja", "gestion"] },
+  tecnico: { l: "Técnico", views: ["dashboard", "repairs", "inventory", "customers", "gestion"] }
+};
+var ROLE_TABS = { cajero: ["cierre", "cotizaciones", "cobrar", "olvidados", "garantias", "soluciones"], tecnico: ["cotizaciones", "garantias", "soluciones", "olvidados"] };
+var _EMP_KEY = "acce_emp_session";
+function _empSessionGet() { try { return localStorage.getItem(_EMP_KEY) || ""; } catch (e) { return ""; } }
+function _empSessionSet(id) { try { if (id) localStorage.setItem(_EMP_KEY, id); else localStorage.removeItem(_EMP_KEY); } catch (e) {} }
+function _empCanView(emp, view) { if (!emp) return true; var r = ROLES[emp.rol]; return !r || !r.views || r.views.indexOf(view) >= 0; }
+function _hashPin(p) { var h = 5381; p = "acce-pin:" + p; for (var i = 0; i < p.length; i++) h = ((h << 5) + h + p.charCodeAt(i)) | 0; return String(h >>> 0); }
+
+function EmpleadosTab(props) {
+  var data = props.data, save = props.save, notify = props.notify, onSwitch = props.onSwitch;
+  var emps = data.empleados || [];
+  var _e = useState(null), edit = _e[0], setEdit = _e[1];
+  var _p = useState(""), pin = _p[0], setPin = _p[1];
+  var _o = useState(""), ownerPin = _o[0], setOwnerPin = _o[1];
+  var _r = useState(getHoyColombia().slice(0, 7)), mes = _r[0], setMes = _r[1];
+  var persist = function (list, extra) { save(Object.assign({}, data, { empleados: list }, extra || {})); };
+  var guardar = function () {
+    if (!edit.nombre.trim()) { notify("Falta el nombre", "error"); return; }
+    if (edit._new && !/^\d{4,6}$/.test(pin)) { notify("El PIN debe tener 4 a 6 dígitos", "error"); return; }
+    if (pin && !/^\d{4,6}$/.test(pin)) { notify("El PIN debe tener 4 a 6 dígitos", "error"); return; }
+    var e = Object.assign({}, edit, pin ? { pinHash: _hashPin(pin) } : {}); var nu = e._new; delete e._new;
+    persist(nu ? emps.concat([e]) : emps.map(function (x) { return x.id === e.id ? e : x; }));
+    notify("Empleado guardado"); setEdit(null); setPin("");
+  };
+  var guardarOwnerPin = function () {
+    if (!/^\d{4,6}$/.test(ownerPin)) { notify("El PIN debe tener 4 a 6 dígitos", "error"); return; }
+    save(Object.assign({}, data, { ownerPinHash: _hashPin(ownerPin) })); setOwnerPin(""); notify("PIN del dueño guardado");
+  };
+  // Productividad del mes
+  var reps = (data.repairs || []).filter(function (r) { return r.status === "Entregado" && (r.deliveryDate || r.date || "").slice(0, 7) === mes; });
+  var tecs = {};
+  reps.forEach(function (r) { var k = (r.technician || "Sin asignar").trim(); if (!tecs[k]) tecs[k] = { n: 0, total: 0, dias: 0, conDias: 0, reing: 0 }; var t = tecs[k]; t.n++; if (!r.warrantyOf) t.total += Number(r.cost) || 0; if (r.deliveryDate) { t.dias += Math.max(0, _gDiff(r.date, r.deliveryDate)); t.conDias++; } });
+  (data.repairs || []).filter(function (r) { return r.warrantyOf && (r.date || "").slice(0, 7) === mes; }).forEach(function (r) { var o = (data.repairs || []).find(function (x) { return x.id === r.warrantyOf; }); var k = ((o && o.technician) || "Sin asignar").trim(); if (!tecs[k]) tecs[k] = { n: 0, total: 0, dias: 0, conDias: 0, reing: 0 }; tecs[k].reing++; });
+  var catT = {};
+  reps.forEach(function (r) { if (!r.deliveryDate) return; var k = r.category || "Otra"; if (!catT[k]) catT[k] = [0, 0]; catT[k][0] += Math.max(0, _gDiff(r.date, r.deliveryDate)); catT[k][1]++; });
+
+  if (edit) {
+    var setE = function (k, v) { setEdit(function (e) { var n = Object.assign({}, e); n[k] = v; return n; }); };
+    return _gh("div", { style: Object.assign({}, _gCard, { display: "flex", flexDirection: "column", gap: 10 }) },
+      _gh(Field, { label: "Nombre (igual al campo Técnico de las órdenes)", value: edit.nombre, onChange: function (v) { setE("nombre", v); } }),
+      _gh("div", null, _gh("span", { style: _gLbl }, "Rol"),
+        _gh("select", { value: edit.rol, onChange: function (e) { setE("rol", e.target.value); }, style: IS }, Object.keys(ROLES).map(function (k) { return _gh("option", { key: k, value: k }, ROLES[k].l); }))),
+      _gh(Field, { label: "Comisión sobre reparaciones entregadas (%)", type: "number", value: edit.comision, onChange: function (v) { setE("comision", Math.max(0, Math.min(100, Number(v) || 0))); } }),
+      _gh(Field, { label: edit._new ? "PIN (4-6 dígitos)" : "Nuevo PIN (déjalo vacío para no cambiarlo)", type: "password", value: pin, onChange: setPin }),
+      _gh("label", { style: { display: "flex", gap: 8, fontSize: 13 } }, _gh("input", { type: "checkbox", checked: edit.activo !== false, onChange: function (e) { setE("activo", e.target.checked); } }), "Activo"),
+      _gh("div", { style: { display: "flex", gap: 8 } }, _gh(Btn, { onClick: guardar, icon: _gIco("Check", 14) }, "Guardar"), _gh(Btn, { variant: "ghost", onClick: function () { setEdit(null); setPin(""); } }, "Cancelar")));
+  }
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { fontWeight: 700, marginBottom: 4 } }, "PIN del dueño"),
+      _gh("div", { style: { fontSize: 12, color: T.muted, marginBottom: 8 } }, data.ownerPinHash ? "Configurado. Se pide para salir del modo empleado." : "Configúralo antes de activar el modo empleado: sin él, cualquiera podría volver a la vista completa."),
+      _gh("div", { style: { display: "flex", gap: 8 } }, _gh("input", { type: "password", inputMode: "numeric", value: ownerPin, onChange: function (e) { setOwnerPin(e.target.value); }, placeholder: data.ownerPinHash ? "Cambiar PIN" : "4 a 6 dígitos", style: Object.assign({}, IS, { maxWidth: 200 }) }), _gh(Btn, { small: true, onClick: guardarOwnerPin }, "Guardar PIN"))),
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 8 } }, _gh("strong", null, "Empleados"),
+        _gh(Btn, { small: true, icon: _gIco("Plus", 13), onClick: function () { setEdit({ id: uid(), nombre: "", rol: "tecnico", comision: 0, activo: true, _new: true }); } }, "Agregar")),
+      emps.length === 0 ? _gEmpty("Agrega a tus técnicos o cajeros para asignarles órdenes, medir su trabajo y limitar lo que ven") :
+      emps.map(function (e) {
+        return _gh("div", { key: e.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + T.border, gap: 8, opacity: e.activo === false ? 0.5 : 1 } },
+          _gh("div", null, _gh("strong", null, e.nombre), _gh("span", { style: { color: T.muted, fontSize: 12 } }, " · " + (ROLES[e.rol] || {}).l + " · comisión " + (e.comision || 0) + "%")),
+          _gh("div", { style: { display: "flex", gap: 6 } },
+            e.activo !== false && _gh(Btn, { small: true, variant: "ghost", onClick: function () { if (!data.ownerPinHash) { notify("Primero configura el PIN del dueño", "error"); return; } onSwitch(e.id); } }, "Iniciar turno"),
+            _gh(Btn, { small: true, variant: "ghost", onClick: function () { setEdit(Object.assign({}, e)); } }, "Editar")));
+      })),
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8 } }, _gh("strong", null, "Productividad y comisiones"),
+        _gh("input", { type: "month", value: mes, onChange: function (e) { setMes(e.target.value); }, style: Object.assign({}, IS, { width: "auto", padding: "6px 10px" }) })),
+      Object.keys(tecs).length === 0 ? _gEmpty("Sin reparaciones entregadas en este mes") :
+      _gh("div", { style: { overflowX: "auto" } }, _gh("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } },
+        _gh("thead", null, _gh("tr", null, ["Técnico", "Entregadas", "Facturado", "Días prom.", "Reingresos", "Comisión"].map(function (h) { return _gh("th", { key: h, style: { textAlign: "left", padding: "6px", borderBottom: "1px solid " + T.border, color: T.muted, fontSize: 11, textTransform: "uppercase" } }, h); }))),
+        _gh("tbody", null, Object.keys(tecs).sort(function (a, b) { return tecs[b].total - tecs[a].total; }).map(function (k) {
+          var t = tecs[k]; var emp = emps.find(function (e) { return (e.nombre || "").trim().toLowerCase() === k.toLowerCase(); });
+          var td = { padding: "6px", borderBottom: "1px solid " + T.border };
+          return _gh("tr", { key: k }, _gh("td", { style: td }, k), _gh("td", { style: td }, t.n), _gh("td", { style: td }, fmt(t.total)),
+            _gh("td", { style: td }, t.conDias ? (Math.round(t.dias * 10 / t.conDias) / 10) + " d" : "—"), _gh("td", { style: Object.assign({}, td, { color: t.reing ? T.red : T.text }) }, t.reing),
+            _gh("td", { style: Object.assign({}, td, { fontWeight: 700 }) }, emp ? fmt(t.total * (emp.comision || 0) / 100) : "—"));
+        })))),
+      Object.keys(catT).length > 0 && _gh("div", { style: { marginTop: 12 } }, _gh("span", { style: _gLbl }, "Tiempo promedio por tipo de reparación"),
+        _gh("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 } }, Object.keys(catT).map(function (k) { return _gh("span", { key: k, style: { fontSize: 12, border: "1px solid " + T.border, borderRadius: 14, padding: "4px 10px" } }, k + ": " + (Math.round(catT[k][0] * 10 / catT[k][1]) / 10) + " días"); })))));
+}
+
+// Barra superior cuando hay un empleado en turno + pantalla de PIN.
+function EmpleadoBar(props) {
+  var emp = props.empleado, data = props.data, onSwitch = props.onSwitch, notify = props.notify;
+  var _p = useState(null), ask = _p[0], setAsk = _p[1];
+  var _v = useState(""), pin = _v[0], setPin = _v[1];
+  if (!emp && !ask) return null;
+  var confirmar = function () {
+    if (ask.target === "owner") {
+      if (_hashPin(pin) !== data.ownerPinHash) { notify("PIN incorrecto", "error"); setPin(""); return; }
+      onSwitch(""); notify("Modo dueño");
+    } else {
+      var e = (data.empleados || []).find(function (x) { return x.id === ask.target; });
+      if (!e || _hashPin(pin) !== e.pinHash) { notify("PIN incorrecto", "error"); setPin(""); return; }
+      onSwitch(e.id); notify("Turno de " + e.nombre);
+    }
+    setAsk(null); setPin("");
+  };
+  return _gh(React.Fragment, null,
+    emp && _gh("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", background: T.accent, color: "#fff", borderRadius: 8, padding: "7px 12px", marginBottom: 12, fontSize: 13 } },
+      _gh("span", null, _gh("strong", null, emp.nombre), " · " + (ROLES[emp.rol] || {}).l),
+      _gh("span", { style: { display: "flex", gap: 6 } },
+        (data.empleados || []).filter(function (x) { return x.activo !== false && x.id !== emp.id; }).length > 0 &&
+          _gh("select", { value: "", onChange: function (e) { if (e.target.value) setAsk({ target: e.target.value }); }, style: { fontSize: 12, borderRadius: 6, border: "none", padding: "3px 6px" } },
+            _gh("option", { value: "" }, "Cambiar de usuario"), (data.empleados || []).filter(function (x) { return x.activo !== false && x.id !== emp.id; }).map(function (x) { return _gh("option", { key: x.id, value: x.id }, x.nombre); })),
+        _gh("button", { onClick: function () { setAsk({ target: "owner" }); }, style: { background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontSize: 12 } }, "Salir (dueño)"))),
+    ask && _gh("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+      _gh("div", { style: Object.assign({}, _gCard, { width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", gap: 10 }) },
+        _gh("strong", null, ask.target === "owner" ? "PIN del dueño" : "PIN de " + (((data.empleados || []).find(function (x) { return x.id === ask.target; }) || {}).nombre || "")),
+        _gh("input", { autoFocus: true, type: "password", inputMode: "numeric", value: pin, onChange: function (e) { setPin(e.target.value); }, onKeyDown: function (e) { if (e.key === "Enter") confirmar(); }, style: IS }),
+        _gh("div", { style: { display: "flex", gap: 8 } }, _gh(Btn, { onClick: confirmar }, "Entrar"), _gh(Btn, { variant: "ghost", onClick: function () { setAsk(null); setPin(""); } }, "Cancelar")))));
+}
+
+// ─── 9. RESPALDO ────────────────────────────────────────────────────
+var _BK_KEY = "acce_last_backup";
+function _gDownload(name, content, type) {
+  var blob = new Blob([content], { type: type });
+  var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function _gCsv(rows, cols) {
+  var esc = function (v) { v = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v); return /[";\n]/.test(v) ? "\"" + v.replace(/"/g, "\"\"") + "\"" : v; };
+  return "﻿" + cols.join(";") + "\n" + rows.map(function (r) { return cols.map(function (c) { return esc(r[c]); }).join(";"); }).join("\n");
+}
+function _gBackupJson(data) {
+  var d = getHoyColombia();
+  _gDownload("respaldo-acce-" + d + ".json", JSON.stringify({ app: "ACCE PRO", fecha: new Date().toISOString(), data: data }), "application/json");
+  try { localStorage.setItem(_BK_KEY, d); } catch (e) {}
+}
+function RespaldoTab(props) {
+  var data = props.data, save = props.save, notify = props.notify;
+  var last = ""; try { last = localStorage.getItem(_BK_KEY) || ""; } catch (e) {}
+  var dias = last ? _gDiff(last, getHoyColombia()) : null;
+  var csv = function (key, cols, name) {
+    var rows = data[key] || [];
+    if (!rows.length) { notify("No hay datos en " + name, "error"); return; }
+    _gDownload(name + "-" + getHoyColombia() + ".csv", _gCsv(rows, cols), "text/csv;charset=utf-8");
+  };
+  var restaurar = function (file) {
+    var rd = new FileReader();
+    rd.onload = function () {
+      try {
+        var j = JSON.parse(rd.result); var d = j && j.data;
+        if (!d || !Array.isArray(d.repairs)) throw new Error("Archivo no válido");
+        if (!confirm("Esto REEMPLAZA todos los datos actuales por los del respaldo del " + String(j.fecha || "").slice(0, 10) + " (" + d.repairs.length + " reparaciones). Se descargará primero un respaldo de lo actual. ¿Continuar?")) return;
+        _gBackupJson(data);
+        save(d); notify("Respaldo restaurado");
+      } catch (e) { notify("No se pudo leer el respaldo: " + e.message, "error"); }
+    };
+    rd.readAsText(file);
+  };
+  var cnt = function (k) { return (data[k] || []).length; };
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { fontWeight: 700 } }, "Respaldo completo"),
+      _gh("div", { style: { fontSize: 13, color: dias === null || dias > 7 ? T.red : T.muted, margin: "4px 0 10px" } }, last ? "Último respaldo descargado en este equipo: " + last + " (hace " + dias + " días)" : "Nunca has descargado un respaldo en este equipo"),
+      _gh("div", { style: { fontSize: 12, color: T.muted, marginBottom: 10 } }, cnt("repairs") + " reparaciones · " + cnt("customers") + " clientes · " + cnt("inventory") + " repuestos · " + cnt("sales") + " ventas · " + cnt("cashflow") + " movimientos de caja"),
+      _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+        _gh(Btn, { onClick: function () { _gBackupJson(data); notify("Respaldo descargado"); }, icon: _gIco("Download", 14) }, "Descargar respaldo (.json)"),
+        _gh("label", { style: { display: "inline-flex" } }, _gh("span", { style: { display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 20px", border: "1px solid " + T.border, borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 14 } }, _gIco("Upload", 14), "Restaurar respaldo"),
+          _gh("input", { type: "file", accept: "application/json,.json", style: { display: "none" }, onChange: function (e) { var f = e.target.files && e.target.files[0]; if (f) restaurar(f); e.target.value = ""; } })))),
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { fontWeight: 700, marginBottom: 8 } }, "Exportar a Excel (CSV)"),
+      _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { csv("repairs", ["date", "customer", "phone", "device", "imei", "problem", "category", "status", "cost", "paid", "deliveryDate", "technician", "warrantyDays", "notes"], "reparaciones"); } }, "Reparaciones"),
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { csv("customers", ["name", "phone", "email", "city", "notes"], "clientes"); } }, "Clientes"),
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { csv("inventory", ["name", "category", "brand", "qty", "minQty", "cost", "price"], "inventario"); } }, "Inventario"),
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { csv("sales", ["date", "customer", "payment", "discount", "total", "items", "notes"], "ventas"); } }, "Ventas"),
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { csv("cashflow", ["date", "type", "category", "description", "amount", "notes"], "caja"); } }, "Caja"),
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { csv("cierresCaja", ["fecha", "base", "esperado", "contado", "diferencia", "por", "notas"], "cierres"); } }, "Cierres de caja"))));
+}
+
+// ─── VISTA CONTENEDORA ──────────────────────────────────────────────
+var GESTION_TABS = [
+  { id: "cobrar", l: "Por cobrar", i: "HandCoins" },
+  { id: "cotizaciones", l: "Cotizaciones", i: "FileText" },
+  { id: "cierre", l: "Cierre de caja", i: "Calculator" },
+  { id: "garantias", l: "Garantías", i: "ShieldCheck" },
+  { id: "olvidados", l: "Sin recoger", i: "Clock" },
+  { id: "soluciones", l: "Soluciones", i: "BookOpen" },
+  { id: "equipo", l: "Empleados", i: "Users" },
+  { id: "respaldo", l: "Respaldo", i: "Download" }
+];
+function GestionView(props) {
+  var emp = props.empleado;
+  var allowed = GESTION_TABS.filter(function (t) { return !emp || !ROLE_TABS[emp.rol] || ROLE_TABS[emp.rol].indexOf(t.id) >= 0; });
+  var saved = ""; try { saved = localStorage.getItem("acce_gestion_tab") || ""; } catch (e) {}
+  var _t = useState(allowed.some(function (t) { return t.id === saved; }) ? saved : allowed[0].id), tab = _t[0], setTab = _t[1];
+  if (!allowed.some(function (t) { return t.id === tab; })) tab = allowed[0].id;
+  var go = function (id) { setTab(id); try { localStorage.setItem("acce_gestion_tab", id); } catch (e) {} };
+  var p = { data: props.data, save: props.save, notify: props.notify, storeName: props.storeName, empleado: emp, onSwitch: props.onSwitch };
+  return _gh("div", null,
+    _gh("h2", { style: { margin: "0 0 14px", fontSize: 22, fontWeight: 800, color: T.text } }, "Gestión"),
+    _gh("div", { className: "trp-scroll", style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 14 } },
+      allowed.map(function (t) {
+        var on = t.id === tab;
+        return _gh("button", { key: t.id, onClick: function () { go(t.id); }, style: { display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", padding: "8px 14px", borderRadius: 8, border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accent : T.card, color: on ? "#fff" : T.text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: on ? 700 : 500 } }, _gIco(t.i, 14), t.l);
+      })),
+    tab === "cobrar" && _gh(PorCobrarTab, p),
+    tab === "cotizaciones" && _gh(CotizacionesTab, p),
+    tab === "cierre" && _gh(CierreCajaTab, p),
+    tab === "garantias" && _gh(GarantiasTab, p),
+    tab === "olvidados" && _gh(OlvidadosTab, p),
+    tab === "soluciones" && _gh(SolucionesTab, p),
+    tab === "equipo" && _gh(EmpleadosTab, p),
+    tab === "respaldo" && _gh(RespaldoTab, p));
+}
+// ═══════════════════ FIN MÓDULO GESTIÓN PRO ═══════════════════
+
+// Sella fechas de estado para medir tiempos y equipos sin recoger.
+function _gStampRepairs(d) {
+  if (!d || !Array.isArray(d.repairs)) return d;
+  var hoy = getHoyColombia(), changed = false;
+  var reps = d.repairs.map(function (r) {
+    var add = null;
+    if ((r.status === "Listo" || r.status === "Entregado") && !r.readyDate) (add = add || {}).readyDate = r.status === "Listo" ? hoy : (r.deliveryDate || hoy);
+    if (r.status === "Entregado" && !r.deliveryDate) (add = add || {}).deliveryDate = hoy;
+    if (!add) return r; changed = true; return Object.assign({}, r, add);
+  });
+  return changed ? Object.assign({}, d, { repairs: reps }) : d;
+}
+
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var onLogout = _appProps && _appProps.onLogout ? _appProps.onLogout : function(){};
@@ -13009,6 +13826,7 @@ function App(_appProps) {
   // ─── GUARDAR ─────────────────────────────────────────────────────────────────
   // Guarda en localStorage PRIMERO (nunca falla), luego sube a Firebase
   var save = function save(d) {
+    d = _gStampRepairs(d);
     var KEY = "trp_data_" + clientId;
     var ts  = Date.now();
     setData(d);
@@ -13149,6 +13967,12 @@ function App(_appProps) {
   };
   var _sbOpen = useState(function(){return window.innerWidth>=1024;}), _sbOpenA = _slicedToArray(_sbOpen, 2), sidebarOpen = _sbOpenA[0], setSidebarOpen = _sbOpenA[1];
   var _pmOpen = useState(false), _pmOpenA = _slicedToArray(_pmOpen, 2), profileMenuOpen = _pmOpenA[0], setProfileMenuOpen = _pmOpenA[1];
+  // Modo empleado (turno con PIN): limita el menú según el rol.
+  var _empS = useState(_empSessionGet), _empSA = _slicedToArray(_empS, 2), empId = _empSA[0], setEmpId = _empSA[1];
+  var empleado = (data && empId) ? ((data.empleados || []).find(function (e) { return e.id === empId && e.activo !== false; }) || null) : null;
+  var switchEmpleado = function (id) { _empSessionSet(id); setEmpId(id); };
+  useEffect(function () { if (empleado && !_empCanView(empleado, view)) setView("dashboard"); }, [empId, view]);
+  window.__acceStoreName = settings.storeName;
   if (!data || !minLoadTimeDone) return /*#__PURE__*/React.createElement(LoadingScreen, { title: "Cargando", subtitle: "Recuperando información necesaria" });
   if (publicMode) return /*#__PURE__*/React.createElement(PublicView, {
     data: data,
@@ -13233,6 +14057,11 @@ function App(_appProps) {
       size: 17
     })
   }, {
+    id: "gestion",
+    label: "Gestión",
+    icon: _gIco("Briefcase", 17),
+    badge: (data.cotizaciones || []).filter(function (c) { return c.estado === "Pendiente"; }).length
+  }, {
     id: "reporte",
     label: "Reporte",
     icon: /*#__PURE__*/React.createElement(Printer, {
@@ -13257,6 +14086,7 @@ function App(_appProps) {
       size: 17
     })
   }];
+  navItems = navItems.filter(function (n) { return _empCanView(empleado, n.id); });
   var _activeNavItem = navItems.find(function (n) { return n.id === view; });
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -13517,6 +14347,8 @@ function App(_appProps) {
       className: "trp-scroll",
       style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24, paddingBottom: isMobile ? 78 : 24 }
     },
+    /*#__PURE__*/React.createElement(EmpleadoBar, { empleado: empleado, data: data, onSwitch: switchEmpleado, notify: notify }),
+    view === "gestion" && /*#__PURE__*/React.createElement(GestionView, { data: data, save: save, notify: notify, storeName: settings.storeName, empleado: empleado, onSwitch: switchEmpleado }),
     view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify, clientId: clientId }),
     view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
     view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
@@ -14601,7 +15433,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.0.0";
+var APP_VERSION = "1.1.0";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
