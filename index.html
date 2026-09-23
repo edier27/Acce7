@@ -14486,6 +14486,8 @@ function App(_appProps) {
   useEffect(function () { if (empleado && !_empCanView(empleado, view)) setView("dashboard"); }, [empId, view]);
   window.__acceStoreName = settings.storeName;
   window.__acceClientId = clientId;
+  window.__acceData = data; // datos en vivo para el asistente IA
+  useEffect(function () { return function () { window.__acceData = null; }; }, []); // al cerrar sesión
 
   // ─── GOOGLE DRIVE: sube a Drive las fotos que siguen dentro de los datos ───
   var _gdDataRef = React.useRef(data), _gdSaveRef = React.useRef(save);
@@ -16375,7 +16377,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   border: 1px solid rgba(255,255,255,0.07);
   color: #d3d3d3;
 }
-.ai-msg.bot strong { color: #1A1A1A; }
+.ai-msg.bot strong { color: #ffffff; }
 .ai-msg.typing { color: #787878; font-style: italic; }
 
 .ai-key-area {
@@ -16769,104 +16771,91 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   sendBtn.addEventListener("click", sendMessage);
 
   // ─── Leer todos los datos del software desde localStorage ───
+  // Datos EN VIVO del taller (los publica App en window.__acceData). La copia de
+  // localStorage se borra al guardar en Firebase, por eso solo se usa de respaldo.
   function getAppData() {
-    var allData = {};
-    // Buscar la key de datos del usuario actual
-    var currentUser = localStorage.getItem("trp_current_user");
-    if (currentUser) {
-      var userData = null;
-      try { userData = JSON.parse(localStorage.getItem("trp_user_" + currentUser) || "null"); } catch(e) {}
-      var clientId = (userData && userData.clientId) ? userData.clientId : currentUser;
-      var keys = ["trp_data_" + clientId, "trp_data_demo", "trp_data_"];
-      for (var i = 0; i < keys.length; i++) {
-        try {
-          var raw = localStorage.getItem(keys[i]);
-          if (raw) { allData = JSON.parse(raw); break; }
-        } catch(e) {}
-      }
-    }
-    // Fallback: buscar cualquier trp_data_*
-    if (!allData || Object.keys(allData).length === 0) {
-      for (var k = 0; k < localStorage.length; k++) {
-        var lkey = localStorage.key(k);
-        if (lkey && lkey.startsWith("trp_data_")) {
-          try { allData = JSON.parse(localStorage.getItem(lkey) || "{}"); break; } catch(e) {}
-        }
-      }
-    }
-    return allData;
+    if (window.__acceData && typeof window.__acceData === "object") return window.__acceData;
+    var cid = window.__acceClientId;
+    try { var raw = cid && localStorage.getItem("trp_data_" + cid); if (raw) return JSON.parse(raw); } catch (e) {}
+    return {};
   }
 
   function buildContext(data) {
-    var lines = ["DATOS ACTUALES DE ACCE PRO (usa estos para responder):"];
+    var N = function (v) { return Number(v) || 0; };
+    var $ = function (v) { return "$" + Math.round(N(v)).toLocaleString("es-CO"); };
+    var hoy = (typeof getHoyColombia === "function") ? getHoyColombia() : new Date().toISOString().slice(0, 10);
+    var mes = hoy.slice(0, 7);
+    var hace30 = new Date(new Date(hoy + "T12:00:00").getTime() - 29 * 864e5).toISOString().slice(0, 10);
+    var abonado = function (r) { return (r.advances || []).reduce(function (s, a) { return s + N(a.amount); }, 0); };
+    var L = ["DATOS REALES DEL TALLER " + (window.__acceStoreName || "") + " — fecha de hoy: " + hoy + " (moneda: pesos colombianos)"];
 
-    // Productos
+    // Productos (mostrador)
     var products = data.products || [];
-    if (products.length > 0) {
-      lines.push("\n## PRODUCTOS EN VENTA (" + products.length + " productos):");
-      products.forEach(function(p) {
-        lines.push("- " + p.name + " | Precio: $" + (p.price||0) + " | Stock: " + (p.stock||0) + " | Cat: " + (p.category||"Sin cat") + (p.sku ? " | SKU: "+p.sku : ""));
-      });
-    }
+    L.push("\n## PRODUCTOS EN VENTA (" + products.length + "):");
+    products.forEach(function (p) {
+      L.push("- " + p.name + " | Precio: " + $(p.price) + " | Stock: " + N(p.stock) + (p.category ? " | Cat: " + p.category : "") + (p.active === false ? " | INACTIVO" : ""));
+    });
 
-    // Inventario (repuestos)
+    // Repuestos
     var inventory = data.inventory || [];
-    if (inventory.length > 0) {
-      lines.push("\n## INVENTARIO/REPUESTOS (" + inventory.length + " ítems):");
-      inventory.forEach(function(item) {
-        lines.push("- " + (item.name||item.part||"?") + " | Qty: " + (item.qty||0) + " | Costo: $" + (item.cost||item.price||0) + (item.category ? " | Cat: "+item.category : ""));
-      });
-    }
+    L.push("\n## REPUESTOS / INVENTARIO (" + inventory.length + "):");
+    inventory.forEach(function (i) {
+      L.push("- " + (i.name || "?") + " | Cantidad: " + N(i.qty) + " | Mínimo: " + N(i.minQty) + " | Costo: " + $(i.cost) + (N(i.price) ? " | Precio venta: " + $(i.price) : "") + (i.category ? " | Cat: " + i.category : ""));
+    });
+    var bajosInv = inventory.filter(function (i) { return N(i.qty) <= N(i.minQty); });
+    var bajosProd = products.filter(function (p) { return p.active !== false && N(p.stock) <= 3; });
+    L.push("\n## STOCK BAJO");
+    L.push("Repuestos en o por debajo del mínimo (" + bajosInv.length + "): " + (bajosInv.map(function (i) { return i.name + " (" + N(i.qty) + "/" + N(i.minQty) + ")"; }).join(", ") || "ninguno"));
+    L.push("Productos con 3 o menos (" + bajosProd.length + "): " + (bajosProd.map(function (p) { return p.name + " (" + N(p.stock) + ")"; }).join(", ") || "ninguno"));
 
     // Reparaciones
     var repairs = data.repairs || [];
-    if (repairs.length > 0) {
-      var pending = repairs.filter(function(r){ return r.status === "pending" || r.status === "in_progress" || !r.status || r.status === "Pendiente" || r.status === "En progreso"; });
-      var done    = repairs.filter(function(r){ return r.status === "done" || r.status === "Listo" || r.status === "completed"; });
-      lines.push("\n## REPARACIONES: " + repairs.length + " total | " + pending.length + " activas | " + done.length + " listas");
-      if (pending.length > 0) {
-        lines.push("Activas/Pendientes:");
-        pending.slice(0, 20).forEach(function(r) {
-          lines.push("- " + (r.client||r.customer||"Sin nombre") + " | " + (r.device||r.model||"?") + " | Estado: " + (r.status||"Pendiente") + (r.price ? " | $"+r.price : "") + (r.id ? " | ID:"+r.id : ""));
-        });
-      }
-    }
+    var porEstado = {};
+    repairs.forEach(function (r) { var st = r.status || "Recibido"; porEstado[st] = (porEstado[st] || 0) + 1; });
+    L.push("\n## REPARACIONES: " + repairs.length + " en total | por estado: " + Object.keys(porEstado).map(function (k) { return k + " " + porEstado[k]; }).join(", "));
+    var activas = repairs.filter(function (r) { return ["Entregado", "Cancelado"].indexOf(r.status) < 0; })
+      .sort(function (a, b) { return String(b.date || "").localeCompare(String(a.date || "")); });
+    L.push("Equipos en el taller (sin entregar) (" + activas.length + "):");
+    activas.slice(0, 80).forEach(function (r) {
+      var saldo = r.paid ? 0 : Math.max(0, N(r.cost) - abonado(r));
+      L.push("- #" + String(r.id || "").slice(-6).toUpperCase() + " | " + (r.customer || "Sin nombre") + (r.phone ? " (" + r.phone + ")" : "") + " | " + (r.device || "?") + " | Falla: " + (r.problem || "-") +
+        " | Estado: " + (r.status || "Recibido") + " | Ingresó: " + (r.date || "?") + " | Valor: " + $(r.cost) + (saldo ? " | Debe: " + $(saldo) : " | Pagado") + (r.technician ? " | Técnico: " + r.technician : ""));
+    });
+    var porCobrar = repairs.filter(function (r) { return !r.paid && r.status !== "Cancelado" && N(r.cost) - abonado(r) > 0; });
+    L.push("Saldo pendiente por cobrar en reparaciones: " + $(porCobrar.reduce(function (s, r) { return s + N(r.cost) - abonado(r); }, 0)) + " (" + porCobrar.length + " órdenes)");
+    var entregadasMes = repairs.filter(function (r) { return r.status === "Entregado" && String(r.deliveryDate || r.date || "").slice(0, 7) === mes; });
+    L.push("Reparaciones entregadas este mes: " + entregadasMes.length);
 
-    // Ventas / Caja
-    var sales = data.sales || data.caja || [];
-    if (sales.length > 0) {
-      var today = new Date().toISOString().slice(0,10);
-      var todaySales = sales.filter(function(s){ return s.date && s.date.startsWith(today); });
-      var totalToday = todaySales.reduce(function(acc,s){ return acc + (Number(s.total||s.amount||0)); }, 0);
-      var totalAll = sales.reduce(function(acc,s){ return acc + (Number(s.total||s.amount||0)); }, 0);
-      lines.push("\n## VENTAS: " + sales.length + " total | Hoy: " + todaySales.length + " ventas ($" + totalToday.toFixed(2) + ") | Total histórico: $" + totalAll.toFixed(2));
-    }
+    // Ventas de mostrador
+    var sales = data.sales || [];
+    var sum = function (arr) { return arr.reduce(function (s, x) { return s + N(x.total); }, 0); };
+    var vHoy = sales.filter(function (s) { return String(s.date || "").slice(0, 10) === hoy; });
+    var vMes = sales.filter(function (s) { return String(s.date || "").slice(0, 7) === mes; });
+    var v30 = sales.filter(function (s) { return String(s.date || "").slice(0, 10) >= hace30; });
+    L.push("\n## VENTAS DE MOSTRADOR: " + sales.length + " en total");
+    L.push("Hoy: " + vHoy.length + " ventas por " + $(sum(vHoy)) + " | Este mes: " + vMes.length + " por " + $(sum(vMes)) + " | Últimos 30 días: " + v30.length + " por " + $(sum(v30)));
+    var top = {};
+    vMes.forEach(function (s) { (s.items || []).forEach(function (it) { var k = it.name || it.productName || "?"; top[k] = (top[k] || 0) + N(it.qty || 1); }); });
+    var topList = Object.keys(top).sort(function (a, b) { return top[b] - top[a]; }).slice(0, 10);
+    if (topList.length) L.push("Más vendidos este mes: " + topList.map(function (k) { return k + " (" + top[k] + ")"; }).join(", "));
+    sales.slice().sort(function (a, b) { return String(b.date || "").localeCompare(String(a.date || "")); }).slice(0, 15).forEach(function (s) {
+      L.push("- " + (s.date || "?") + " | " + (s.customer || "Cliente general") + " | " + $(s.total) + " | " + (s.payment || "-") + " | " + (s.items || []).map(function (it) { return (it.name || "?") + " x" + N(it.qty || 1); }).join(", "));
+    });
 
-    // Clientes
-    var clients = data.clients || data.customers || [];
-    if (clients.length > 0) {
-      lines.push("\n## CLIENTES: " + clients.length + " registrados");
-    }
+    // Caja (ingresos y egresos manuales)
+    var cf = data.cashflow || [];
+    var cfSum = function (tipo, pref) { return cf.filter(function (c) { return c.type === tipo && String(c.date || "").indexOf(pref) === 0; }).reduce(function (s, c) { return s + N(c.amount); }, 0); };
+    L.push("\n## CAJA (movimientos manuales)");
+    L.push("Hoy: ingresos " + $(cfSum("ingreso", hoy)) + ", egresos " + $(cfSum("egreso", hoy)) + " | Este mes: ingresos " + $(cfSum("ingreso", mes)) + ", egresos " + $(cfSum("egreso", mes)));
 
-    // Resumen general
-    lines.push("\n## RESUMEN GENERAL:");
-    lines.push("- Productos: " + products.length);
-    lines.push("- Repuestos en inventario: " + inventory.length);
-    lines.push("- Reparaciones totales: " + (data.repairs||[]).length);
-    lines.push("- Ventas totales: " + ((data.sales||data.caja||[]).length));
-    lines.push("- Clientes: " + clients.length);
-
-    // Alertas de stock bajo
-    var lowStock = products.filter(function(p){ return (p.stock||0) <= 3; });
-    if (lowStock.length > 0) {
-      lines.push("\n⚠️ STOCK BAJO (≤3 unidades): " + lowStock.map(function(p){ return p.name+"("+p.stock+")"; }).join(", "));
+    // Clientes y celulares
+    L.push("\n## CLIENTES: " + (data.customers || []).length + " registrados");
+    var cels = (data.celulares || []).filter(function (c) { return c.estado !== "Vendido"; });
+    if (cels.length) {
+      L.push("\n## CELULARES EN VENTA (" + cels.length + "):");
+      cels.forEach(function (c) { L.push("- " + [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" ") + " | " + (c.condicion || "") + " | " + $(c.precio) + " | " + (c.estado || "Disponible")); });
     }
-    var lowInv = inventory.filter(function(i){ return (i.qty||0) <= 2; });
-    if (lowInv.length > 0) {
-      lines.push("⚠️ REPUESTOS BAJOS (≤2): " + lowInv.map(function(i){ return (i.name||i.part)+"("+i.qty+")"; }).join(", "));
-    }
-
-    return lines.join("\n");
+    return L.join("\n");
   }
 
   function addMessage(text, role, isTyping) {
