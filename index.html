@@ -11436,11 +11436,13 @@ var _IA_KEY_STORE = "acce_ai_key";
 
 // Google retira modelos cada cierto tiempo (gemini-1.5-flash ya no existe).
 // "gemini-flash-latest" siempre apunta al Flash vigente; si no responde, se prueban los siguientes.
-var _GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"];
-var _geminiOk = null; // modelo que ya funcionó en esta sesión
+// Si uno está saturado (mucha demanda) o sin cupo, se prueba el siguiente.
+var _GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+var _geminiOk = null; // modelo que funcionó la última vez (se prueba primero)
 function _geminiGenerate(apiKey, body) {
-  var list = _geminiOk ? [_geminiOk] : _GEMINI_MODELS.slice();
-  var i = 0;
+  var list = _GEMINI_MODELS.slice();
+  if (_geminiOk) list = [_geminiOk].concat(list.filter(function (m) { return m !== _geminiOk; }));
+  var i = 0, lastBusy = null;
   var tryNext = function () {
     var model = list[i];
     return fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent", {
@@ -11452,9 +11454,12 @@ function _geminiGenerate(apiKey, body) {
       return res.json().catch(function () { return {}; }).then(function (e) {
         var msg = (e && e.error && e.error.message) || "";
         var gone = res.status === 404 || (res.status === 400 && /not found|not supported|is not available/i.test(msg));
-        if (gone && i < list.length - 1) { i++; return tryNext(); }
-        if (res.status === 400 && /api key/i.test(msg)) throw { error: { message: "La API key no es válida. Revísala o crea una nueva en aistudio.google.com/apikey" } };
-        if (res.status === 429) throw { error: { message: "Se alcanzó el límite gratuito de consultas por ahora. Espera un minuto y vuelve a intentar." } };
+        var busy = res.status === 429 || res.status === 500 || res.status === 503 || /overloaded|high demand|unavailable/i.test(msg);
+        if (busy) lastBusy = res.status;
+        if ((gone || busy) && i < list.length - 1) { i++; return tryNext(); }
+        if ((res.status === 400 || res.status === 403) && /api key|permission|unauthori[sz]ed/i.test(msg)) throw { error: { message: "Google no aceptó la API key. Revísala o crea una nueva en aistudio.google.com/apikey" } };
+        if (lastBusy === 429) throw { error: { message: "Se alcanzó el límite gratuito de consultas por ahora. Espera un minuto y vuelve a intentar." } };
+        if (lastBusy) throw { error: { message: "Los servidores de Google están saturados en este momento. Espera unos segundos y vuelve a intentar." } };
         throw (e && e.error) ? e : { error: { message: "Google respondió " + res.status } };
       });
     });
@@ -16907,7 +16912,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
       var msg = "Error al conectar con la IA.";
       if (err && err.error && err.error.message) msg = "Error: " + err.error.message;
       else if (err && err.message) msg = "Error: " + err.message;
-      addMessage(msg + "<br><small style='color:#787878'>Verifica tu API key con el botón de abajo.</small>", "bot");
+      var errEl = addMessage(msg, "bot");
+      if (!/saturados|límite gratuito/.test(msg)) {
+        var hint = document.createElement("small");
+        hint.style.cssText = "display:block;margin-top:6px;color:#9a9a9a";
+        hint.textContent = "Si el problema sigue, revisa tu API key con \"Cambiar API key\" abajo.";
+        errEl.appendChild(hint);
+      }
     })
     .finally(function() {
       sendBtn.disabled = false;
