@@ -1,15 +1,16 @@
 // ACCE PRO — Service Worker v1.0
-const CACHE_NAME = 'accepro-v2';
+const CACHE_NAME = 'accepro-v3';
+// Rutas relativas al sitio (sirve en GitHub Pages /Acce7/ y en pruebas locales)
 const ASSETS = [
-  '/Acce7/',
-  '/Acce7/index.html'
+  './',
+  './index.html'
 ];
 
 // Instalar y cachear recursos
 self.addEventListener('install', function(e) {
   e.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(ASSETS);
+      return cache.addAll(ASSETS).catch(function() {});
     })
   );
   self.skipWaiting();
@@ -46,5 +47,16 @@ self.addEventListener('fetch', function(e) {
       .catch(function() {
         return caches.match(e.request);
       })
+  );
+});
+
+// Al tocar un aviso (calificación nueva, pendientes del día): abrir o enfocar la app
+self.addEventListener('notificationclick', function(e) {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(list) {
+      for (var i = 0; i < list.length; i++) { if ('focus' in list[i]) return list[i].focus(); }
+      return self.clients.openWindow('./');
+    })
   );
 });

@@ -11574,6 +11574,13 @@ function ProveedoresView(_pRef) {
   var facturaRef = useRef(null);
 
   useEffect(function() { try { localStorage.setItem("acce_order_drafts", JSON.stringify(orderDrafts)); } catch(e) {} }, [orderDrafts]);
+  // Pedido sugerido por el Asistente IA: abrir directo el editor de ese proveedor
+  useEffect(function() {
+    var pid = null;
+    try { pid = localStorage.getItem("acce_open_order"); localStorage.removeItem("acce_open_order"); } catch(e) {}
+    var p = pid && (data.providers || []).find(function(x) { return x.id === pid; });
+    if (p) { setSubView("proveedores"); openOrder(p); }
+  }, []);
 
   var providers = data.providers || [];
   var couriers = data.couriers || [];
@@ -13785,8 +13792,8 @@ function SolucionesTab(props) {
 // ─── 8. EMPLEADOS, ROLES Y PRODUCTIVIDAD ────────────────────────────
 var ROLES = {
   admin:   { l: "Administrador", views: null },
-  cajero:  { l: "Cajero / ventas", views: ["dashboard", "repairs", "products", "celulares", "customers", "sales", "facturas", "caja", "gestion"] },
-  tecnico: { l: "Técnico", views: ["dashboard", "repairs", "inventory", "customers", "gestion"] }
+  cajero:  { l: "Cajero / ventas", views: ["dashboard", "repairs", "products", "celulares", "customers", "sales", "facturas", "caja", "gestion", "ia"] },
+  tecnico: { l: "Técnico", views: ["dashboard", "repairs", "inventory", "customers", "gestion", "ia"] }
 };
 var ROLE_TABS = { cajero: ["cierre", "cotizaciones", "cobrar", "olvidados", "garantias", "soluciones"], tecnico: ["cotizaciones", "garantias", "soluciones", "olvidados"] };
 var _EMP_KEY = "acce_emp_session";
@@ -13994,6 +14001,669 @@ function GestionView(props) {
     tab === "respaldo" && _gh(RespaldoTab, p));
 }
 // ═══════════════════ FIN MÓDULO GESTIÓN PRO ═══════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// MÓDULO ASISTENTE IA
+// Resumen del día + avisos, mensajes de WhatsApp redactados por IA,
+// asistente de diagnóstico y pedido sugerido a proveedor.
+// Usa la misma clave de Gemini del chat (localStorage "acce_ai_key").
+// ═══════════════════════════════════════════════════════════════════
+function _iaKey() { try { return localStorage.getItem(_IA_KEY_STORE) || ""; } catch (e) { return ""; } }
+// Pregunta a Gemini y devuelve el texto (o el JSON ya interpretado si opts.json)
+function _iaAsk(prompt, opts) {
+  opts = opts || {};
+  var key = _iaKey();
+  if (!key) return Promise.reject(new Error("SIN_CLAVE"));
+  var parts = (opts.images || []).map(function (u) {
+    var m = String(u).match(/^data:([^;]+);base64,(.*)$/);
+    return m ? { inline_data: { mime_type: m[1], data: m[2] } } : null;
+  }).filter(Boolean).concat([{ text: prompt }]);
+  var body = {
+    contents: [{ role: "user", parts: parts }],
+    generationConfig: { maxOutputTokens: opts.max || 2048, temperature: opts.temp == null ? 0.6 : opts.temp }
+  };
+  if (opts.system) body.system_instruction = { parts: [{ text: opts.system }] };
+  if (opts.json) body.generationConfig.responseMimeType = "application/json";
+  return _geminiGenerate(key, body).then(function (json) {
+    var t = _geminiText(json).trim();
+    if (!t) throw new Error("La IA no devolvió respuesta. Intenta de nuevo.");
+    if (!opts.json) return t;
+    t = t.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "").trim();
+    try { return JSON.parse(t); } catch (e) { throw new Error("No se pudo interpretar la respuesta de la IA."); }
+  }, function (e) { throw new Error((e && e.error && e.error.message) || (e && e.message) || "Error al conectar con la IA."); });
+}
+function _iaErrMsg(e) {
+  return e && e.message === "SIN_CLAVE" ? "Primero configura tu API key de Gemini en el chat (botón de abajo a la derecha)." : ((e && e.message) || "Error con la IA");
+}
+// Texto de la IA → HTML seguro (se escapa primero y luego negritas/saltos)
+function _iaHtml(t) {
+  return { __html: _escHtml(t).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/^\s*[-*]\s+/gm, "• ").replace(/^#{1,4}\s*(.+)$/gm, "<strong>$1</strong>").replace(/\n/g, "<br>") };
+}
+function _iaTexto(t) { return _gh("div", { style: { fontSize: 14, lineHeight: 1.6, color: T.text }, dangerouslySetInnerHTML: _iaHtml(t) }); }
+function _iaNorm(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " "); }
+function _iaFirst(n) { return String(n || "").trim().split(/\s+/)[0] || ""; }
+function _iaMoney(v) { return "$" + Math.round(Number(v) || 0).toLocaleString("es-CO"); }
+
+// ── Hechos del día (se calculan localmente, sin IA) ──
+function _iaHechos(data) {
+  var hoy = getHoyColombia();
+  var reps = data.repairs || [];
+  var listos = reps.filter(function (r) { return r.status === "Listo"; }).map(function (r) { return Object.assign({}, r, { _dias: _gDiff(r.readyDate || r.date, hoy) }); })
+    .sort(function (a, b) { return b._dias - a._dias; });
+  var olvidados = listos.filter(function (r) { return r._dias >= 7; });
+  var estancados = reps.filter(function (r) { return ["Recibido", "Diagnóstico", "En Reparación"].indexOf(r.status) >= 0 && _gDiff(r.date, hoy) >= 7; })
+    .map(function (r) { return Object.assign({}, r, { _dias: _gDiff(r.date, hoy) }); }).sort(function (a, b) { return b._dias - a._dias; });
+  var deudores = reps.filter(function (r) { return ["Listo", "Entregado"].indexOf(r.status) >= 0 && _gRepPendiente(r) > 0; });
+  var porCobrar = deudores.reduce(function (s, r) { return s + _gRepPendiente(r); }, 0);
+  var bajos = (data.inventory || []).filter(function (i) { return (Number(i.qty) || 0) <= (Number(i.minQty) || 0); });
+  var cotiz = (data.cotizaciones || []).filter(function (c) { return c.estado === "Pendiente"; });
+  var ayer = _gAddDays(hoy, -1);
+  var ventasAyer = (data.sales || []).filter(function (s) { return String(s.date || "").slice(0, 10) === ayer; });
+  var entregadosAyer = reps.filter(function (r) { return r.status === "Entregado" && String(r.deliveryDate || "").slice(0, 10) === ayer; });
+  return { hoy: hoy, listos: listos, olvidados: olvidados, estancados: estancados, deudores: deudores, porCobrar: porCobrar, bajos: bajos, cotiz: cotiz,
+    ventasAyer: ventasAyer.length, totalAyer: ventasAyer.reduce(function (s, v) { return s + (Number(v.total) || 0); }, 0), entregadosAyer: entregadosAyer.length };
+}
+
+// ── Avisos del navegador (con la app abierta) ──
+var _AVISOS_KEY = "acce_avisos_on";
+function _avisosOn() { try { return localStorage.getItem(_AVISOS_KEY) === "1" && typeof Notification !== "undefined" && Notification.permission === "granted"; } catch (e) { return false; } }
+function _avisoMostrar(title, body, tag) {
+  if (!_avisosOn()) return;
+  var opts = { body: body, tag: tag || "acce", icon: "icon-192.png", badge: "icon-192.png" };
+  var fallback = function () { try { new Notification(title, opts); } catch (e) {} };
+  // En Android solo funcionan las notificaciones a través del service worker
+  if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+    navigator.serviceWorker.getRegistration().then(function (reg) { if (reg && reg.showNotification) reg.showNotification(title, opts); else fallback(); }).catch(fallback);
+  } else fallback();
+}
+function _avisosActivar() {
+  if (typeof Notification === "undefined") return Promise.reject(new Error("Este navegador no permite avisos."));
+  var reg = (navigator.serviceWorker && location.protocol !== "file:") ? navigator.serviceWorker.register("sw.js").catch(function () { return null; }) : Promise.resolve(null);
+  return reg.then(function () { return Notification.requestPermission(); }).then(function (p) {
+    if (p !== "granted") throw new Error("No se dio permiso. Actívalo en la configuración del navegador (candado junto a la dirección).");
+    try { localStorage.setItem(_AVISOS_KEY, "1"); } catch (e) {}
+  });
+}
+function _avisosDesactivar() { try { localStorage.removeItem(_AVISOS_KEY); } catch (e) {} }
+// Aviso del día: una sola vez por día y por equipo
+function _avisoDelDia(data) {
+  if (!_avisosOn()) return;
+  var h = _iaHechos(data), k = "acce_aviso_dia";
+  try { if (localStorage.getItem(k) === h.hoy) return; localStorage.setItem(k, h.hoy); } catch (e) { return; }
+  var partes = [];
+  if (h.listos.length) partes.push(h.listos.length + " listos para entregar" + (h.olvidados.length ? " (" + h.olvidados.length + " hace +7 días)" : ""));
+  if (h.estancados.length) partes.push(h.estancados.length + " equipos sin avanzar hace +7 días");
+  if (h.porCobrar) partes.push("te deben " + _iaMoney(h.porCobrar));
+  if (h.bajos.length) partes.push(h.bajos.length + " repuestos bajos");
+  if (h.cotiz.length) partes.push(h.cotiz.length + " cotizaciones sin respuesta");
+  if (partes.length) _avisoMostrar("Pendientes de hoy", partes.join(" · "), "acce-dia");
+}
+
+// ── Tarjeta "Resumen del día" (Dashboard) ──
+var _iaResumenTried = {};
+function IAResumenCard(props) {
+  var data = props.data, setView = props.setView, cid = props.clientId || "x";
+  var h = _iaHechos(data);
+  var cacheKey = "acce_ia_resumen_" + cid;
+  var _c = useState(function () { try { var c = JSON.parse(localStorage.getItem(cacheKey) || "null"); return c && c.date === h.hoy ? c.text : ""; } catch (e) { return ""; } }), text = _c[0], setText = _c[1];
+  var _l = useState(false), loading = _l[0], setLoading = _l[1];
+  var _e = useState(""), err = _e[0], setErr = _e[1];
+  var _o = useState(true), open = _o[0], setOpen = _o[1];
+  var generar = function () {
+    setLoading(true); setErr("");
+    var hechos = [
+      "Fecha: " + h.hoy,
+      "Ayer: " + h.ventasAyer + " ventas de mostrador por " + _iaMoney(h.totalAyer) + ", " + h.entregadosAyer + " equipos entregados.",
+      "Listos para entregar: " + h.listos.length + ". " + h.listos.slice(0, 8).map(function (r) { return r.customer + " (" + r.device + ", " + r._dias + " días listo" + (_gRepPendiente(r) ? ", debe " + _iaMoney(_gRepPendiente(r)) : "") + ")"; }).join("; "),
+      "Equipos sin avanzar hace 7+ días: " + h.estancados.length + ". " + h.estancados.slice(0, 8).map(function (r) { return r.customer + " (" + r.device + ", " + r.status + ", " + r._dias + " días)"; }).join("; "),
+      "Por cobrar: " + _iaMoney(h.porCobrar) + " en " + h.deudores.length + " órdenes.",
+      "Repuestos en o bajo el mínimo: " + h.bajos.length + ". " + h.bajos.slice(0, 12).map(function (i) { return i.name + " (" + (i.qty || 0) + ")"; }).join(", "),
+      "Cotizaciones esperando respuesta del cliente: " + h.cotiz.length + "."
+    ].join("\n");
+    _iaAsk("Datos del taller hoy:\n" + hechos + "\n\nEscribe el resumen de la mañana para el dueño.", {
+      system: "Eres el asistente del taller de celulares " + (window.__acceStoreName || "") + " en Colombia. Escribe un resumen corto (máximo 8 líneas) para empezar el día: primero lo más urgente, con nombres y cifras concretas, y termina con una recomendación práctica. Usa **negritas** para nombres y cifras y guiones para listas. Sin emojis. No inventes nada que no esté en los datos.",
+      max: 1200, temp: 0.4
+    }).then(function (t) { setText(t); try { localStorage.setItem(cacheKey, JSON.stringify({ date: h.hoy, text: t })); } catch (e) {} })
+      .catch(function (e) { setErr(_iaErrMsg(e)); })
+      .then(function () { setLoading(false); });
+  };
+  // Se genera sola una vez al día (si falla, no reintenta en cada visita)
+  useEffect(function () { var k = cid + h.hoy; if (!text && _iaKey() && !_iaResumenTried[k]) { _iaResumenTried[k] = 1; generar(); } }, []);
+  var chip = function (n, label, color, view) {
+    if (!n) return null;
+    return _gh("button", { onClick: function () { setView(view); }, style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 20, border: "1px solid " + T.border, background: T.surface || T.card, color: T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" } },
+      _gh("span", { style: { width: 7, height: 7, borderRadius: "50%", background: color } }), n + " " + label);
+  };
+  return _gh("div", { style: Object.assign({}, _gCard, { marginBottom: 16, padding: 16 }) },
+    _gh("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: open ? 10 : 0 } },
+      _gIco("Sparkles", 16),
+      _gh("strong", { style: { fontSize: 15, color: T.text, flex: 1 } }, "Resumen del día"),
+      open && _iaKey() && _gh(Btn, { small: true, variant: "ghost", disabled: loading, onClick: generar, icon: loading ? _gh(Loader2, { size: 13, className: "trp-spin" }) : _gIco("RefreshCw", 13) }, loading ? "Pensando..." : "Actualizar"),
+      _gh("button", { onClick: function () { setOpen(!open); }, title: open ? "Contraer" : "Expandir", style: { background: "none", border: "none", color: T.muted, cursor: "pointer", display: "flex" } }, _gIco(open ? "ChevronUp" : "ChevronDown", 16))),
+    open && _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 } },
+      chip(h.listos.length, "listos para entregar", T.green, "repairs"),
+      chip(h.olvidados.length, "listos hace +7 días", "#d97706", "gestion"),
+      chip(h.estancados.length, "sin avanzar +7 días", T.red, "repairs"),
+      h.porCobrar ? chip(_iaMoney(h.porCobrar), "por cobrar", "#d97706", "gestion") : null,
+      chip(h.bajos.length, "repuestos bajos", T.red, "inventory"),
+      chip(h.cotiz.length, "cotizaciones pendientes", T.accent, "gestion")),
+    open && (text ? _iaTexto(text)
+      : err ? _gh("div", { style: { fontSize: 13, color: T.red } }, err)
+      : loading ? _gh("div", { style: { fontSize: 13, color: T.muted } }, "Preparando el resumen...")
+      : !_iaKey() ? _gh("div", { style: { fontSize: 13, color: T.muted } }, "Configura tu API key de Gemini en el chat para recibir aquí un resumen redactado cada mañana.")
+      : null));
+}
+
+// ── Pestaña: Mensajes de WhatsApp con IA ──
+var IA_MSG_TIPOS = [
+  { id: "cobro", l: "Cobro de saldo" },
+  { id: "listo", l: "Equipo listo sin recoger" },
+  { id: "promo", l: "Promoción a clientes" },
+  { id: "libre", l: "Mensaje libre" }
+];
+function IAMensajesTab(props) {
+  var data = props.data, notify = props.notify;
+  var tienda = window.__acceStoreName || "nuestro taller";
+  var h = _iaHechos(data);
+  var _t = useState("cobro"), tipo = _t[0], setTipo = _t[1];
+  var _to = useState("Amable"), tono = _to[0], setTono = _to[1];
+  var _s = useState(null), sel = _s[0], setSel = _s[1];
+  var _m = useState(""), msg = _m[0], setMsg = _m[1];
+  var _i = useState(""), idea = _i[0], setIdea = _i[1];
+  var _l = useState(false), loading = _l[0], setLoading = _l[1];
+  var _q = useState(""), q = _q[0], setQ = _q[1];
+  var candidatos = tipo === "cobro" ? h.deudores.map(function (r) { return { key: r.id, nombre: r.customer, phone: r.phone, det: r.device + " · debe " + _iaMoney(_gRepPendiente(r)), r: r }; })
+    : tipo === "listo" ? h.listos.filter(function (r) { return r._dias >= 2; }).map(function (r) { return { key: r.id, nombre: r.customer, phone: r.phone, det: r.device + " · listo hace " + r._dias + " días", r: r }; })
+    : (data.customers || []).filter(function (c) { return _gDigits(c.phone).length >= 10; }).map(function (c) { return { key: c.id, nombre: c.name, phone: c.phone, det: c.phone }; });
+  if (q) { var nq = _iaNorm(q); candidatos = candidatos.filter(function (c) { return _iaNorm(c.nombre + " " + c.det).indexOf(nq) >= 0; }); }
+  var redactar = function () {
+    var r = sel && sel.r, pedido;
+    if (tipo === "cobro") pedido = "Mensaje de cobro para " + _iaFirst(sel.nombre) + ": su " + r.device + " (orden #" + _gOrderCode(r) + ") tiene un saldo pendiente de " + _iaMoney(_gRepPendiente(r)) + ". Estado: " + r.status + ". Invítalo a pagar por Nequi, transferencia o en el local, sin sonar agresivo.";
+    else if (tipo === "listo") pedido = "Aviso para " + _iaFirst(sel.nombre) + ": su " + r.device + " (orden #" + _gOrderCode(r) + ") está listo hace " + r._dias + " días y no lo ha recogido." + (_gRepPendiente(r) ? " Saldo a pagar al recoger: " + _iaMoney(_gRepPendiente(r)) + "." : "") + " Recuérdale pasar a recogerlo.";
+    else if (tipo === "promo") pedido = "Mensaje de promoción para clientes del taller. Qué se promociona: " + (idea || "descuentos en accesorios y revisión gratis") + ". Empieza con 'Hola {nombre}' (deja {nombre} literal, se reemplaza después).";
+    else pedido = "Mensaje para " + (sel ? _iaFirst(sel.nombre) : "un cliente") + ". Idea: " + (idea || "saludo");
+    setLoading(true);
+    _iaAsk(pedido, {
+      system: "Redactas mensajes de WhatsApp para el taller de celulares \"" + tienda + "\" en Colombia. Tono: " + tono + ". Español colombiano natural, trato de usted, máximo 450 caracteres, firma con el nombre del taller. Puedes usar *negrita* de WhatsApp para una cifra o dato clave. Sin emojis. Devuelve SOLO el texto del mensaje.",
+      max: 800, temp: 0.8
+    }).then(function (t) { setMsg(t.replace(/^["']|["']$/g, "")); }).catch(function (e) { notify(_iaErrMsg(e), "error"); }).then(function () { setLoading(false); });
+  };
+  var enviar = function (c) {
+    var texto = msg.replace(/\{nombre\}/gi, _iaFirst(c ? c.nombre : "") || "");
+    var phone = c ? c.phone : "";
+    if (_gDigits(phone).length < 10) { notify("Ese cliente no tiene un teléfono válido", "error"); return; }
+    window.open(_gWa(phone, texto), "_blank");
+  };
+  var needsSel = tipo === "cobro" || tipo === "listo";
+  return _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" } },
+    _gh("div", { style: _gCard },
+      _gh("span", { style: _gLbl }, "Tipo de mensaje"),
+      _gh("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 } }, IA_MSG_TIPOS.map(function (t) {
+        var on = t.id === tipo;
+        return _gh("button", { key: t.id, onClick: function () { setTipo(t.id); setSel(null); setMsg(""); setQ(""); }, style: { padding: "6px 12px", borderRadius: 18, border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accentDim : "transparent", color: on ? T.accent : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" } }, t.l);
+      })),
+      _gh("span", { style: _gLbl }, "Tono"),
+      _gh("select", { value: tono, onChange: function (e) { setTono(e.target.value); }, style: { width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, marginBottom: 12, fontFamily: "inherit" } },
+        ["Amable", "Formal", "Breve y directo", "Cercano y alegre"].map(function (o) { return _gh("option", { key: o, value: o }, o); })),
+      (tipo === "promo" || tipo === "libre") && _gh(Field, { label: tipo === "promo" ? "¿Qué quiere promocionar?" : "¿Qué quiere decir?", value: idea, onChange: setIdea, placeholder: tipo === "promo" ? "Ej: 20% en vidrios templados esta semana" : "Ej: el repuesto llega el viernes" }),
+      _gh("span", { style: Object.assign({}, _gLbl, { marginTop: 10 }) }, tipo === "cobro" ? "Clientes con saldo (" + candidatos.length + ")" : tipo === "listo" ? "Equipos listos sin recoger (" + candidatos.length + ")" : "Cliente" + (tipo === "promo" ? "s (" + candidatos.length + ")" : " (opcional)")),
+      _gh("input", { value: q, onChange: function (e) { setQ(e.target.value); }, placeholder: "Buscar...", style: { width: "100%", boxSizing: "border-box", padding: "7px 10px", borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, marginBottom: 8, fontFamily: "inherit" } }),
+      _gh("div", { className: "trp-scroll", style: { maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 } },
+        candidatos.length === 0 ? _gEmpty("No hay clientes en esta lista") : candidatos.slice(0, 150).map(function (c) {
+          var on = sel && sel.key === c.key;
+          return _gh("div", { key: c.key, onClick: function () { if (tipo !== "promo") { setSel(on ? null : c); if (needsSel) setMsg(""); } }, style: { display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, cursor: tipo === "promo" ? "default" : "pointer", border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accentDim : "transparent" } },
+            _gh("div", { style: { flex: 1, minWidth: 0 } },
+              _gh("div", { style: { fontWeight: 600, fontSize: 13, color: T.text } }, c.nombre || "Sin nombre"),
+              _gh("div", { style: { fontSize: 11, color: T.muted } }, c.det)),
+            tipo === "promo" && msg && _gh(Btn, { small: true, onClick: function () { enviar(c); } }, "Enviar"));
+        }))),
+    _gh("div", { style: _gCard },
+      _gh("span", { style: _gLbl }, "Mensaje"),
+      _gh(Btn, { onClick: redactar, disabled: loading || (needsSel && !sel), icon: loading ? _gh(Loader2, { size: 14, className: "trp-spin" }) : _gIco("Sparkles", 14) },
+        loading ? "Redactando..." : (needsSel && !sel ? "Elija un cliente de la lista" : msg ? "Redactar otra versión" : "Redactar con IA")),
+      _gh("textarea", { value: msg, onChange: function (e) { setMsg(e.target.value); }, rows: 9, placeholder: "Aquí aparece el mensaje. Puede editarlo antes de enviarlo.", style: { width: "100%", boxSizing: "border-box", marginTop: 10, padding: 10, borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit", fontSize: 14, lineHeight: 1.5, resize: "vertical" } }),
+      msg && tipo !== "promo" && _gh("div", { style: { display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" } },
+        sel && _gh(Btn, { onClick: function () { enviar(sel); }, icon: _gh(MessageCircle, { size: 14 }) }, "Abrir WhatsApp de " + _iaFirst(sel.nombre)),
+        _gh(Btn, { variant: "ghost", onClick: function () { try { navigator.clipboard.writeText(msg); notify("Mensaje copiado"); } catch (e) {} } }, "Copiar")),
+      msg && tipo === "promo" && _gh("div", { style: { fontSize: 12, color: T.muted, marginTop: 8 } }, "Use el botón \"Enviar\" de cada cliente en la lista: {nombre} se cambia por su nombre.")));
+}
+
+// ── Pestaña: Asistente de diagnóstico ──
+function IADiagnosticoTab(props) {
+  var data = props.data, save = props.save, notify = props.notify;
+  var _f = useState({ equipo: "", falla: "", probado: "" }), f = _f[0], setF = _f[1];
+  var _r = useState(""), res = _r[0], setRes = _r[1];
+  var _l = useState(false), loading = _l[0], setLoading = _l[1];
+  var set = function (k) { return function (v) { setF(function (o) { var n = Object.assign({}, o); n[k] = v; return n; }); }; };
+  var activas = (data.repairs || []).filter(function (r) { return ["Recibido", "Diagnóstico", "En Reparación"].indexOf(r.status) >= 0; });
+  var diagnosticar = function () {
+    if (!f.equipo.trim() || !f.falla.trim()) { notify("Escriba el equipo y la falla", "error"); return; }
+    var words = _iaNorm(f.equipo + " " + f.falla).split(/\s+/).filter(function (w) { return w.length >= 3; });
+    var score = function (t) { t = _iaNorm(t); return words.filter(function (w) { return t.indexOf(w) >= 0; }).length; };
+    var sols = (data.soluciones || []).map(function (s) { return { s: s, n: score([s.modelo, s.falla, s.solucion, s.tags].join(" ")) }; }).filter(function (x) { return x.n >= 2; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 6);
+    var hist = (data.repairs || []).filter(function (r) { return r.status === "Entregado"; }).map(function (r) { return { r: r, n: score([r.device, r.problem, r.category, r.notes].join(" ")) }; }).filter(function (x) { return x.n >= 2; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 8);
+    var devWords = _iaNorm(f.equipo).split(/\s+/).filter(function (w) { return w.length >= 2; });
+    var inv = (data.inventory || []).filter(function (i) { var t = _iaNorm(i.name); return devWords.some(function (w) { return w.length >= 3 && t.indexOf(w) >= 0; }); }).slice(0, 20);
+    var ctx = [
+      "Soluciones guardadas por el taller que se parecen:\n" + (sols.map(function (x) { return "- " + x.s.modelo + " | " + x.s.falla + " → " + x.s.solucion; }).join("\n") || "ninguna"),
+      "Reparaciones parecidas ya entregadas:\n" + (hist.map(function (x) { return "- " + x.r.device + " | " + x.r.problem + " | cobrado " + _iaMoney(x.r.cost) + (x.r.notes ? " | notas: " + String(x.r.notes).slice(0, 160) : ""); }).join("\n") || "ninguna"),
+      "Repuestos del inventario relacionados con el equipo:\n" + (inv.map(function (i) { return "- " + i.name + " | cantidad " + (i.qty || 0) + " | costo " + _iaMoney(i.cost); }).join("\n") || "ninguno")
+    ].join("\n\n");
+    setLoading(true); setRes("");
+    _iaAsk("Equipo: " + f.equipo + "\nFalla reportada: " + f.falla + (f.probado ? "\nYa se probó: " + f.probado : "") + "\n\n" + ctx, {
+      system: "Eres un técnico experto en reparación de celulares (hardware y software) que asesora a otro técnico en Colombia. Responde con estas secciones en **negrita**: Causas probables (ordenadas de más a menos probable), Pruebas en orden (de la más rápida a la más compleja), Repuestos que podría necesitar (di si el taller lo tiene en inventario y cuántos), Precio de referencia (solo si hay reparaciones parecidas en los datos; si no, dilo), Precauciones. Sé concreto y breve. Si el taller ya tiene una solución guardada que aplica, menciónala primero. Sin emojis.",
+      max: 2500, temp: 0.3
+    }).then(setRes).catch(function (e) { notify(_iaErrMsg(e), "error"); }).then(function () { setLoading(false); });
+  };
+  var guardar = function () {
+    var s = { id: uid(), modelo: f.equipo.trim(), falla: f.falla.trim(), solucion: res.slice(0, 2000), tags: "ia", usos: 0 };
+    save(Object.assign({}, data, { soluciones: [s].concat(data.soluciones || []) }));
+    notify("Guardado en Gestión → Soluciones (puede editarlo allí)");
+  };
+  return _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" } },
+    _gh("div", { style: _gCard },
+      activas.length > 0 && _gh("div", { style: { marginBottom: 10 } },
+        _gh("span", { style: _gLbl }, "Tomar datos de una orden abierta"),
+        _gh("select", { value: "", onChange: function (e) { var r = activas.find(function (x) { return x.id === e.target.value; }); if (r) { setF({ equipo: r.device || "", falla: r.problem || "", probado: r.notes || "" }); setRes(""); } }, style: { width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit" } },
+          _gh("option", { value: "" }, "Elegir orden..."),
+          activas.map(function (r) { return _gh("option", { key: r.id, value: r.id }, "#" + _gOrderCode(r) + " · " + r.customer + " · " + r.device); }))),
+      _gh("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+        _gh(Field, { label: "Equipo (marca y modelo)", value: f.equipo, onChange: set("equipo"), placeholder: "Ej: Samsung A54" }),
+        _gh(Field, { label: "Falla", value: f.falla, onChange: set("falla"), placeholder: "Ej: no carga, se calienta el pin" }),
+        _gh(Field, { label: "Lo que ya probó (opcional)", value: f.probado, onChange: set("probado"), placeholder: "Ej: cambié el pin de carga, sigue igual" })),
+      _gh("div", { style: { marginTop: 10 } }, _gh(Btn, { onClick: diagnosticar, disabled: loading, icon: loading ? _gh(Loader2, { size: 14, className: "trp-spin" }) : _gIco("Sparkles", 14) }, loading ? "Analizando..." : "Diagnosticar con IA")),
+      _gh("div", { style: { fontSize: 11, color: T.muted, marginTop: 10, lineHeight: 1.5 } }, "La IA usa también sus soluciones guardadas, reparaciones parecidas y su inventario. Es una guía: confirme siempre con sus pruebas.")),
+    _gh("div", { style: _gCard },
+      res ? _gh(React.Fragment, null, _iaTexto(res),
+        _gh("div", { style: { display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" } },
+          _gh(Btn, { small: true, variant: "ghost", onClick: guardar, icon: _gIco("BookOpen", 13) }, "Guardar en Soluciones"),
+          _gh(Btn, { small: true, variant: "ghost", onClick: function () { try { navigator.clipboard.writeText(res); notify("Copiado"); } catch (e) {} } }, "Copiar")))
+        : _gEmpty(loading ? "Analizando la falla..." : "El diagnóstico aparece aquí")));
+}
+
+// ── Pestaña: Pedido sugerido ──
+function IAPedidoTab(props) {
+  var data = props.data, notify = props.notify, setView = props.setView;
+  var hoy = getHoyColombia(), desde = _gAddDays(hoy, -60);
+  var providers = data.providers || [];
+  // Consumo de los últimos 60 días (ventas de mostrador, por nombre)
+  var vendidos = {};
+  (data.sales || []).forEach(function (s) {
+    if (String(s.date || "").slice(0, 10) < desde) return;
+    (s.items || []).forEach(function (it) { var k = _iaNorm(it.name); vendidos[k] = (vendidos[k] || 0) + (Number(it.qty) || 1); });
+  });
+  var base = (data.inventory || []).map(function (i) {
+    var qty = Number(i.qty) || 0, min = Number(i.minQty) || 0, v60 = vendidos[_iaNorm(i.name)] || 0;
+    var objetivo = Math.max(min * 2, Math.ceil(v60 / 2), min > 0 || v60 > 0 ? 1 : 0); // cubrir ~30 días
+    return { id: i.id, name: i.name, qty: qty, min: min, v60: v60, cost: Number(i.cost) || 0, pedir: Math.max(0, objetivo - qty) };
+  }).filter(function (x) { return x.pedir > 0 && (x.qty <= x.min || x.v60 > 0); })
+    .sort(function (a, b) { return (a.qty - a.min) - (b.qty - b.min) || b.v60 - a.v60; });
+  var _l = useState(null), lines = _l[0], setLines = _l[1];
+  var rows = lines || base.map(function (x) { return Object.assign({ on: true, motivo: "" }, x); });
+  var _p = useState(providers[0] ? providers[0].id : ""), prov = _p[0], setProv = _p[1];
+  var _b = useState(false), loading = _b[0], setLoading = _b[1];
+  var upd = function (id, patch) { setLines(rows.map(function (r) { return r.id === id ? Object.assign({}, r, patch) : r; })); };
+  var total = rows.filter(function (r) { return r.on; }).reduce(function (s, r) { return s + r.pedir * r.cost; }, 0);
+  var ajustarIA = function () {
+    setLoading(true);
+    var lista = rows.slice(0, 60).map(function (r) { return r.name + " | tiene " + r.qty + " | mínimo " + r.min + " | vendidos 60 días " + r.v60 + " | costo " + r.cost + " | sugerido " + r.pedir; }).join("\n");
+    _iaAsk("Repuestos candidatos a pedir:\n" + lista + "\n\nDevuelve JSON {\"items\":[{\"name\":\"nombre exacto\",\"qty\":numero,\"motivo\":\"frase corta\"}]} solo con los que vale la pena pedir ahora.", {
+      system: "Eres el encargado de compras de un taller de celulares en Colombia. Ajusta cantidades para no inmovilizar plata: prioriza lo que se vende y lo que está en cero; baja cantidades de lo que casi no rota. Usa SOLO nombres de la lista.",
+      json: true, max: 3000, temp: 0.2
+    }).then(function (j) {
+      var map = {}; ((j && j.items) || []).forEach(function (it) { map[_iaNorm(it.name)] = it; });
+      setLines(rows.map(function (r) { var m = map[_iaNorm(r.name)]; return m ? Object.assign({}, r, { on: true, pedir: Math.max(1, Math.round(Number(m.qty) || r.pedir)), motivo: m.motivo || "" }) : Object.assign({}, r, { on: false, motivo: "La IA sugiere esperar" }); }));
+      notify("Pedido ajustado por la IA");
+    }).catch(function (e) { notify(_iaErrMsg(e), "error"); }).then(function () { setLoading(false); });
+  };
+  var llevar = function () {
+    var p = providers.find(function (x) { return x.id === prov; });
+    if (!p) { notify("Primero registre un proveedor en Proveedores", "error"); return; }
+    var items = rows.filter(function (r) { return r.on && r.pedir > 0; }).map(function (r) { return { id: uid(), name: r.name, qty: r.pedir, cost: r.cost }; });
+    if (!items.length) { notify("No hay repuestos marcados", "error"); return; }
+    try {
+      var all = JSON.parse(localStorage.getItem("acce_order_drafts") || "{}");
+      var cur = all[p.id]; cur = (typeof cur === "string") ? { notas: cur, items: [] } : (cur || { notas: "", items: [] });
+      all[p.id] = { notas: cur.notas || "", items: items };
+      localStorage.setItem("acce_order_drafts", JSON.stringify(all));
+      localStorage.setItem("acce_open_order", p.id);
+    } catch (e) {}
+    notify("Pedido listo para revisar y enviar a " + p.name);
+    setView("proveedores");
+  };
+  var inp = { width: 64, padding: "5px 6px", borderRadius: 5, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit" };
+  return _gh("div", { style: _gCard },
+    _gh("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 } },
+      _gh("div", { style: { flex: "1 1 260px", fontSize: 13, color: T.muted, lineHeight: 1.5 } }, "Repuestos en o bajo el mínimo, o que se vendieron en los últimos 60 días. La cantidad cubre aproximadamente un mes."),
+      base.length > 0 && _gh(Btn, { small: true, variant: "ghost", onClick: ajustarIA, disabled: loading, icon: loading ? _gh(Loader2, { size: 13, className: "trp-spin" }) : _gIco("Sparkles", 13) }, loading ? "Ajustando..." : "Ajustar con IA")),
+    base.length === 0 ? _gEmpty("No hay repuestos por pedir: todo está sobre el mínimo.") : _gh("div", { style: { overflowX: "auto" } },
+      _gh("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } },
+        _gh("thead", null, _gh("tr", { style: { color: T.muted, textAlign: "left" } }, ["", "Repuesto", "Tiene", "Mín.", "Vendidos 60d", "Pedir", "Costo", ""].map(function (h, i) { return _gh("th", { key: i, style: { padding: "6px 8px", borderBottom: "1px solid " + T.border, fontWeight: 600, fontSize: 12 } }, h); }))),
+        _gh("tbody", null, rows.map(function (r) {
+          return _gh("tr", { key: r.id, style: { opacity: r.on ? 1 : 0.5 } },
+            _gh("td", { style: { padding: "6px 8px" } }, _gh("input", { type: "checkbox", checked: r.on, onChange: function (e) { upd(r.id, { on: e.target.checked }); } })),
+            _gh("td", { style: { padding: "6px 8px", color: T.text } }, r.name, r.motivo && _gh("div", { style: { fontSize: 11, color: T.muted } }, r.motivo)),
+            _gh("td", { style: { padding: "6px 8px", color: r.qty <= r.min ? T.red : T.text, fontWeight: 600 } }, r.qty),
+            _gh("td", { style: { padding: "6px 8px", color: T.muted } }, r.min),
+            _gh("td", { style: { padding: "6px 8px", color: T.muted } }, r.v60),
+            _gh("td", { style: { padding: "6px 8px" } }, _gh("input", { type: "number", min: 0, value: r.pedir, onChange: function (e) { upd(r.id, { pedir: Math.max(0, Math.round(Number(e.target.value) || 0)) }); }, style: inp })),
+            _gh("td", { style: { padding: "6px 8px", color: T.muted } }, _iaMoney(r.cost)),
+            _gh("td", { style: { padding: "6px 8px", color: T.text, fontWeight: 600 } }, r.on ? _iaMoney(r.pedir * r.cost) : ""));
+        })))),
+    base.length > 0 && _gh("div", { style: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 14 } },
+      _gh("div", { style: { flex: 1, fontSize: 14, color: T.text } }, "Total estimado: ", _gh("strong", null, _iaMoney(total))),
+      providers.length > 0 ? _gh("select", { value: prov, onChange: function (e) { setProv(e.target.value); }, style: { padding: "8px 10px", borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit" } },
+        providers.map(function (p) { return _gh("option", { key: p.id, value: p.id }, p.name); })) : _gh("span", { style: { fontSize: 12, color: T.muted } }, "Registre un proveedor primero"),
+      _gh(Btn, { onClick: llevar, disabled: !providers.length, icon: _gIco("Send", 14) }, "Revisar y enviar al proveedor")));
+}
+
+// ── Pestaña: Resumen y avisos ──
+function IAAvisosTab(props) {
+  var notify = props.notify;
+  var _a = useState(_avisosOn()), on = _a[0], setOn = _a[1];
+  var soportado = typeof Notification !== "undefined";
+  var activar = function () {
+    _avisosActivar().then(function () { setOn(true); _avisoMostrar("Avisos activados", "Le avisaremos de calificaciones nuevas y de los pendientes del día.", "acce-test"); notify("Avisos activados en este equipo"); })
+      .catch(function (e) { notify(e.message, "error"); });
+  };
+  return _gh("div", null,
+    _gh(IAResumenCard, props),
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } }, _gIco("Bell", 16), _gh("strong", { style: { color: T.text, fontSize: 15 } }, "Avisos en este equipo")),
+      _gh("div", { style: { fontSize: 13, color: T.muted, lineHeight: 1.6, marginBottom: 12 } },
+        "Con la app abierta (aunque esté minimizada) le avisa cuando un cliente deja una calificación y, una vez al día, los pendientes: equipos listos sin recoger, órdenes estancadas, cobros y repuestos bajos. Cada equipo (computador o celular) se activa por separado."),
+      !soportado ? _gh("div", { style: { fontSize: 13, color: T.red } }, "Este navegador no permite avisos.")
+        : on ? _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+            _gh(Btn, { small: true, variant: "ghost", onClick: function () { _avisoMostrar("Prueba de aviso", "Así se verán los avisos de ACCE PRO.", "acce-test"); } }, "Probar aviso"),
+            _gh(Btn, { small: true, variant: "ghost", onClick: function () { _avisosDesactivar(); setOn(false); notify("Avisos desactivados"); } }, "Desactivar"))
+        : _gh(Btn, { onClick: activar, icon: _gIco("Bell", 14) }, "Activar avisos")));
+}
+
+// ── Fotos para vender: mejora automática + marca de agua (todo en el equipo, sin IA) ──
+var _MARCA_KEY = "acce_marca_agua";
+function _marcaAgua() { try { var v = localStorage.getItem(_MARCA_KEY); return v == null ? "CLINICELL" : v; } catch (e) { return "CLINICELL"; } }
+function _fotoCargar(src) {
+  return new Promise(function (res, rej) {
+    var img = new Image();
+    if (!_isDataUrl(src)) img.crossOrigin = "anonymous"; // fotos de Drive: permitir editarlas si Google lo deja
+    img.onload = function () { res(img); };
+    img.onerror = function () { rej(new Error("No se pudo cargar la foto")); };
+    img.src = _isGd(src) ? _photoSrc(src, 1600) : src;
+  });
+}
+// o = { mejorar, cuadrada, marca (texto o "") } → dataURL JPEG
+function _fotoProcesar(img, o) {
+  var W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+  var sc = Math.min(1, 1600 / Math.max(W, H)), w = Math.round(W * sc), h = Math.round(H * sc);
+  var base = document.createElement("canvas"); base.width = w; base.height = h;
+  var bx = base.getContext("2d"); bx.drawImage(img, 0, 0, w, h);
+  if (o.mejorar) {
+    var id = bx.getImageData(0, 0, w, h), d = id.data, n = w * h, hist = new Uint32Array(256), i;
+    for (i = 0; i < d.length; i += 4) hist[(d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8]++;
+    // Niveles automáticos: estira entre el 1% más oscuro y el 1% más claro
+    var acc = 0, lo = 0, hi = 255;
+    for (i = 0; i < 256; i++) { acc += hist[i]; if (acc > n * 0.01) { lo = i; break; } }
+    acc = 0;
+    for (i = 255; i >= 0; i--) { acc += hist[i]; if (acc > n * 0.01) { hi = i; break; } }
+    var k = hi > lo ? Math.min(1.6, 255 / (hi - lo)) : 1, sat = 1.12;
+    for (i = 0; i < d.length; i += 4) {
+      var r = (d[i] - lo) * k, g = (d[i + 1] - lo) * k, b = (d[i + 2] - lo) * k;
+      var gr = r * 0.299 + g * 0.587 + b * 0.114;
+      d[i] = gr + (r - gr) * sat; d[i + 1] = gr + (g - gr) * sat; d[i + 2] = gr + (b - gr) * sat;
+    }
+    // Nitidez suave (máscara de enfoque 3x3)
+    var src = new Uint8ClampedArray(d), a = 0.35, c = 1 + 4 * a, x, y, p;
+    for (y = 1; y < h - 1; y++) for (x = 1; x < w - 1; x++) {
+      p = (y * w + x) * 4;
+      for (var ch = 0; ch < 3; ch++) {
+        d[p + ch] = c * src[p + ch] - a * (src[p + ch - 4] + src[p + ch + 4] + src[p + ch - w * 4] + src[p + ch + w * 4]);
+      }
+    }
+    bx.putImageData(id, 0, 0);
+  }
+  var out = base, fx = 0, fy = 0; // fx, fy: dónde quedó la foto dentro del lienzo
+  if (o.cuadrada && w !== h) {
+    var s = Math.max(w, h);
+    out = document.createElement("canvas"); out.width = s; out.height = s;
+    var ox = out.getContext("2d");
+    fx = Math.round((s - w) / 2); fy = Math.round((s - h) / 2);
+    ox.fillStyle = "#ffffff"; ox.fillRect(0, 0, s, s);
+    ox.drawImage(base, fx, fy);
+  }
+  if (o.marca) {
+    // La marca va sobre la foto (no sobre el borde blanco del formato cuadrado)
+    var cx = out.getContext("2d"), S = Math.min(w, h);
+    var fs = Math.max(14, Math.round(S * 0.05));
+    cx.font = "800 " + fs + "px 'Segoe UI', Arial, sans-serif";
+    cx.textAlign = "right"; cx.textBaseline = "bottom";
+    var txt = String(o.marca).toUpperCase().split("").join(String.fromCharCode(8202)); // espaciado entre letras
+    var mx = fx + w - Math.round(S * 0.035), my = fy + h - Math.round(S * 0.03);
+    cx.shadowColor = "rgba(0,0,0,0.55)"; cx.shadowBlur = Math.round(fs * 0.35); cx.shadowOffsetY = Math.round(fs * 0.06);
+    cx.fillStyle = "rgba(255,255,255,0.92)";
+    cx.fillText(txt, mx, my);
+    cx.shadowColor = "transparent";
+  }
+  return out.toDataURL("image/jpeg", 0.9);
+}
+function _fotoDescargar(url, nombre) {
+  var a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+}
+function FotosVenta(props) {
+  var fotos = props.fotos || [], notify = props.notify;
+  var _o = useState({ mejorar: true, cuadrada: true, marcaOn: true }), op = _o[0], setOp = _o[1];
+  var _m = useState(_marcaAgua()), marca = _m[0], setMarca = _m[1];
+  var _r = useState({}), proc = _r[0], setProc = _r[1];
+  var key = fotos.join("|").length + "_" + fotos.length;
+  useEffect(function () {
+    var alive = true;
+    setProc({});
+    var t = setTimeout(function () { fotos.forEach(function (src, i) {
+      _fotoCargar(src).then(function (img) {
+        var url = _fotoProcesar(img, { mejorar: op.mejorar, cuadrada: op.cuadrada, marca: op.marcaOn ? marca.trim() : "" });
+        if (alive) setProc(function (p) { var n = Object.assign({}, p); n[i] = { url: url }; return n; });
+      }).catch(function () {
+        if (alive) setProc(function (p) { var n = Object.assign({}, p); n[i] = { err: true }; return n; });
+      });
+    }); }, 300);
+    return function () { alive = false; clearTimeout(t); };
+  }, [key, op.mejorar, op.cuadrada, op.marcaOn, marca]);
+  if (!fotos.length) return null;
+  var slug = String(marca || "foto").toLowerCase().replace(/[^a-z0-9]+/g, "-") || "foto";
+  var compartir = function (url, i) {
+    fetch(url).then(function (r) { return r.blob(); }).then(function (b) {
+      var file = new File([b], slug + "-" + (i + 1) + ".jpg", { type: "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], text: props.texto || "" });
+      _fotoDescargar(url, file.name); notify("Este equipo no permite compartir directo: la foto se descargó");
+    }).catch(function () {});
+  };
+  var chk = function (k, t) {
+    return _gh("label", { style: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: T.text, cursor: "pointer" } },
+      _gh("input", { type: "checkbox", checked: op[k], onChange: function (e) { var v = e.target.checked; setOp(function (o) { var n = Object.assign({}, o); n[k] = v; return n; }); } }), t);
+  };
+  return _gh("div", { style: Object.assign({}, _gCard, { marginTop: 12 }) },
+    _gh("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } }, _gIco("Image", 15), _gh("strong", { style: { fontSize: 14, color: T.text } }, "Fotos listas para publicar")),
+    _gh("div", { style: { display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center", marginBottom: 10 } },
+      chk("mejorar", "Mejorar (brillo y nitidez)"), chk("cuadrada", "Formato cuadrado"), chk("marcaOn", "Marca de agua"),
+      op.marcaOn && _gh("input", { value: marca, maxLength: 24, onChange: function (e) { setMarca(e.target.value); try { localStorage.setItem(_MARCA_KEY, e.target.value); } catch (er) {} },
+        style: { width: 130, padding: "5px 8px", borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit", fontWeight: 700 } })),
+    _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 } }, fotos.map(function (src, i) {
+      var pr = proc[i];
+      return _gh("div", { key: i, style: { border: "1px solid " + T.border, borderRadius: 8, overflow: "hidden", background: T.bg } },
+        _gh("div", { style: { aspectRatio: "1", display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" } },
+          pr && pr.url ? _gh("img", { src: pr.url, alt: "", style: { width: "100%", height: "100%", objectFit: "contain", cursor: "zoom-in" }, onClick: function () { _openPhoto(pr.url); } })
+            : pr && pr.err ? _gh("div", { style: { padding: 10, fontSize: 11, color: T.muted, textAlign: "center" } }, "Esta foto no se puede editar aquí. Descárguela y súbala con \"Agregar fotos\".")
+            : _gh(Loader2, { size: 18, className: "trp-spin", color: T.muted })),
+        pr && pr.url && _gh("div", { style: { display: "flex", borderTop: "1px solid " + T.border } },
+          _gh("button", { onClick: function () { _fotoDescargar(pr.url, slug + "-" + (i + 1) + ".jpg"); }, style: { flex: 1, padding: "7px 0", background: "none", border: "none", borderRight: "1px solid " + T.border, color: T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" } }, "Descargar"),
+          _gh("button", { onClick: function () { compartir(pr.url, i); }, style: { flex: 1, padding: "7px 0", background: "none", border: "none", color: T.accent, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" } }, "Compartir")));
+    })));
+}
+
+// ── Pestaña: Publicar para vender (Facebook / WhatsApp) ──
+function _iaCopiar(txt, notify) {
+  var ok = function () { notify("Copiado. Péguelo en Facebook o WhatsApp"); };
+  try { navigator.clipboard.writeText(txt).then(ok, function () { notify("No se pudo copiar", "error"); }); } catch (e) { notify("No se pudo copiar", "error"); }
+}
+function IAPublicarTab(props) {
+  var data = props.data, notify = props.notify, st = props.settings || {};
+  var _o = useState("celular"), origen = _o[0], setOrigen = _o[1];
+  var _s = useState(""), selId = _s[0], setSelId = _s[1];
+  var _f = useState({ nombre: "", detalles: "", precio: "" }), libre = _f[0], setLibre = _f[1];
+  var _op = useState({ tono: "Vendedor y confiable", precio: true, conocidas: true, contacto: true, extra: "" }), op = _op[0], setOp = _op[1];
+  var _r = useState(null), res = _r[0], setRes = _r[1];
+  var _l = useState(false), loading = _l[0], setLoading = _l[1];
+  var _ed = useState({}), ed = _ed[0], setEd = _ed[1]; // ediciones del usuario sobre los textos
+  var _sb = useState([]), subidas = _sb[0], setSubidas = _sb[1]; // fotos que sube el usuario (la IA las mira)
+  var fotoRef = useRef(null);
+  var agregarFotos = function (files) {
+    var lista = Array.prototype.slice.call(files || []).filter(function (f) { return /^image\//.test(f.type); }).slice(0, 4 - subidas.length);
+    if (!lista.length) { notify("Máximo 4 fotos", "error"); return; }
+    Promise.all(lista.map(function (f) {
+      return _compressImageFile(f, 1600, 0.88).catch(function () { return f; }).then(function (b) {
+        return new Promise(function (res) { var r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = function () { res(null); }; r.readAsDataURL(b); });
+      });
+    })).then(function (urls) { setSubidas(function (s) { return s.concat(urls.filter(Boolean)).slice(0, 4); }); setRes(null); });
+  };
+  var setO = function (k, v) { setOp(function (o) { var n = Object.assign({}, o); n[k] = v; return n; }); };
+  var cels = (data.celulares || []).filter(function (c) { return c.estado !== "Vendido"; });
+  var prods = (data.products || []).filter(function (p) { return p.active !== false; });
+
+  // Ficha con los datos reales del artículo (nunca se envía el IMEI)
+  var ficha = function () {
+    if (origen === "celular") {
+      var c = cels.find(function (x) { return x.id === selId; }); if (!c) return null;
+      return { titulo: [c.marca, c.modelo].filter(Boolean).join(" "), precio: c.precio, fotos: c.photos || [],
+        texto: ["Tipo: celular", "Marca: " + (c.marca || "-"), "Modelo: " + (c.modelo || "-"), c.condicion && "Condición: " + c.condicion, c.capacidad && "Almacenamiento: " + c.capacidad, c.ram && "RAM: " + c.ram,
+          c.color && "Color: " + c.color, c.bateria && "Salud de batería: " + c.bateria, c.accesorios && "Incluye: " + c.accesorios, c.descripcion && "Notas del vendedor: " + c.descripcion].filter(Boolean).join("\n") };
+    }
+    if (origen === "producto") {
+      var p = prods.find(function (x) { return x.id === selId; }); if (!p) return null;
+      return { titulo: p.name, precio: p.price, fotos: p.image ? [p.image] : [],
+        texto: ["Producto: " + p.name, p.brand && "Marca: " + p.brand, p.category && "Categoría: " + p.category, p.description && "Descripción: " + p.description, (p.features || []).length ? "Características: " + p.features.join(", ") : "", "Disponibles: " + (p.stock || 0)].filter(Boolean).join("\n") };
+    }
+    if (!libre.nombre.trim() && !subidas.length) return null;
+    return { titulo: libre.nombre.trim(), precio: Number(String(libre.precio).replace(/\D/g, "")) || 0, fotos: [],
+      texto: (libre.nombre.trim() ? "Producto: " + libre.nombre.trim() : "Producto: identifícalo por las fotos") + (libre.detalles.trim() ? "\nDetalles del vendedor: " + libre.detalles.trim() : "") };
+  };
+
+  var generar = function () {
+    var f = ficha();
+    if (!f) { notify(origen === "otro" ? "Escriba qué va a vender o agregue una foto" : "Elija el artículo de la lista", "error"); return; }
+    var contacto = [st.storeName && "Tienda: " + st.storeName, st.address && "Dirección: " + st.address, st.whatsapp && "WhatsApp: " + st.whatsapp].filter(Boolean).join("\n");
+    var prompt = "Artículo a vender:\n" + f.texto +
+      (op.precio && f.precio ? "\nPrecio: " + _iaMoney(f.precio) : "\nNo menciones el precio (se negocia por mensaje).") +
+      (op.contacto && contacto ? "\n\nDatos de contacto para incluir:\n" + contacto : "") +
+      (op.extra.trim() ? "\n\nIndicaciones del vendedor: " + op.extra.trim() : "") +
+      (subidas.length ? "\n\nSe adjuntan " + subidas.length + " foto(s) del artículo: identifica exactamente qué producto es (marca y modelo si se ven), lee lo que diga la caja o las etiquetas y usa esos datos. Si se ve usado, menciona con honestidad el estado visible (rayones, marcas, desgaste)." : "") +
+      "\n\nDevuelve JSON con esta forma exacta: {\"producto\":\"nombre del producto identificado\",\"tipo\":\"qué clase de producto es\",\"facebook_titulo\":\"máx 80 caracteres\",\"facebook\":\"publicación para Facebook Marketplace o grupos\",\"whatsapp\":\"mensaje para enviar por WhatsApp\",\"estado\":\"texto muy corto para Estado de WhatsApp\",\"hashtags\":\"5 a 8 hashtags separados por espacio\"}";
+    var system = "Eres experto en ventas por redes sociales en Colombia. Primero identifica qué tipo de producto es y destaca lo que más le importa a quien compra ESE tipo de producto " +
+      "(por ejemplo: en un celular cámara, batería, almacenamiento, pantalla y estado; en una plancha de cabello temperatura, tipo de placas, calentamiento y cuidado del cabello; en unos audífonos sonido, batería y conexión; etc.). " +
+      "Tono: " + op.tono + ". Español colombiano natural, claro y persuasivo, sin exagerar. " +
+      (op.conocidas ? "Puedes agregar características técnicas conocidas y verificables de ese modelo exacto; si no estás seguro de un dato, no lo pongas. " : "Usa SOLO los datos dados; no agregues especificaciones que no estén en la ficha. ") +
+      "Nunca inventes garantía, envíos, descuentos ni formas de pago que no estén en las indicaciones. " +
+      "Facebook: título llamativo y descripción con viñetas (usa el guion -) de características, estado, qué incluye, precio y cierre con llamado a escribir. " +
+      "WhatsApp: más corto, usa *negrita* de WhatsApp para el nombre y el precio. Estado: una o dos líneas. Sin emojis.";
+    setLoading(true); setRes(null); setEd({});
+    _iaAsk(prompt, { system: system, json: true, max: 3000, temp: 0.8, images: subidas })
+      .then(function (j) { setRes(j); })
+      .catch(function (e) { notify(_iaErrMsg(e), "error"); })
+      .then(function () { setLoading(false); });
+  };
+
+  var selStyle = { width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit" };
+  var check = function (k, txt) {
+    return _gh("label", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.text, cursor: "pointer" } },
+      _gh("input", { type: "checkbox", checked: !!op[k], onChange: function (e) { setO(k, e.target.checked); } }), txt);
+  };
+  var bloque = function (key, titulo, original, acciones) {
+    var texto = ed[key] != null ? ed[key] : original;
+    return _gh("div", { style: Object.assign({}, _gCard, { marginBottom: 12 }) },
+      _gh("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
+        _gh("strong", { style: { flex: 1, fontSize: 14, color: T.text } }, titulo), acciones(texto)),
+      _gh("textarea", { value: texto, onChange: function (e) { var v = e.target.value; setEd(function (o) { var n = Object.assign({}, o); n[key] = v; return n; }); }, rows: Math.min(14, Math.max(3, String(texto).split("\n").length + 1)),
+        style: { width: "100%", boxSizing: "border-box", padding: 10, borderRadius: 6, border: "1px solid " + T.border, background: T.surface, color: T.text, fontFamily: "inherit", fontSize: 13.5, lineHeight: 1.5, resize: "vertical" } }));
+  };
+  var fb = res ? (res.facebook_titulo ? res.facebook_titulo + "\n\n" : "") + (res.facebook || "") + (res.hashtags ? "\n\n" + res.hashtags : "") : "";
+
+  return _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" } },
+    _gh("div", { style: _gCard },
+      _gh("span", { style: _gLbl }, "¿Qué va a vender?"),
+      _gh("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 } }, [["celular", "Celular (" + cels.length + ")"], ["producto", "Producto (" + prods.length + ")"], ["otro", "Otro / desde foto"]].map(function (o) {
+        var on = o[0] === origen;
+        return _gh("button", { key: o[0], onClick: function () { setOrigen(o[0]); setSelId(""); setRes(null); }, style: { padding: "6px 12px", borderRadius: 18, border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accentDim : "transparent", color: on ? T.accent : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" } }, o[1]);
+      })),
+      origen === "celular" && _gh("select", { value: selId, onChange: function (e) { setSelId(e.target.value); setRes(null); }, style: selStyle },
+        _gh("option", { value: "" }, cels.length ? "Elegir celular..." : "No hay celulares disponibles"),
+        cels.map(function (c) { return _gh("option", { key: c.id, value: c.id }, [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" ") + (c.precio ? " · " + _iaMoney(c.precio) : "")); })),
+      origen === "producto" && _gh("select", { value: selId, onChange: function (e) { setSelId(e.target.value); setRes(null); }, style: selStyle },
+        _gh("option", { value: "" }, prods.length ? "Elegir producto..." : "No hay productos"),
+        prods.map(function (p) { return _gh("option", { key: p.id, value: p.id }, p.name + (p.price ? " · " + _iaMoney(p.price) : "")); })),
+      origen === "otro" && _gh("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+        _gh(Field, { label: "Artículo", value: libre.nombre, onChange: function (v) { setLibre(Object.assign({}, libre, { nombre: v })); }, placeholder: "Ej: Plancha de cabello Remington S5500" }),
+        _gh(Field, { label: "Detalles (estado, qué incluye...)", value: libre.detalles, onChange: function (v) { setLibre(Object.assign({}, libre, { detalles: v })); }, placeholder: "Ej: nueva en caja, placas de cerámica, 230 °C" }),
+        _gh(Field, { label: "Precio (opcional)", value: libre.precio, onChange: function (v) { setLibre(Object.assign({}, libre, { precio: v })); }, placeholder: "Ej: 120000" })),
+      _gh("span", { style: Object.assign({}, _gLbl, { marginTop: 14 }) }, "Fotos (opcional, la IA las mira)"),
+      _gh("input", { ref: fotoRef, type: "file", accept: "image/*", multiple: true, style: { display: "none" }, onChange: function (e) { agregarFotos(e.target.files); e.target.value = ""; } }),
+      _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" } },
+        subidas.map(function (u, i) {
+          return _gh("div", { key: i, style: { position: "relative", width: 56, height: 56, borderRadius: 6, overflow: "hidden", border: "1px solid " + T.border } },
+            _gh("img", { src: u, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } }),
+            _gh("button", { onClick: function () { setSubidas(subidas.filter(function (_, j) { return j !== i; })); setRes(null); }, title: "Quitar", style: { position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 12, lineHeight: 1, cursor: "pointer", padding: 0 } }, "\xD7"));
+        }),
+        subidas.length < 4 && _gh(Btn, { small: true, variant: "ghost", onClick: function () { fotoRef.current && fotoRef.current.click(); }, icon: _gIco("Camera", 13) }, subidas.length ? "Agregar otra" : "Agregar fotos")),
+      _gh("div", { style: { fontSize: 11, color: T.muted, marginTop: 6, lineHeight: 1.5 } }, "Con una foto del producto o de su caja, la IA reconoce qué es y lee sus datos. Abajo le salen las fotos mejoradas con su marca de agua."),
+      _gh("span", { style: Object.assign({}, _gLbl, { marginTop: 14 }) }, "Estilo"),
+      _gh("select", { value: op.tono, onChange: function (e) { setO("tono", e.target.value); }, style: Object.assign({}, selStyle, { marginBottom: 10 }) },
+        ["Vendedor y confiable", "Cercano y alegre", "Elegante y premium", "Oferta urgente"].map(function (t) { return _gh("option", { key: t, value: t }, t); })),
+      _gh("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 } },
+        check("precio", "Incluir el precio"),
+        check("conocidas", "Agregar características conocidas del modelo"),
+        check("contacto", "Incluir datos del negocio (nombre, dirección, WhatsApp)")),
+      _gh(Field, { label: "Indicaciones extra (opcional)", value: op.extra, onChange: function (v) { setO("extra", v); }, placeholder: "Ej: envíos a todo el país, recibo Nequi, 3 meses de garantía" }),
+      _gh("div", { style: { marginTop: 12 } }, _gh(Btn, { onClick: generar, disabled: loading, icon: loading ? _gh(Loader2, { size: 14, className: "trp-spin" }) : _gIco("Sparkles", 14) }, loading ? "Escribiendo..." : res ? "Escribir otra versión" : "Crear publicación")),
+      op.conocidas && _gh("div", { style: { fontSize: 11, color: T.muted, marginTop: 10, lineHeight: 1.5 } }, "Revise las características técnicas antes de publicar: la IA puede equivocarse en algún dato del modelo.")),
+    _gh("div", null,
+      !res ? _gh("div", { style: _gCard }, _gEmpty(loading ? "Escribiendo la publicación..." : "Aquí aparecen los textos para Facebook y WhatsApp"))
+        : _gh(React.Fragment, null,
+          res.tipo && _gh("div", { style: { fontSize: 12, color: T.muted, marginBottom: 8 } }, "Tipo de producto detectado: ", _gh("strong", { style: { color: T.text } }, res.tipo)),
+          bloque("fb", "Facebook / Marketplace", fb, function (t) { return _gh(Btn, { small: true, onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); }),
+          res.whatsapp && bloque("wa", "WhatsApp", res.whatsapp, function (t) { return _gh("div", { style: { display: "flex", gap: 6 } },
+            _gh(Btn, { small: true, variant: "ghost", onClick: function () { _iaCopiar(t, notify); } }, "Copiar"),
+            _gh(Btn, { small: true, onClick: function () { window.open("https://wa.me/?text=" + encodeURIComponent(t), "_blank"); }, icon: _gh(MessageCircle, { size: 13 }) }, "Enviar")); }),
+          res.estado && bloque("estado", "Estado de WhatsApp", res.estado, function (t) { return _gh(Btn, { small: true, variant: "ghost", onClick: function () { _iaCopiar(t, notify); } }, "Copiar"); }),
+          null),
+        _gh(FotosVenta, { fotos: ((ficha() || {}).fotos || []).concat(subidas), notify: notify, texto: res ? (ed.wa != null ? ed.wa : res.whatsapp) : "" })));
+}
+
+var IA_TABS = [
+  { id: "resumen", l: "Resumen y avisos", i: "Sparkles" },
+  { id: "publicar", l: "Publicar para vender", i: "Megaphone" },
+  { id: "mensajes", l: "Mensajes WhatsApp", i: "MessageCircle" },
+  { id: "diagnostico", l: "Diagnóstico", i: "Stethoscope" },
+  { id: "pedido", l: "Pedido sugerido", i: "ShoppingCart" }
+];
+var IA_ROLE_TABS = { cajero: ["resumen", "publicar", "mensajes"], tecnico: ["diagnostico"] };
+function IAView(props) {
+  var emp = props.empleado;
+  var allowed = IA_TABS.filter(function (t) { return !emp || !IA_ROLE_TABS[emp.rol] || IA_ROLE_TABS[emp.rol].indexOf(t.id) >= 0; });
+  var saved = ""; try { saved = localStorage.getItem("acce_ia_tab") || ""; } catch (e) {}
+  var _t = useState(allowed.some(function (t) { return t.id === saved; }) ? saved : allowed[0].id), tab = _t[0], setTab = _t[1];
+  var go = function (id) { setTab(id); try { localStorage.setItem("acce_ia_tab", id); } catch (e) {} };
+  return _gh("div", null,
+    _gh("h2", { style: { margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: T.text } }, "Asistente IA"),
+    _gh("div", { style: { fontSize: 13, color: T.muted, marginBottom: 14 } }, _iaKey() ? "Usa su clave de Google Gemini." : "Para usar la IA, configure su API key de Gemini en el chat (botón de abajo a la derecha)."),
+    _gh("div", { className: "trp-scroll", style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 14 } },
+      allowed.map(function (t) {
+        var on = t.id === tab;
+        return _gh("button", { key: t.id, onClick: function () { go(t.id); }, style: { display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", padding: "8px 14px", borderRadius: 8, border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accentDim : "transparent", color: on ? T.accent : T.text, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" } }, _gIco(t.i, 14), t.l);
+      })),
+    tab === "resumen" && _gh(IAAvisosTab, props),
+    tab === "publicar" && _gh(IAPublicarTab, props),
+    tab === "mensajes" && _gh(IAMensajesTab, props),
+    tab === "diagnostico" && _gh(IADiagnosticoTab, props),
+    tab === "pedido" && _gh(IAPedidoTab, props));
+}
+// ═══════════════════ FIN MÓDULO ASISTENTE IA ═══════════════════
 
 // Sella fechas de estado para medir tiempos y equipos sin recoger.
 function _gStampRepairs(d) {
@@ -14517,6 +15187,24 @@ function App(_appProps) {
       .catch(function (e) { notify((e && e.message) || "No se pudo subir a Google Drive", "error"); });
   };
 
+  useEffect(function () {
+    if (!clientId || !ratings || !ratings.length) return;
+    var k = "acce_aviso_rating_" + clientId, prev = "";
+    try { prev = localStorage.getItem(k) || ""; } catch (e) {}
+    var max = ratings.reduce(function (m, r) { return (r.date || "") > m ? r.date : m; }, "");
+    if (prev) ratings.filter(function (r) { return (r.date || "") > prev; }).forEach(function (r) {
+      _avisoMostrar("Nueva calificación: " + (r.rating || 0) + " de 5 estrellas", (r.customer || "Cliente") + (r.comment ? ": " + String(r.comment).slice(0, 100) : ""), "rating-" + (r.repairId || r.date));
+    });
+    if (max > prev) { try { localStorage.setItem(k, max); } catch (e) {} }
+  }, [ratings]);
+  var _hasData = !!data;
+  useEffect(function () {
+    if (!_hasData) return;
+    var t0 = setTimeout(function () { _avisoDelDia(_gdDataRef.current || {}); }, 5000);
+    var iv = setInterval(function () { _avisoDelDia(_gdDataRef.current || {}); }, 30 * 60000);
+    return function () { clearTimeout(t0); clearInterval(iv); };
+  }, [_hasData]);
+
   if (!data || !minLoadTimeDone) return /*#__PURE__*/React.createElement(LoadingScreen, { title: "Cargando", subtitle: "Recuperando información necesaria" });
   if (publicMode) return /*#__PURE__*/React.createElement(PublicView, {
     data: data,
@@ -14605,6 +15293,10 @@ function App(_appProps) {
     label: "Gestión",
     icon: _gIco("Briefcase", 17),
     badge: (data.cotizaciones || []).filter(function (c) { return c.estado === "Pendiente"; }).length
+  }, {
+    id: "ia",
+    label: "Asistente IA",
+    icon: _gIco("Sparkles", 17)
   }, {
     id: "reporte",
     label: "Reporte",
@@ -14893,6 +15585,8 @@ function App(_appProps) {
     },
     /*#__PURE__*/React.createElement(EmpleadoBar, { empleado: empleado, data: data, onSwitch: switchEmpleado, notify: notify }),
     /*#__PURE__*/React.createElement(DriveSyncBar, { pending: gdPending, bytes: dataBytes, onAction: gdAction }),
+    view === "dashboard" && /*#__PURE__*/React.createElement(IAResumenCard, { data: data, setView: setView, clientId: clientId }),
+    view === "ia" && /*#__PURE__*/React.createElement(IAView, { data: data, save: save, notify: notify, setView: setView, clientId: clientId, empleado: empleado, settings: settings }),
     view === "gestion" && /*#__PURE__*/React.createElement(GestionView, { data: data, save: save, notify: notify, storeName: settings.storeName, empleado: empleado, onSwitch: switchEmpleado }),
     view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify, clientId: clientId }),
     view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
