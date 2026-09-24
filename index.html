@@ -6,10 +6,11 @@
   <meta name="theme-color" content="#1A1A1A">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="ACCE PRO">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="apple-mobile-web-app-title" content="CLINICELL">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>ACCE PRO</title>
+  <title>CLINICELL</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
     *{box-sizing:border-box;margin:0;padding:0}
@@ -48,6 +49,14 @@
     .cc-title{display:flex;align-items:center;gap:10px;color:#d8b25a;font-size:12px;font-weight:700;letter-spacing:.22em;text-transform:uppercase}
     .cc-title i{width:5px;height:5px;border-radius:50%;background:#ffc940;box-shadow:0 0 8px #ffc940;animation:pulse 1.2s ease-in-out infinite}
     .cc-title i:nth-child(3){animation-delay:.2s}.cc-title i:nth-child(4){animation-delay:.4s}
+    .cc-brand{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(86vw,420px)}
+    .cc-brand-logo{max-width:180px;max-height:150px;width:auto;height:auto;object-fit:contain;border-radius:18px;filter:drop-shadow(0 10px 28px rgba(0,0,0,.55))}
+    .cc-brand-name{color:#fff;font-size:30px;font-weight:800;letter-spacing:.01em;text-align:center;line-height:1.15;word-break:break-word}
+    .cc-brand-pulse{width:220px;height:auto;filter:drop-shadow(0 0 5px rgba(255,191,46,.7))}
+    .cc-brand-sm{gap:10px;width:100%}
+    .cc-brand-sm .cc-brand-logo{max-width:120px;max-height:96px;border-radius:14px}
+    .cc-brand-sm .cc-brand-name{font-size:23px}
+    .cc-brand-sm .cc-brand-pulse{width:170px}
     .cc-sub{color:#8e949b;font-size:13px;font-weight:600;text-align:center;padding:0 20px;margin-top:-12px}
     /* Hover effects en cards */
     .trp-card-hover{transition:transform 0.15s,box-shadow 0.15s}
@@ -72,7 +81,7 @@
     }
 
     /* ════════════════════════════════════════════════════════════
-       ACCE PRO — DISEÑO MATTE 3D
+       CLINICELL — DISEÑO MATTE 3D
        Profundidad real · Superficies elevadas · Sin neón
     ════════════════════════════════════════════════════════════ */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -265,13 +274,42 @@
         '<path class="cc-spark" d="' + PULSO + '" pathLength="100" stroke-dasharray="22 140" fill="none" stroke="#fff4c8" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" filter="url(#ccGlowFuerte)"/>' +
         '</svg>';
       function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
-      window.__ccSplash = function (title, subtitle) {
+      // Solo el logo animado (también lo usa la pantalla de inicio de sesión).
+      window.__ccLogo = function () {
         // Retraso negativo según el reloj: al pasar del logo estático al de React
         // la animación continúa donde iba en vez de reiniciarse.
         var d = "-" + ((performance.now() / 1000) % 2.4).toFixed(2) + "s";
-        return '<div class="cc-splash">' +
-          SVG.replace('class="cc-spark"', 'class="cc-spark" style="animation-delay:' + d + '"')
-             .replace('class="cc-phone-glow"', 'class="cc-phone-glow" style="animation-delay:' + d + '"') +
+        return SVG.replace('class="cc-spark"', 'class="cc-spark" style="animation-delay:' + d + '"')
+                  .replace('class="cc-phone-glow"', 'class="cc-phone-glow" style="animation-delay:' + d + '"');
+      };
+      // Marca del taller (se vende a varios talleres): si en Configuración activó
+      // "usar mi marca", el login y la carga muestran SU logo y nombre en vez de CLINICELL.
+      // Se lee de la configuración guardada en este equipo (último taller que entró aquí).
+      window.__ccBrand = function () {
+        try {
+          var s = JSON.parse(localStorage.getItem("trp_settings_v1") || "null");
+          if (s && s.loginBrand === true) {
+            var logo = /^(data:image\/|https:\/\/)/.test(s.logo || "") ? s.logo : "";
+            var name = String(s.storeName || "").trim();
+            if (logo || name) return { custom: true, name: name, logo: logo };
+          }
+        } catch (e) {}
+        return { custom: false, name: "CLINICELL", logo: "" };
+      };
+      // Logo que se muestra: el del taller (imagen + nombre) o el CLINICELL animado.
+      window.__ccBrandHTML = function (small) {
+        var b = window.__ccBrand();
+        if (!b.custom) return window.__ccLogo();
+        return '<div class="cc-brand' + (small ? ' cc-brand-sm' : '') + '">' +
+          (b.logo ? '<img class="cc-brand-logo" src="' + esc(b.logo) + '" alt="">' : '') +
+          (b.name ? '<div class="cc-brand-name">' + esc(b.name) + '</div>' : '') +
+          '<svg class="cc-brand-pulse" viewBox="0 0 240 40" aria-hidden="true"><path d="M0 22H70L78 14L86 22H98L110 3L124 37L134 22H146L154 16L162 22H240" fill="none" stroke="#ffbf2e" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" opacity=".85"/></svg>' +
+          '</div>';
+      };
+      var _b0 = window.__ccBrand();
+      if (_b0.custom && _b0.name) document.title = _b0.name;
+      window.__ccSplash = function (title, subtitle) {
+        return '<div class="cc-splash">' + window.__ccBrandHTML() +
           '<div class="cc-title">' + esc(title || "Cargando") + '<i></i><i></i><i></i></div>' +
           (subtitle ? '<div class="cc-sub">' + esc(subtitle) + '</div>' : '') +
           '</div>';
@@ -899,10 +937,10 @@ function LicExpiredScreen() {
   },
     /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"center", marginBottom:16, color:"#1A1A1A" } }, /*#__PURE__*/React.createElement(Clock, { size: 56 })),
     /*#__PURE__*/React.createElement("div", { style:{ fontSize:22, fontWeight:700, color:"#000000", marginBottom:8 } }, "Tu período de prueba ha finalizado"),
-    /*#__PURE__*/React.createElement("div", { style:{ fontSize:15, color:"#404040", marginBottom:6, maxWidth:400 } }, "Esperamos que hayas disfrutado el demo de ACCE PRO."),
+    /*#__PURE__*/React.createElement("div", { style:{ fontSize:15, color:"#404040", marginBottom:6, maxWidth:400 } }, "Esperamos que hayas disfrutado el demo de CLINICELL."),
     /*#__PURE__*/React.createElement("div", { style:{ fontSize:15, color:"#404040", marginBottom:32, maxWidth:400 } }, "Activa tu licencia por solo ", /*#__PURE__*/React.createElement("strong", { style:{color:"#1A1A1A"} }, LICENSE_PRICE), " y sigue gestionando tu taller sin límites."),
     /*#__PURE__*/React.createElement("a", {
-      href: "https://wa.me/" + LICENSE_WA + "?text=" + encodeURIComponent("Hola, quiero activar ACCE PRO. ¿Cómo procedo?"),
+      href: "https://wa.me/" + LICENSE_WA + "?text=" + encodeURIComponent("Hola, quiero activar CLINICELL. ¿Cómo procedo?"),
       target: "_blank",
       style:{ display:"inline-flex", alignItems:"center", gap:10, background:"#1A1A1A", color:"#fff", padding:"14px 28px", borderRadius:6, fontWeight:700, fontSize:16, textDecoration:"none", marginBottom:16, boxShadow:"0 2px 8px rgba(0,0,0,0.15)" }
     }, /*#__PURE__*/React.createElement(MessageCircle, { size: 17 }), "Contactar por WhatsApp"),
@@ -934,7 +972,7 @@ function LicLoginScreen(_ref) {
       style:{ background:"#fff", border:"1px solid #E0E0E0", borderRadius:8, padding:"40px 36px", width:"100%", maxWidth:420, boxShadow:"0 1px 3px rgba(0,0,0,0.3)", textAlign:"center" }
     },
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", justifyContent:"center", marginBottom:12, color:"#1A1A1A" } }, /*#__PURE__*/React.createElement(Wrench, { size: 44 })),
-      /*#__PURE__*/React.createElement("div", { style:{fontSize:22, fontWeight:700, color:"#000000", marginBottom:4} }, "ACCE PRO"),
+      /*#__PURE__*/React.createElement("div", { style:{fontSize:22, fontWeight:700, color:"#000000", marginBottom:4} }, "CLINICELL"),
       /*#__PURE__*/React.createElement("div", { style:{fontSize:13, color:"#404040", marginBottom:28} }, "Ingresa tu código de acceso para continuar"),
       /*#__PURE__*/React.createElement("input", {
         type:"text", value:code, placeholder:"Ej: DEMO-20261231ABC-XXXXXXXX",
@@ -950,7 +988,7 @@ function LicLoginScreen(_ref) {
       /*#__PURE__*/React.createElement("div", { style:{borderTop:"1px solid #E0E0E0", paddingTop:16} },
         /*#__PURE__*/React.createElement("div", { style:{fontSize:12, color:"#666666", marginBottom:8} }, "¿No tienes código? Solicita tu demo gratis"),
         /*#__PURE__*/React.createElement("a", {
-          href: "https://wa.me/" + LICENSE_WA + "?text=" + encodeURIComponent("Hola, me interesa probar ACCE PRO. ¿Pueden darme un código demo?"),
+          href: "https://wa.me/" + LICENSE_WA + "?text=" + encodeURIComponent("Hola, me interesa probar CLINICELL. ¿Pueden darme un código demo?"),
           target:"_blank",
           style:{ display:"inline-flex", alignItems:"center", gap:6, background:"#1A1A1A", color:"#fff", padding:"9px 18px", borderRadius:4, fontWeight:600, fontSize:13, textDecoration:"none" }
         }, /*#__PURE__*/React.createElement(MessageCircle, { size: 14 }), "Solicitar demo por WhatsApp")
@@ -961,7 +999,7 @@ function LicLoginScreen(_ref) {
 }
 
 var DEFAULT_SETTINGS = {
-  storeName: "ACCE PRO",
+  storeName: "CLINICELL",
   storeSubtitle: "GESTIÓN TALLER",
   logo: "",
   nit: "",
@@ -979,7 +1017,7 @@ var STATUSES = ["Recibido", "Diagnóstico", "En Reparación", "Listo", "Entregad
 function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trackUrl, storeName) {
   var nombre = customer ? customer.split(" ")[0] : "cliente";
   var equipo = device || "su equipo";
-  var tienda = (storeName && String(storeName).trim()) || "ACCE PRO";
+  var tienda = (storeName && String(storeName).trim()) || "CLINICELL";
   var pagado = paid ? "PAGADO" : "PENDIENTE DE PAGO";
   var costoInfo = (cost && Number(cost) > 0) ? ("\nValor de la reparacion: *$" + Number(cost).toLocaleString("es-CO") + "*") : "";
   var wDays = (warrantyDays === 0 || warrantyDays) ? Number(warrantyDays) : 15;
@@ -1034,7 +1072,7 @@ function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trac
 function buildAbandonoWAMessage(customer, device, days, storeName) {
   var nombre = customer ? customer.split(" ")[0] : "cliente";
   var equipo = device || "su equipo";
-  var tienda = storeName || "ACCE PRO";
+  var tienda = storeName || "CLINICELL";
   var msg = "";
   if (days >= 30) {
     msg = "Hola " + nombre + ", le escribimos de *" + tienda + "*."
@@ -2016,7 +2054,7 @@ function DashboardView(_ref8) {
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 16 } },
         /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, color: T.text } }, /*#__PURE__*/React.createElement(Star, { size: 15 }), "Calificaci\xF3n de Clientes"),
         /*#__PURE__*/React.createElement("button", {
-          onClick: function () { return shareRatingsSummary(_all, (settings && settings.storeName) || "ACCE PRO", settings && settings.logo, notify); },
+          onClick: function () { return shareRatingsSummary(_all, (settings && settings.storeName) || "CLINICELL", settings && settings.logo, notify); },
           style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: T.accentDim, color: T.accent, border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit" }
         }, /*#__PURE__*/React.createElement(Download, { size: 13 }), "Compartir resumen")
       ),
@@ -2073,7 +2111,7 @@ function DashboardView(_ref8) {
     }).sort(function (a, b) {
       return ((b.deliveryDate || b.date) || "").localeCompare((a.deliveryDate || a.date) || "");
     });
-    var tienda = (settings && settings.storeName) || "ACCE PRO";
+    var tienda = (settings && settings.storeName) || "CLINICELL";
     var totalEntregados = (data.repairs || []).filter(function (r) { return r.status === "Entregado"; }).length;
     var tasa = totalEntregados > 0 ? Math.round(((ratings || []).length / totalEntregados) * 100) : 0;
 
@@ -2564,7 +2602,7 @@ function RepairsView(_ref9) {
       }
     }, /*#__PURE__*/React.createElement(QrCode, { size: 14 })), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
-        showPrintModal(function(type, tw){ printRepair(r, (data.settings && data.settings.storeName) || "ACCE PRO", clientId, type, tw); });
+        showPrintModal(function(type, tw){ printRepair(r, (data.settings && data.settings.storeName) || "CLINICELL", clientId, type, tw); });
       },
       title: "Imprimir orden",
       style: {
@@ -2578,7 +2616,7 @@ function RepairsView(_ref9) {
       size: 14
     })), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
-        shareRepairReceipt(r, (data.settings && data.settings.storeName) || "ACCE PRO", clientId, notify);
+        shareRepairReceipt(r, (data.settings && data.settings.storeName) || "CLINICELL", clientId, notify);
       },
       title: "Compartir recibo por WhatsApp",
       style: {
@@ -3064,7 +3102,7 @@ function RepairModal(_ref0) {
         // Botón compartir recibo (imagen + texto) por WhatsApp
         form.phone && /*#__PURE__*/React.createElement("button", {
           type: "button",
-          onClick: function(){ shareRepairReceipt(form, (data.settings && data.settings.storeName) || "ACCE PRO", clientId, notify); },
+          onClick: function(){ shareRepairReceipt(form, (data.settings && data.settings.storeName) || "CLINICELL", clientId, notify); },
           title:"Compartir recibo por WhatsApp",
           style:{ width:42, height:42, background:T.surface, color:"#1A1A1A", border:"2px solid #1A1A1A", borderRadius:12, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }
         }, /*#__PURE__*/React.createElement(Share2, { size: 18 }))
@@ -4672,7 +4710,7 @@ function CelularesView(_refCel) {
               small: true,
               variant: "ghost",
               icon: /*#__PURE__*/React.createElement(Printer, { size: 11 }),
-              onClick: function onClick() { return showPrintModal(function (type, tw) { printCelularReceipt(c, (data.settings && data.settings.storeName) || "ACCE PRO", type, tw); }); }
+              onClick: function onClick() { return showPrintModal(function (type, tw) { printCelularReceipt(c, (data.settings && data.settings.storeName) || "CLINICELL", type, tw); }); }
             }, "Factura"),
             /*#__PURE__*/React.createElement(Btn, {
               small: true,
@@ -4861,7 +4899,7 @@ function VenderCelularModal(_refVM) {
     notify("Venta registrada");
     onClose();
     showPrintModal(function (type, tw) {
-      printCelularReceipt(updatedCel, (data.settings && data.settings.storeName) || "ACCE PRO", type, tw);
+      printCelularReceipt(updatedCel, (data.settings && data.settings.storeName) || "CLINICELL", type, tw);
     });
   };
   return /*#__PURE__*/React.createElement(ModalWrap, { title: "Vender " + celular.marca + " " + celular.modelo, onClose: onClose },
@@ -5460,7 +5498,7 @@ function PublicView(_ref17) {
       fontWeight: 800,
       letterSpacing: "-0.02em"
     }
-  }, cfg && cfg.storeName || "ACCE PRO"), /*#__PURE__*/React.createElement("div", {
+  }, cfg && cfg.storeName || "CLINICELL"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 9,
       color: T.accent,
@@ -6299,7 +6337,7 @@ function _buildRatingUrlGeneral(clientId) {
 // Mensaje corto de recordatorio: aqui el enlace es lo unico que importa.
 function _buildRecordatorioCalificacion(r, clientId, storeName) {
   var nombre = (r.customer || "").split(" ")[0] || "";
-  var tienda = (storeName && String(storeName).trim()) || "ACCE PRO";
+  var tienda = (storeName && String(storeName).trim()) || "CLINICELL";
   return "Hola " + nombre + ", ¿como le ha ido con su *" + (r.device || "equipo") + "*?"
     + "\n\nSi quedo conforme, ¿nos regala 10 segundos para calificarnos? Es tocar las estrellas y listo:"
     + "\n" + _buildRatingUrl(clientId, r)
@@ -6309,7 +6347,7 @@ function _buildRecordatorioCalificacion(r, clientId, storeName) {
 // Cartel imprimible con el QR del link general, para pegar en el mostrador.
 function showRatingPoster(clientId, settings) {
   var url = _buildRatingUrlGeneral(clientId);
-  var tienda = (settings && settings.storeName) || "ACCE PRO";
+  var tienda = (settings && settings.storeName) || "CLINICELL";
 
   var overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;z-index:999999;background:rgba(9,9,9,0.75);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);overflow:auto";
@@ -6458,7 +6496,7 @@ function showPrintModal(onSelect) {
 }
 
 function printRepair(r) {
-  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ACCE PRO";
+  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "CLINICELL";
   var clientId = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : (localStorage.getItem("trp_permanent_clientId_" + (localStorage.getItem("trp_current_user")||"")) || "");
   var forceType = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : null;
   var forceTw   = arguments.length > 4 && arguments[4] !== undefined ? arguments[4] : null;
@@ -6701,7 +6739,7 @@ function shareRatingsSummary(ratings, storeName, logo, notify) {
     + "</style></head><body>"
     + "<div style='background:#fff;border-radius:26px;padding:30px 26px'>"
     + (logo ? "<img src='" + logo + "' style='width:54px;height:54px;border-radius:14px;object-fit:cover;margin-bottom:12px'/>" : "")
-    + "<div style='font-size:13px;font-weight:800;color:#878787;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px'>" + _escHtml(storeName || "ACCE PRO") + "</div>"
+    + "<div style='font-size:13px;font-weight:800;color:#878787;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px'>" + _escHtml(storeName || "CLINICELL") + "</div>"
     + "<div style='font-size:19px;font-weight:800;color:#131313;margin-bottom:18px'>Calificación de nuestros clientes</div>"
     + "<div style='text-align:center;padding:22px 0;border-radius:20px;background:rgba(152,152,152,0.06);margin-bottom:20px'>"
     + "<div style='font-size:52px;font-weight:900;color:#131313;line-height:1'>" + avg.toFixed(1) + "</div>"
@@ -6749,7 +6787,7 @@ function shareRatingsSummary(ratings, storeName, logo, notify) {
 
 // ── RECEIPT PRINT HELPER ─────────────────────────
 function printReceipt(sale) {
-  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ACCE PRO";
+  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "CLINICELL";
   var forceType = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
   var forceTw   = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : null;
   var fmtCOP = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
@@ -6841,7 +6879,7 @@ function printReceipt(sale) {
 }
 
 function printCelularReceipt(cel) {
-  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ACCE PRO";
+  var storeName = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "CLINICELL";
   var forceType = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
   var forceTw   = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : null;
   var fmtCOP = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
@@ -7005,7 +7043,7 @@ function printFactura(f) {
     return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(n || 0);
   };
   var ptype     = forceType || _getPrinterType();
-  var storeName = cfg.storeName || "ACCE PRO";
+  var storeName = cfg.storeName || "CLINICELL";
   var cli       = f.cliente || {};
   var items     = f.items || [];
   var saldo     = _facturaSaldo(f);
@@ -7208,7 +7246,7 @@ function shareFacturaWA(f, cfg, notify) {
   var lineas = (f.items || []).map(function (i) {
     return "• " + i.name + " x" + i.qty + " — " + fmt(_facturaLineaNeto(i));
   }).join("\n");
-  var msg = "*" + (cfg.storeName || "ACCE PRO") + "*\n" +
+  var msg = "*" + (cfg.storeName || "CLINICELL") + "*\n" +
     "Factura de venta *" + f.numero + "*\n" +
     "Fecha: " + f.date + "\n\n" +
     "Hola " + (cli.nombre ? cli.nombre.split(" ")[0] : "cliente") + ", este es el detalle de tu compra:\n\n" +
@@ -7252,7 +7290,7 @@ function VentasView(_ref18) {
     var todayStr = getHoyColombia();
     var mesStr = getMesColombia();
     var hoy = new Date(todayStr+"T12:00:00");
-    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
+    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "CLINICELL";
 
     var lista, titulo, subtitulo;
     if (tipo === "diario") {
@@ -9106,9 +9144,24 @@ function SettingsView(_ref20) {
   var handleLogoUpload = function handleLogoUpload(e) {
     var file = e.target.files[0];
     if (!file) return;
+    e.target.value = "";
     var reader = new FileReader();
     reader.onload = function (ev) {
-      return set("logo", ev.target.result);
+      var src = ev.target.result;
+      // Se reduce a 400px máx. en WebP (conserva transparencia y pesa ~20-60 KB)
+      var img = new Image();
+      img.onload = function () {
+        var k = Math.min(1, 400 / Math.max(img.width, img.height));
+        var cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round(img.width * k));
+        cv.height = Math.max(1, Math.round(img.height * k));
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        var out = cv.toDataURL("image/webp", 0.9);
+        if (out.indexOf("data:image/webp") !== 0) out = cv.toDataURL("image/png");
+        set("logo", out.length < src.length ? out : src);
+      };
+      img.onerror = function () { notify("No se pudo leer la imagen", "error"); };
+      img.src = src;
     };
     reader.readAsDataURL(file);
   };
@@ -9260,7 +9313,7 @@ function SettingsView(_ref20) {
     onChange: function onChange(v) {
       return set("storeName", v);
     },
-    placeholder: "ACCE PRO"
+    placeholder: "CLINICELL"
   }), /*#__PURE__*/React.createElement(Field, {
     label: "Subt\xEDtulo / Slogan",
     value: form.storeSubtitle,
@@ -9268,7 +9321,20 @@ function SettingsView(_ref20) {
       return set("storeSubtitle", v);
     },
     placeholder: "GESTI\xD3N TALLER"
-  }), /*#__PURE__*/React.createElement(Field, {
+  }), /*#__PURE__*/React.createElement("label", {
+    style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", background: T.bg, border: "1px solid ".concat(form.loginBrand ? T.accent : T.border), borderRadius: 10, cursor: "pointer" }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: form.loginBrand === true,
+    onChange: function onChange(e) { return set("loginBrand", e.target.checked); },
+    style: { width: 18, height: 18, marginTop: 2, flexShrink: 0, accentColor: T.accent, cursor: "pointer" }
+  }), /*#__PURE__*/React.createElement("div", null,
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: T.text } }, "Usar mi logo y nombre al abrir el programa"),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 3, lineHeight: 1.45 } },
+      form.loginBrand
+        ? "El inicio de sesi\xF3n, la pantalla de carga y el t\xEDtulo de la ventana muestran " + ((form.storeName || "").trim() || "tu negocio") + (form.logo ? " con tu logo." : ". Sube un logo para que se vea mejor.")
+        : "Desactivado: se muestra el logo de CLINICELL. Act\xEDvalo para que tus empleados vean tu marca al entrar."))
+  ), /*#__PURE__*/React.createElement(Field, {
     label: "NIT / C\xE9dula (aparece en las facturas)",
     value: form.nit || "",
     onChange: function onChange(v) {
@@ -10824,7 +10890,7 @@ function ReporteView(_props) {
   // ── Exportar CSV ──
   var exportarCSV = function () {
     var rows = [];
-    rows.push(["REPORTE", (data.settings && data.settings.storeName) || "ACCE PRO"]);
+    rows.push(["REPORTE", (data.settings && data.settings.storeName) || "CLINICELL"]);
     rows.push(["Periodo", rango.desde + " a " + rango.hasta]);
     rows.push(["Generado", new Date().toLocaleString("es-CO")]);
     rows.push([]);
@@ -10868,7 +10934,7 @@ function ReporteView(_props) {
 
   // ── Imprimir (informe ejecutivo con comparación y rankings) ──
   var imprimir = function () {
-    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "ACCE PRO";
+    var storeName = (data.settings && data.settings.storeName) ? data.settings.storeName : "CLINICELL";
     var esc = _escHtml;
     var td = "padding:8px 12px;border-bottom:1px solid #eee;font-size:13px";
     var tHead = function (cols) {
@@ -11804,7 +11870,7 @@ function ProveedoresView(_pRef) {
     var msg = "*PEDIDO - " + storeName + "*\n\n" + cuerpo;
     if ((Number(ped.total) || 0) > 0) msg += "\n\nTotal estimado: " + fmt(ped.total);
     if (ped.notes) msg += "\n\nNotas: " + ped.notes;
-    return msg + "\n\n_Enviado desde ACCE PRO_";
+    return msg + "\n\n_Enviado desde " + ((window.__acceStoreName || "").trim() || "CLINICELL") + "_";
   };
 
   var openOrder = function(p) { setNewLine({ name: "", qty: "1", cost: "" }); setModal({ mode: "order", provider: p }); };
@@ -11842,7 +11908,7 @@ function ProveedoresView(_pRef) {
     var prov = modal.provider;
     var text = returnText.trim();
     if (!text) { notify("Escribe qué vas a devolver", "error"); return; }
-    var msg = "*DEVOLUCIÓN A PROVEEDOR*\n\n" + text + "\n\n_Enviado desde ACCE PRO_";
+    var msg = "*DEVOLUCIÓN A PROVEEDOR*\n\n" + text + "\n\n_Enviado desde " + ((window.__acceStoreName || "").trim() || "CLINICELL") + "_";
     window.open("https://wa.me/" + prov.whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
     var record = { id: uid(), date: today(), text: text };
     var updatedProviders = providers.map(function(p) {
@@ -11921,7 +11987,7 @@ function ProveedoresView(_pRef) {
       + (shipForm.direccion.trim() ? "Dirección: " + shipForm.direccion.trim() + "\n" : "")
       + "\nContenido:\n" + shipForm.contenido.trim()
       + (shipForm.notas.trim() ? "\n\nNotas: " + shipForm.notas.trim() : "")
-      + "\n\n_Enviado desde ACCE PRO_";
+      + "\n\n_Enviado desde " + ((window.__acceStoreName || "").trim() || "CLINICELL") + "_";
     window.open("https://wa.me/" + courier.whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
     notify("Datos de envío enviados");
     setModal(null);
@@ -13406,7 +13472,7 @@ function ImeiCheckBtn(props) {
 function _printActaRecepcion(r, storeName) {
   var chk = r.checklist || {};
   var rows = CHK_ITEMS.map(function (k) { var s = CHK_STATES[chk[k] || "nr"]; return "<tr><td>" + _escHtml(k) + "</td><td style='color:" + s.c + ";font-weight:700'>" + s.l + "</td></tr>"; }).join("");
-  var html = "<h1>" + _escHtml(storeName || "ACCE PRO") + " — Acta de recepción</h1>" +
+  var html = "<h1>" + _escHtml(storeName || "CLINICELL") + " — Acta de recepción</h1>" +
     "<div class='muted'>Orden #" + _gOrderCode(r) + " · " + _escHtml(r.date || "") + "</div>" +
     "<h2>Cliente y equipo</h2><table><tr><th>Cliente</th><td>" + _escHtml(r.customer) + "</td><th>Teléfono</th><td>" + _escHtml(r.phone || "") + "</td></tr>" +
     "<tr><th>Equipo</th><td>" + _escHtml(r.device) + "</td><th>IMEI</th><td>" + _escHtml(r.imei || "—") + "</td></tr>" +
@@ -13523,7 +13589,7 @@ function CierreCajaTab(props) {
 // ─── 3. COTIZACIONES ────────────────────────────────────────────────
 var COT_EST = { Pendiente: "#D97706", Aprobada: "#16A34A", Rechazada: "#DC2626", Convertida: "#4F46E5" };
 function CotizacionesTab(props) {
-  var data = props.data, save = props.save, notify = props.notify, storeName = props.storeName || "ACCE PRO";
+  var data = props.data, save = props.save, notify = props.notify, storeName = props.storeName || "CLINICELL";
   var cots = data.cotizaciones || [];
   var _m = useState(null), edit = _m[0], setEdit = _m[1];
   var _q = useState("todas"), filtro = _q[0], setFiltro = _q[1];
@@ -13634,7 +13700,7 @@ function CotizacionesTab(props) {
 
 // ─── 4. CUENTAS POR COBRAR ──────────────────────────────────────────
 function PorCobrarTab(props) {
-  var data = props.data, storeName = props.storeName || "ACCE PRO";
+  var data = props.data, storeName = props.storeName || "CLINICELL";
   var hoy = getHoyColombia();
   var deudas = [];
   (data.repairs || []).forEach(function (r) {
@@ -13726,7 +13792,7 @@ function GarantiasTab(props) {
 
 // ─── 6. EQUIPOS OLVIDADOS ───────────────────────────────────────────
 function OlvidadosTab(props) {
-  var data = props.data, save = props.save, storeName = props.storeName || "ACCE PRO";
+  var data = props.data, save = props.save, storeName = props.storeName || "CLINICELL";
   var _d = useState(15), min = _d[0], setMin = _d[1];
   var hoy = getHoyColombia();
   var lista = (data.repairs || []).filter(function (r) { return r.status === "Listo"; }).map(function (r) {
@@ -14505,7 +14571,7 @@ function IAAvisosTab(props) {
         "Con la app abierta (aunque esté minimizada) le avisa cuando un cliente deja una calificación y, una vez al día, los pendientes: equipos listos sin recoger, órdenes estancadas, cobros y repuestos bajos. Cada equipo (computador o celular) se activa por separado."),
       !soportado ? _gh("div", { style: { fontSize: 13, color: T.red } }, "Este navegador no permite avisos.")
         : on ? _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
-            _gh(Btn, { small: true, variant: "ghost", onClick: function () { _avisoMostrar("Prueba de aviso", "Así se verán los avisos de ACCE PRO.", "acce-test"); } }, "Probar aviso"),
+            _gh(Btn, { small: true, variant: "ghost", onClick: function () { _avisoMostrar("Prueba de aviso", "Así se verán los avisos de CLINICELL.", "acce-test"); } }, "Probar aviso"),
             _gh(Btn, { small: true, variant: "ghost", onClick: function () { _avisosDesactivar(); setOn(false); notify("Avisos desactivados"); } }, "Desactivar"))
         : _gh(Btn, { onClick: activar, icon: _gIco("Bell", 14) }, "Activar avisos")));
 }
@@ -15326,6 +15392,17 @@ function App(_appProps) {
   window.__acceClientId = clientId;
   window.__acceData = data; // datos en vivo para el asistente IA
   useEffect(function () { return function () { window.__acceData = null; }; }, []); // al cerrar sesión
+  // Botones flotantes (catálogo PDF y asistente IA): solo dentro del software,
+  // no en la pantalla de carga, el login ni el catálogo público.
+  var _enApp = !!data && minLoadTimeDone && !publicMode;
+  useEffect(function () {
+    document.body.classList.toggle("acce-en-app", _enApp);
+    return function () { document.body.classList.remove("acce-en-app"); };
+  }, [_enApp]);
+  // Título de la ventana: nombre del taller si activó "usar mi marca", si no CLINICELL
+  useEffect(function () {
+    document.title = (settings.loginBrand === true && String(settings.storeName || "").trim()) || "CLINICELL";
+  }, [settings.loginBrand, settings.storeName]);
   useEffect(function () { _aiKeySync(); }, [clientId]); // clave de IA de la cuenta → este equipo
 
   // ─── GOOGLE DRIVE: sube a Drive las fotos que siguen dentro de los datos ───
@@ -15536,7 +15613,7 @@ function App(_appProps) {
       /*#__PURE__*/React.createElement("div", {
         style: { overflow: "hidden" }
       },
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, settings.storeName || "ACCE PRO"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, settings.storeName || "CLINICELL"),
         /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: T.muted, letterSpacing: "0.06em" } }, "PANEL DE GESTIÓN")
       )
     ),
@@ -15931,30 +16008,50 @@ function _saveAuth(clientId, data) {} // reemplazado por _saveUser
 function _loadAuthLocal(username) { return _loadUserLocal(username); } // alias
 
 
+// Estilos de las pantallas de acceso — negro + dorado, a juego con el logo CLINICELL
 var _AS = {
   page: {
-    minHeight:"100dvh", width:"100%", display:"flex", alignItems:"center", justifyContent:"center",
-    fontFamily:"'DM Sans',system-ui,sans-serif", position:"relative", overflow:"auto", padding:24, boxSizing:"border-box",
-    background: "#131313"
+    minHeight:"100dvh", width:"100%", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+    fontFamily:"'DM Sans',system-ui,sans-serif", position:"relative", overflow:"auto", padding:"28px 16px", boxSizing:"border-box",
+    background:"radial-gradient(ellipse at 50% 30%,#1d2026 0%,#0c0d10 60%,#060708 100%)"
   },
   card: {
-    background:"#1b1b1b",
-    border:"1px solid rgba(255,255,255,0.10)", borderRadius:10, padding:"44px 38px 36px",
-    width:"100%", maxWidth:380, position:"relative", zIndex:2,
-    boxShadow:"0 1px 3px rgba(0,0,0,0.3)"
+    background:"linear-gradient(180deg,rgba(24,26,31,0.92),rgba(14,15,18,0.92))",
+    border:"1px solid rgba(255,201,64,0.14)", borderRadius:18, padding:"30px 30px 26px",
+    width:"100%", maxWidth:410, position:"relative", zIndex:2,
+    boxShadow:"0 24px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04)"
   },
-  avatarWrap: { width:80, height:80, borderRadius:10, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.14)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 24px" },
-  title: { fontWeight:700, fontSize:20, color:"#fff", textAlign:"center", letterSpacing:"-0.01em" },
-  sub: { fontSize:13.5, color:"rgba(255,255,255,0.55)", textAlign:"center", marginTop:6, marginBottom:28, lineHeight:1.5 },
-  inputWrap: { display:"flex", alignItems:"center", gap:11, borderBottom:"1px solid rgba(255,255,255,0.28)", padding:"10px 2px", marginBottom:22 },
-  input: { flex:1, width:"100%", background:"transparent", border:"none", outline:"none", color:"#fff", fontSize:16.5, fontFamily:"inherit", fontWeight:500 },
-  checkRow: { display:"flex", alignItems:"center", gap:8, fontSize:12.5, color:"rgba(255,255,255,0.6)", cursor:"pointer" },
-  btn: { width:"100%", padding:"14px", background:"#2563EB", color:"#FFFFFF", border:"none", borderRadius:6, fontSize:13, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase", cursor:"pointer", fontFamily:"inherit", marginBottom:14 },
-  btnGhost: { width:"100%", padding:"13px", background:"rgba(255,255,255,0.06)", color:"#fff", border:"1px solid rgba(255,255,255,0.16)", borderRadius:6, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:12, letterSpacing:"0.02em" },
-  err: { background:"rgba(119,119,119,0.14)", color:"#e4e4e4", borderRadius:6, padding:"10px 14px", fontSize:12.5, marginBottom:16, border:"1px solid rgba(119,119,119,0.3)", fontWeight:500 },
-  ok: { background:"rgba(137,137,137,0.14)", color:"#eaeaea", borderRadius:6, padding:"10px 14px", fontSize:12.5, marginBottom:16, border:"1px solid rgba(137,137,137,0.3)", fontWeight:500 },
-  link: { background:"none", border:"none", color:"rgba(255,255,255,0.75)", fontSize:12.5, cursor:"pointer", fontFamily:"inherit", fontWeight:500, fontStyle:"italic", textDecoration:"underline" }
+  avatarWrap: { width:"100%", maxWidth:230, margin:"0 auto 14px" },
+  title: { fontWeight:700, fontSize:19, color:"#fff", textAlign:"center", letterSpacing:"-0.01em" },
+  sub: { fontSize:13.5, color:"rgba(255,255,255,0.55)", textAlign:"center", marginTop:6, marginBottom:24, lineHeight:1.5 },
+  inputWrap: { display:"flex", alignItems:"center", gap:11, background:"#0b0c0f", border:"1px solid rgba(255,255,255,0.10)", borderRadius:11, padding:"0 14px", height:50, marginBottom:14, transition:"border-color .15s, box-shadow .15s" },
+  input: { flex:1, width:"100%", minWidth:0, background:"transparent", border:"none", outline:"none", color:"#fff", fontSize:15.5, fontFamily:"inherit", fontWeight:500 },
+  checkRow: { display:"flex", alignItems:"center", gap:8, fontSize:13, color:"rgba(255,255,255,0.62)", cursor:"pointer" },
+  btn: { width:"100%", height:50, background:"linear-gradient(180deg,#ffd466 0%,#f2b233 55%,#dd9a1c 100%)", color:"#1a1204", border:"none", borderRadius:11, fontSize:14, fontWeight:800, letterSpacing:"0.08em", textTransform:"uppercase", cursor:"pointer", fontFamily:"inherit", marginBottom:12, boxShadow:"0 8px 24px rgba(242,178,51,0.22), inset 0 1px 0 rgba(255,255,255,0.35)", transition:"transform .15s, box-shadow .15s" },
+  btnGhost: { width:"100%", height:48, background:"transparent", color:"rgba(255,255,255,0.88)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:11, fontSize:13.5, fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:12, letterSpacing:"0.01em" },
+  err: { background:"rgba(239,68,68,0.10)", color:"#fecaca", borderRadius:10, padding:"10px 14px", fontSize:13, marginBottom:16, border:"1px solid rgba(239,68,68,0.28)", fontWeight:500, lineHeight:1.45 },
+  ok: { background:"rgba(34,197,94,0.10)", color:"#bbf7d0", borderRadius:10, padding:"10px 14px", fontSize:13, marginBottom:16, border:"1px solid rgba(34,197,94,0.28)", fontWeight:500, lineHeight:1.45 },
+  link: { background:"none", border:"none", color:"#e2bd6a", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600, padding:0, minHeight:0 }
 };
+// Logo de las pantallas de acceso: el del taller si activó "usar mi marca"
+// (window.__ccBrand), si no el CLINICELL animado de la pantalla de carga.
+function _authLogo(maxWidth) {
+  var b = window.__ccBrand ? window.__ccBrand() : { custom: false };
+  if (b.custom) return /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", justifyContent: "center", margin: "0 auto 18px" },
+    dangerouslySetInnerHTML: { __html: window.__ccBrandHTML((maxWidth || 230) < 300) }
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    style: { width: "100%", maxWidth: maxWidth || 230, margin: "0 auto 14px", lineHeight: 0 },
+    dangerouslySetInnerHTML: { __html: window.__ccLogo ? window.__ccLogo().replace('class="cc-logo"', 'class="cc-logo" style="width:100%"') : "" }
+  });
+}
+// Pie de las pantallas de acceso
+function _authFooter() {
+  var b = window.__ccBrand ? window.__ccBrand() : { custom: false };
+  return /*#__PURE__*/React.createElement("div", { style: { marginTop: 18, fontSize: 11.5, color: "rgba(255,255,255,0.32)", letterSpacing: "0.04em", textAlign: "center" } },
+    b.custom ? "Con tecnología CLINICELL" : "CLINICELL · Software para talleres de celulares");
+}
 
 // ─── HELPERS DE CUENTAS ────────────────────────────────────
 // Contraseña hasheada con username para mayor seguridad
@@ -16088,16 +16185,20 @@ var _AUTH_ICONS = {
 };
 // Campo de auth estilo "cristal": ícono + línea inferior (sin caja), usado en las 4 pantallas de acceso
 function _authField(iconKey, inputProps) {
-  return /*#__PURE__*/React.createElement("div", { style: _AS.inputWrap },
-    _svgIco(_AUTH_ICONS[iconKey], 15),
+  return /*#__PURE__*/React.createElement("div", { className:"trp-auth-field", style: _AS.inputWrap },
+    _svgIco(_AUTH_ICONS[iconKey], 16),
     /*#__PURE__*/React.createElement("input", Object.assign({ className:"trp-auth-input" }, inputProps, { style: Object.assign({}, _AS.input, inputProps.style) }))
   );
 }
 // Fondo difuminado + estilos que no se pueden fijar inline (::placeholder)
 function _authBgStyleTag() {
   return /*#__PURE__*/React.createElement("style", null,
-    ".trp-auth-input::placeholder{color:rgba(255,255,255,0.4)}"+
-    ".trp-auth-btn:hover{transform:translateY(-1px)}"+
+    ".trp-auth-input::placeholder{color:rgba(255,255,255,0.38)}"+
+    ".trp-auth-field:focus-within{border-color:rgba(255,201,64,0.65)!important;box-shadow:0 0 0 3px rgba(255,201,64,0.12)}"+
+    ".trp-auth-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 12px 30px rgba(242,178,51,0.32),inset 0 1px 0 rgba(255,255,255,0.35)!important}"+
+    ".trp-auth-ghost:hover{background:rgba(255,255,255,0.05)!important;border-color:rgba(255,255,255,0.24)!important}"+
+    ".trp-auth-link:hover{color:#ffd466!important;text-decoration:underline}"+
+    ".trp-auth-check{accent-color:#f2b233;width:16px;height:16px;margin:0;cursor:pointer}"+
     // Evita que el autocompletado del navegador pinte el campo de blanco/amarillo:
     // fuerza fondo oscuro + texto blanco incluso cuando Chrome rellena el valor.
     ".trp-auth-input:-webkit-autofill,"+
@@ -16105,8 +16206,8 @@ function _authBgStyleTag() {
     ".trp-auth-input:-webkit-autofill:focus,"+
     ".trp-auth-input:-webkit-autofill:active{"+
       "-webkit-text-fill-color:#fff;"+
-      "-webkit-box-shadow:0 0 0px 1000px #0f0f0f inset;"+
-      "box-shadow:0 0 0px 1000px #0f0f0f inset;"+
+      "-webkit-box-shadow:0 0 0px 1000px #0b0c0f inset;"+
+      "box-shadow:0 0 0px 1000px #0b0c0f inset;"+
       "caret-color:#fff;"+
       "transition:background-color 9999s ease-in-out 0s, color 9999s ease-in-out 0s;"+
     "}"
@@ -16204,13 +16305,13 @@ function LoginScreen(_ref) {
   if (resetMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
     _authBgStyleTag(),
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.avatarWrap }, /*#__PURE__*/React.createElement(Smartphone, { size:34, color:"rgba(255,255,255,0.85)" })),
+      _authLogo(200),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Restablecer contraseña"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Te enviaremos un enlace seguro a tu correo"),
       err && /*#__PURE__*/React.createElement("div", { style: Object.assign({ display: "flex", alignItems: "center", gap: 6 }, err.charAt(0) === "" ? _AS.ok : _AS.err) }, err.charAt(0) === "" ? [/*#__PURE__*/React.createElement(CheckCircle, { size: 14, key: "i" }), err.slice(1)] : err),
       _authField("email", { type:"email", placeholder:"Tu correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doReset();} }),
       /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:doReset, disabled:loading, style:Object.assign({},_AS.btn,loading?{opacity:0.6}:{}) }, loading ? "Enviando..." : "Enviar enlace de recuperación"),
-      /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(false);setErr("");}, style:_AS.btnGhost }, "← Volver")
+      /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(false);setErr("");}, className:"trp-auth-ghost", style:_AS.btnGhost }, "← Volver")
     )
   );
 
@@ -16218,7 +16319,7 @@ function LoginScreen(_ref) {
   if (migrateMode) return /*#__PURE__*/React.createElement("div", { style: _AS.page },
     _authBgStyleTag(),
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.avatarWrap }, /*#__PURE__*/React.createElement(Smartphone, { size:34, color:"rgba(255,255,255,0.85)" })),
+      _authLogo(200),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Migrar cuenta antigua"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Vincula tu usuario actual a un correo para proteger tus datos. Tus datos NO se pierden."),
       err && /*#__PURE__*/React.createElement("div", { style: Object.assign({ display: "flex", alignItems: "center", gap: 6 }, err.charAt(0) === "" ? _AS.ok : _AS.err) }, err.charAt(0) === "" ? [/*#__PURE__*/React.createElement(CheckCircle, { size: 14, key: "i" }), err.slice(1)] : err),
@@ -16228,33 +16329,34 @@ function LoginScreen(_ref) {
       _authField("lock", { type:"password", placeholder:"Nueva contraseña (mín. 6 caracteres)", value:newPwd, onChange:function(e){setNewPwd(e.target.value);setErr("");} }),
       _authField("lock", { type:"password", placeholder:"Confirmar nueva contraseña", value:newPwd2, onChange:function(e){setNewPwd2(e.target.value);setErr("");} }),
       /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:doMigrate, disabled:loading, style:Object.assign({},_AS.btn,loading?{opacity:0.6}:{}) }, loading ? "Vinculando..." : "Vincular y entrar"),
-      /*#__PURE__*/React.createElement("button", { onClick:function(){setMigrateMode(false);setErr("");}, style:_AS.btnGhost }, "← Volver al login")
+      /*#__PURE__*/React.createElement("button", { onClick:function(){setMigrateMode(false);setErr("");}, className:"trp-auth-ghost", style:_AS.btnGhost }, "← Volver al login")
     )
   );
 
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
     _authBgStyleTag(),
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.avatarWrap }, /*#__PURE__*/React.createElement(Smartphone, { size:34, color:"rgba(255,255,255,0.85)" })),
-      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "ACCE PRO"),
-      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Bienvenido de nuevo · Inicia sesión"),
+      _authLogo(320),
+      /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Bienvenido de nuevo"),
+      /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Ingresa a tu taller para continuar"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
       _authField("email", { type:"email", placeholder:"Correo electrónico", value:email, onChange:function(e){setEmail(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();} }),
       _authField("lock", { type:"password", placeholder:"Contraseña", value:pwd, onChange:function(e){setPwd(e.target.value);setErr("");}, onKeyDown:function(e){if(e.key==="Enter")doLogin();} }),
-      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:-6, marginBottom:24 } },
+      /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:4, marginBottom:22 } },
         /*#__PURE__*/React.createElement("label", { style: _AS.checkRow },
-          /*#__PURE__*/React.createElement("input", { type:"checkbox", checked:remember, onChange:function(e){setRemember(e.target.checked);} }), "Recordarme"
+          /*#__PURE__*/React.createElement("input", { type:"checkbox", className:"trp-auth-check", checked:remember, onChange:function(e){setRemember(e.target.checked);} }), "Recordarme"
         ),
-        /*#__PURE__*/React.createElement("button", { onClick:function(){setResetMode(true);setErr("");}, style:_AS.link }, "¿Olvidaste tu contraseña?")
+        /*#__PURE__*/React.createElement("button", { className:"trp-auth-link", onClick:function(){setResetMode(true);setErr("");}, style:_AS.link }, "¿Olvidaste tu contraseña?")
       ),
       /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:doLogin, disabled:loading, style:Object.assign({},_AS.btn,loading?{opacity:0.6}:{}) },
         loading ? "Verificando..." : "Iniciar sesión"
       ),
-      /*#__PURE__*/React.createElement("button", { onClick:onCreateNew, style:Object.assign({},_AS.btnGhost,{display:"flex",alignItems:"center",justifyContent:"center",gap:8}) }, _svgIco(_AUTH_ICONS.userPlus,15), "Crear cuenta nueva"),
-      /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:8,borderTop:"1px solid rgba(255,255,255,0.14)",paddingTop:10} },
-        /*#__PURE__*/React.createElement("button", { onClick:function(){setMigrateMode(true);setErr("");}, style:_AS.link }, "¿Cuenta antigua sin correo? Vincúlala aquí")
+      /*#__PURE__*/React.createElement("button", { className:"trp-auth-ghost", onClick:onCreateNew, style:Object.assign({},_AS.btnGhost,{display:"flex",alignItems:"center",justifyContent:"center",gap:8}) }, _svgIco(_AUTH_ICONS.userPlus,15), "Crear cuenta nueva"),
+      /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",marginTop:6,borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:14} },
+        /*#__PURE__*/React.createElement("button", { className:"trp-auth-link", onClick:function(){setMigrateMode(true);setErr("");}, style:Object.assign({},_AS.link,{color:"rgba(255,255,255,0.5)",fontWeight:500,fontSize:12.5}) }, "¿Cuenta antigua sin correo? Vincúlala aquí")
       )
-    )
+    ),
+    _authFooter()
   );
 }
 
@@ -16354,7 +16456,7 @@ function CreateAccountScreen(_ref) {
   return /*#__PURE__*/React.createElement("div", { style: _AS.page },
     _authBgStyleTag(),
     /*#__PURE__*/React.createElement("div", { style: _AS.card },
-      /*#__PURE__*/React.createElement("div", { style: _AS.avatarWrap }, /*#__PURE__*/React.createElement(Smartphone, { size:34, color:"rgba(255,255,255,0.85)" })),
+      _authLogo(200),
       /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Crear cuenta nueva"),
       /*#__PURE__*/React.createElement("div", { style: _AS.sub }, "Necesitas un código de activación para registrarte"),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
@@ -16366,7 +16468,7 @@ function CreateAccountScreen(_ref) {
       /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:crear, disabled:loading, style:Object.assign({},_AS.btn,loading?{opacity:0.6}:{}) },
         loading ? "Creando cuenta..." : "Crear cuenta y entrar"
       ),
-      /*#__PURE__*/React.createElement("button", { onClick:onBack, style:_AS.btnGhost }, "← Volver al login"),
+      /*#__PURE__*/React.createElement("button", { onClick:onBack, className:"trp-auth-ghost", style:_AS.btnGhost }, "← Volver al login"),
       /*#__PURE__*/React.createElement("div", { style:{fontSize:11,color:"rgba(255,255,255,0.5)",textAlign:"center",marginTop:4} },
         "¿No tienes código? ",
         /*#__PURE__*/React.createElement("a", { href:"https://wa.me/"+WHATSAPP, target:"_blank", style:{color:"#c9c9c9",textDecoration:"none",fontWeight:600} }, "Contáctanos — "+PRECIO)
@@ -16430,11 +16532,11 @@ function ExpiredScreen(_ref) {
     style: Object.assign({}, _AS.page, { alignItems:"flex-start", paddingTop:40 })
   },
     /*#__PURE__*/React.createElement("div", { style: Object.assign({}, _AS.card, { maxWidth:480 }) },
+      _authLogo(200),
       /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", marginBottom:20 } },
-        /*#__PURE__*/React.createElement(Clock, { size: 44, color: "#fff" }),
         /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Licencia vencida"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, color:"#8b8b8b", marginTop:6 } },
-          "Hola ", /*#__PURE__*/React.createElement("strong", { style:{color:"#1A1A1A"} }, currentUser.username),
+          "Hola ", /*#__PURE__*/React.createElement("strong", { style:{color:"#fff"} }, currentUser.username),
           ". Tu licencia ha expirado."
         )
       ),
@@ -16443,23 +16545,24 @@ function ExpiredScreen(_ref) {
         "Tus datos están seguros y completos. Al ingresar el nuevo código todo vuelve a funcionar exactamente igual."
       ),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
-      /*#__PURE__*/React.createElement("input", {
+      _authBgStyleTag(),
+      _authField("code", {
         type:"text", placeholder:"Nuevo código de activación",
         value:newCode, onChange:function(e){setNewCode(e.target.value.toUpperCase());setErr("");},
         onKeyDown:function(e){if(e.key==="Enter")renovar();},
-        style:Object.assign({},_AS.input,{letterSpacing:"0.06em",textAlign:"center",fontSize:16,fontWeight:600})
+        style:{letterSpacing:"0.06em",fontSize:16,fontWeight:600}
       }),
-      /*#__PURE__*/React.createElement("button", { onClick:renovar, disabled:loading, style:Object.assign({display:"flex",alignItems:"center",justifyContent:"center",gap:8},_AS.btn,loading?{background:"#d5d5d5",color:"#878787",boxShadow:"none"}:{}) },
+      /*#__PURE__*/React.createElement("button", { className:"trp-auth-btn", onClick:renovar, disabled:loading, style:Object.assign({display:"flex",alignItems:"center",justifyContent:"center",gap:8},_AS.btn,loading?{background:"#d5d5d5",color:"#878787",boxShadow:"none"}:{}) },
         loading ? "Activando..." : [/*#__PURE__*/React.createElement(Unlock,{size:15,key:"i"}),"Activar y continuar"]
       ),
       /*#__PURE__*/React.createElement("a", {
         href:"https://wa.me/"+WHATSAPP+"?text=Hola%2C%20mi%20licencia%20venci%C3%B3.%20Usuario%3A%20"+encodeURIComponent(currentUser.username)+"%20Precio%3A%20"+encodeURIComponent(PRECIO),
         target:"_blank",
-        style:{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#1A1A1A", color:"#fff", padding:"12px", borderRadius:14, fontWeight:700, fontSize:14, textDecoration:"none", marginBottom:10 }
+        style:{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"#16a34a", color:"#fff", height:48, borderRadius:11, fontWeight:700, fontSize:14, textDecoration:"none", marginBottom:10 }
       }, /*#__PURE__*/React.createElement(MessageCircle,{size:15}), "Solicitar código — "+PRECIO),
       /*#__PURE__*/React.createElement("button", {
-        onClick: function(){ onBack && onBack(); },
-        style:{ width:"100%", padding:"12px", background:"#f3f3f3", color:"#484848", border:"1px solid #dbdbdb", borderRadius:14, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }
+        onClick: function(){ onBack && onBack(); }, className:"trp-auth-ghost",
+        style:Object.assign({}, _AS.btnGhost, { marginBottom:0 })
       }, "← Volver a iniciar sesión")
     )
   );
@@ -16532,7 +16635,7 @@ function TrackingLoader(_ref) {
   };
 
   var fmt = function(n){ return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",minimumFractionDigits:0}).format(n||0); };
-  var storeName = (store && store.storeName) ? store.storeName : "ACCE PRO";
+  var storeName = (store && store.storeName) ? store.storeName : "CLINICELL";
 
   // Estados con su progreso
   var STAGES = ["Recibido","Diagnóstico","En Reparación","Listo","Entregado"];
@@ -16843,7 +16946,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.2.0";
+var APP_VERSION = "1.3.0";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
@@ -17090,11 +17193,16 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 </script>
 
 <!-- ═══════════════════════════════════════════════════════
-     ACCE PRO — ASISTENTE IA
+     CLINICELL — ASISTENTE IA
      Lee datos de localStorage y responde preguntas sobre
      inventario, productos, reparaciones y caja.
 ════════════════════════════════════════════════════════ -->
 <style>
+/* Ocultos hasta entrar al software (App pone la clase acce-en-app en <body>) */
+body:not(.acce-en-app) #acce-pdf-btn,
+body:not(.acce-en-app) #acce-pdf-tooltip,
+body:not(.acce-en-app) #acce-ai-btn,
+body:not(.acce-en-app) #acce-ai-panel { display: none !important; }
 #acce-pdf-btn {
   position: fixed;
   bottom: 90px;
@@ -17351,7 +17459,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   <div class="ai-header">
     <div class="ai-header-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.3-4.1A7.5 7.5 0 1 1 20 11.5Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8.6" cy="11.5" r="1.1" fill="#fff"/><circle cx="12" cy="11.5" r="1.1" fill="#fff"/><circle cx="15.4" cy="11.5" r="1.1" fill="#fff"/></svg></div>
     <div>
-      <div class="ai-header-title">Asistente ACCE PRO</div>
+      <div class="ai-header-title">Asistente IA</div>
       <div class="ai-header-sub">Pregunta sobre tu inventario, ventas y más</div>
     </div>
     <button class="ai-close-btn" id="acce-ai-close">✕</button>
@@ -17371,7 +17479,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
   <div id="acce-ai-chat-section" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
     <div class="ai-messages" id="acce-ai-messages">
       <div class="ai-msg bot">
-        ¡Hola! Soy tu asistente de <strong>ACCE PRO</strong>. Puedo ayudarte con preguntas sobre tu inventario, productos, reparaciones, clientes y caja.<br><br>
+        ¡Hola! Soy tu asistente. Puedo ayudarte con preguntas sobre tu inventario, productos, reparaciones, clientes y caja.<br><br>
         ¿Qué necesitas saber?
       </div>
     </div>
@@ -17436,7 +17544,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
       cats[cat].push(p);
     });
 
-    var businessName = (allData.settings && allData.settings.businessName) ? allData.settings.businessName : "ACCE PRO";
+    var businessName = (allData.settings && allData.settings.businessName) ? allData.settings.businessName : "CLINICELL";
     var currency = (allData.settings && allData.settings.currency) ? allData.settings.currency : "$";
     var now = new Date();
     var dateStr = now.toLocaleDateString("es-CO", { year:"numeric", month:"long", day:"numeric" });
@@ -17517,7 +17625,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
       + '</div>'
       + '<div style="text-align:right;">'
       + '<div style="font-size:13px;color:#727272;">' + totalProducts + ' productos · ' + availableProducts + ' disponibles</div>'
-      + '<div style="font-size:11px;color:#a1a1a1;margin-top:2px;">Generado con ACCE PRO</div>'
+      + '<div style="font-size:11px;color:#a1a1a1;margin-top:2px;">Generado con CLINICELL</div>'
       + '</div>'
       + '</div>'
 
@@ -17531,7 +17639,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 
       // Footer
       + '<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e7e7e7;text-align:center;font-size:11px;color:#a1a1a1;">'
-      + 'Catálogo generado con <strong style="color:#1A1A1A;">ACCE PRO</strong> · Los precios y disponibilidad pueden cambiar sin previo aviso.'
+      + 'Catálogo generado con <strong style="color:#1A1A1A;">CLINICELL</strong> · Los precios y disponibilidad pueden cambiar sin previo aviso.'
       + '</div>'
       + '</div>'
       + '<script>window.onload=function(){window.print();}<\/script>'
@@ -17763,7 +17871,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 
     var typingEl = addMessage("Consultando datos...", "bot", true);
 
-    var systemPrompt = "Eres el asistente de ACCE PRO, un software de gestión de talleres de reparación y tiendas de accesorios. Tu trabajo es responder preguntas del dueño/empleado sobre sus datos reales del negocio. Usa SOLO los datos que se te proporcionan. Si algo no está en los datos, dilo claramente. Responde en español, de forma concisa y útil. No inventes datos. Usa negritas para resaltar nombres y cifras importantes.\n\n" + context;
+    var systemPrompt = "Eres el asistente de CLINICELL, un software de gestión de talleres de reparación y tiendas de accesorios. Tu trabajo es responder preguntas del dueño/empleado sobre sus datos reales del negocio. Usa SOLO los datos que se te proporcionan. Si algo no está en los datos, dilo claramente. Responde en español, de forma concisa y útil. No inventes datos. Usa negritas para resaltar nombres y cifras importantes.\n\n" + context;
 
     _geminiGenerate(apiKey, {
         system_instruction: { parts: [{ text: systemPrompt }] },

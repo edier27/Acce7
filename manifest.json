@@ -1,12 +1,12 @@
 {
-  "name": "ACCE PRO",
-  "short_name": "ACCE PRO",
+  "name": "CLINICELL",
+  "short_name": "CLINICELL",
   "description": "Software de gesti\u00f3n para talleres de celulares",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
-  "background_color": "#09090D",
-  "theme_color": "#E8621A",
+  "background_color": "#0c0d10",
+  "theme_color": "#0c0d10",
   "orientation": "portrait-primary",
   "lang": "es-CO",
   "icons": [
