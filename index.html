@@ -38,6 +38,17 @@
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
     .trp-fade{animation:fadeUp 0.3s ease both}
     .trp-pulse{animation:pulse 2s infinite}
+    /* Pantalla de carga CLINICELL */
+    .cc-splash{min-height:100%;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:radial-gradient(ellipse at 50% 42%,#1d2026 0%,#0c0d10 62%,#060708 100%);font-family:'DM Sans',system-ui,sans-serif;overflow:hidden}
+    .cc-logo{width:min(92vw,720px);height:auto;overflow:visible}
+    .cc-spark{animation:ccSweep 2.4s linear infinite}
+    .cc-phone-glow{animation:ccPhone 2.4s ease-in-out infinite}
+    @keyframes ccSweep{from{stroke-dashoffset:22}to{stroke-dashoffset:-100}}
+    @keyframes ccPhone{0%,30%,75%,100%{opacity:0}48%{opacity:.55}}
+    .cc-title{display:flex;align-items:center;gap:10px;color:#d8b25a;font-size:12px;font-weight:700;letter-spacing:.22em;text-transform:uppercase}
+    .cc-title i{width:5px;height:5px;border-radius:50%;background:#ffc940;box-shadow:0 0 8px #ffc940;animation:pulse 1.2s ease-in-out infinite}
+    .cc-title i:nth-child(3){animation-delay:.2s}.cc-title i:nth-child(4){animation-delay:.4s}
+    .cc-sub{color:#8e949b;font-size:13px;font-weight:600;text-align:center;padding:0 20px;margin-top:-12px}
     /* Hover effects en cards */
     .trp-card-hover{transition:transform 0.15s,box-shadow 0.15s}
     .trp-card-hover:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.12)!important}
@@ -221,6 +232,54 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    // Logo CLINICELL de la pantalla de carga. Se pinta aquí mismo para que se vea
+    // mientras baja el resto del archivo; LoadingScreen (React) reutiliza el mismo HTML.
+    (function () {
+      var PULSO = "M20 200H95L103 192L110 200H130L140 118L150 224L158 200H200L207 194L214 200H306V160H342L350 149L358 160H368L378 56L390 240L398 160H408L416 145L426 160H454V200H540L550 110L560 222L568 200H600L607 193L614 200H740";
+      var SVG =
+        '<svg class="cc-logo" viewBox="0 0 760 300" role="img" aria-label="CLINICELL" xmlns="http://www.w3.org/2000/svg">' +
+        '<defs>' +
+          '<linearGradient id="ccCobre" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e7b996"/><stop offset=".45" stop-color="#a86e4c"/><stop offset=".7" stop-color="#d9a37e"/><stop offset="1" stop-color="#7d4d33"/></linearGradient>' +
+          '<linearGradient id="ccMetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3c8ce"/><stop offset=".55" stop-color="#737880"/><stop offset="1" stop-color="#44474c"/></linearGradient>' +
+          '<filter id="ccGlow" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+          '<filter id="ccGlowFuerte" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+          '<filter id="ccSombra" x="-10%" y="-20%" width="120%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000" flood-opacity=".7"/></filter>' +
+          '<mask id="ccHueco"><rect width="760" height="300" fill="#fff"/><rect x="316" y="152" width="22" height="16" fill="#000"/><rect x="422" y="152" width="22" height="16" fill="#000"/></mask>' +
+        '</defs>' +
+        '<g font-family="\'DM Sans\',\'Segoe UI\',Arial,sans-serif" font-weight="800" font-size="80" fill="url(#ccMetal)" stroke="#1b1d20" stroke-width="1" filter="url(#ccSombra)">' +
+          '<text x="104" y="184" textLength="198" lengthAdjust="spacingAndGlyphs">CLINI</text>' +
+          '<text x="460" y="184" textLength="186" lengthAdjust="spacingAndGlyphs">CELL</text>' +
+        '</g>' +
+        '<g fill="none" stroke="url(#ccCobre)" stroke-linecap="round" stroke-linejoin="round" mask="url(#ccHueco)" filter="url(#ccSombra)">' +
+          '<rect x="322" y="22" width="116" height="256" rx="24" stroke-width="5"/>' +
+          '<rect x="333" y="33" width="94" height="234" rx="15" stroke-width="2.5"/>' +
+          '<path d="M354 33v4q0 7 7 7h38q7 0 7-7v-4" stroke-width="2.5"/>' +
+          '<rect x="366" y="37" width="28" height="4" rx="2" fill="url(#ccCobre)" stroke="none"/>' +
+          '<path d="M333 240H427" stroke-width="2.5"/>' +
+          '<circle cx="380" cy="254" r="7" stroke-width="2.5"/>' +
+          '<path d="M339 248h20l5 5M339 255h16l4-4M339 262h22M421 248h-20l-5 5M421 255h-16l-4-4M421 262h-22" stroke-width="1.8"/>' +
+        '</g>' +
+        '<rect class="cc-phone-glow" x="322" y="22" width="116" height="256" rx="24" fill="none" stroke="#ffc940" stroke-width="3" filter="url(#ccGlowFuerte)" opacity="0"/>' +
+        '<path d="' + PULSO + '" fill="none" stroke="#ffbf2e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#ccGlow)" opacity=".85"/>' +
+        '<path class="cc-spark" d="' + PULSO + '" pathLength="100" stroke-dasharray="22 140" fill="none" stroke="#fff4c8" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" filter="url(#ccGlowFuerte)"/>' +
+        '</svg>';
+      function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
+      window.__ccSplash = function (title, subtitle) {
+        // Retraso negativo según el reloj: al pasar del logo estático al de React
+        // la animación continúa donde iba en vez de reiniciarse.
+        var d = "-" + ((performance.now() / 1000) % 2.4).toFixed(2) + "s";
+        return '<div class="cc-splash">' +
+          SVG.replace('class="cc-spark"', 'class="cc-spark" style="animation-delay:' + d + '"')
+             .replace('class="cc-phone-glow"', 'class="cc-phone-glow" style="animation-delay:' + d + '"') +
+          '<div class="cc-title">' + esc(title || "Cargando") + '<i></i><i></i><i></i></div>' +
+          (subtitle ? '<div class="cc-sub">' + esc(subtitle) + '</div>' : '') +
+          '</div>';
+      };
+      var root = document.getElementById("root");
+      if (root && !root.firstChild) root.innerHTML = window.__ccSplash("Cargando");
+    })();
+  </script>
   <script>/**
  * @license React
  * react.production.min.js
@@ -1482,51 +1541,14 @@ var Toast = function Toast(_ref7) {
   }), " ", msg);
 };
 
-// ─── Spinner de puntos en anillo (pantallas de carga) ─────
-var DotRingSpinner = function DotRingSpinner(_ref7b) {
-  var _size = (_ref7b && _ref7b.size) || 84;
-  var _dot = (_ref7b && _ref7b.dotSize) || 9;
-  var _color = (_ref7b && _ref7b.color) || "#1A1A1A";
-  var _count = 12;
-  var _radius = _size / 2 - _dot;
-  var _dots = [];
-  for (var _i = 0; _i < _count; _i++) {
-    var _angle = (360 / _count) * _i;
-    var _delay = ((_count - _i) * (1.1 / _count)).toFixed(2);
-    _dots.push(/*#__PURE__*/React.createElement("div", {
-      key: _i,
-      style: { position: "absolute", top: "50%", left: "50%", width: 0, height: 0, transform: "rotate(".concat(_angle, "deg) translate(").concat(_radius, "px)") }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: _dot, height: _dot, borderRadius: "50%", background: _color,
-        marginLeft: -_dot / 2, marginTop: -_dot / 2,
-        animation: "dotRingPulse 1.1s ease-in-out infinite",
-        animationDelay: _delay + "s"
-      }
-    })));
-  }
-  return /*#__PURE__*/React.createElement("div", { style: { position: "relative", width: _size, height: _size, flexShrink: 0 } },
-    /*#__PURE__*/React.createElement("style", null, "@keyframes dotRingPulse{0%,100%{opacity:.2;transform:scale(.55)}50%{opacity:1;transform:scale(1)}}"),
-    _dots
-  );
-};
-// Pantalla de carga completa: anillo de puntos + título + subtítulo
+// Pantalla de carga completa: logo CLINICELL animado (definido en window.__ccSplash, al inicio del <body>)
 var LoadingScreen = function LoadingScreen(_ref7c) {
   var title = (_ref7c && _ref7c.title) || "Cargando";
   var subtitle = _ref7c && _ref7c.subtitle;
-  var bg = (_ref7c && _ref7c.bg) || "#f7f7f7";
   return /*#__PURE__*/React.createElement("div", {
-    style: { minHeight: "100dvh", background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6, fontFamily: "'DM Sans',system-ui,sans-serif" }
-  },
-    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
-      /*#__PURE__*/React.createElement(DotRingSpinner, null),
-      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 600, color: "#333333" } },
-        /*#__PURE__*/React.createElement("span", { style: { width: 8, height: 8, borderRadius: "50%", background: "#1A1A1A", flexShrink: 0 } }),
-        title
-      )
-    ),
-    subtitle && /*#__PURE__*/React.createElement("div", { style: { marginTop: 8, fontSize: 13, fontWeight: 700, color: "#333333", textAlign: "center", padding: "0 20px" } }, subtitle)
-  );
+    style: { height: "100%" },
+    dangerouslySetInnerHTML: { __html: window.__ccSplash(title, subtitle) }
+  });
 };
 
 // ─── DASHBOARD ───────────────────────────────────────────
