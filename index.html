@@ -1600,38 +1600,35 @@ function ResumenDia(_props) {
   var diaSemana = colombiaDate().toLocaleDateString("es-CO",{weekday:"long",day:"numeric",month:"long"});
 
   // ── Calcular movimientos del día ──
-  var ventasHoy     = (data.sales||[]).filter(function(s){ return s.date===hoy; });
-  var repsHoy       = (data.repairs||[]).filter(function(r){ return r.paid && (r.deliveryDate===hoy || (!r.deliveryDate && r.date===hoy)) && (!r.advances || r.advances.length===0); });
-  var ingresosHoy   = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso" && e.date===hoy; });
-  var egresosHoy    = (data.cashflow||[]).filter(function(e){ return e.type==="egreso"  && e.date===hoy; });
+  // Mismo cálculo que Reportes (_repCalc): cada pago de reparación cuenta el día
+  // en que entró, y se incluyen los celulares vendidos desde el módulo Celulares.
+  var _hoyC = _repCalc(data, hoy, hoy);
+  var ventasHoy     = _hoyC.ventas;
+  var pagosRepHoy   = _hoyC.abonos;
+  var celHoy        = _hoyC.celVentas;
+  var ingresosHoy   = _hoyC.ingresos;
+  var egresosHoy    = _hoyC.egresos;
 
-  // Abonos recibidos hoy (pagos parciales o finales registrados como avances)
-  var _abonosHoyItems = [];
-  (data.repairs||[]).forEach(function(r){
-    (r.advances||[]).forEach(function(adv){
-      if(adv.date===hoy) _abonosHoyItems.push({ repair:r, adv:adv });
-    });
-  });
-  var totalAbonosHoy = _abonosHoyItems.reduce(function(s,x){ return s+(Number(x.adv.amount)||0); }, 0);
-
-  var totalVentas   = ventasHoy.reduce(function(a,s){ return a+(Number(s.total)||0); },0);
-  var totalReps     = repsHoy.reduce(function(a,r){ return a+(Number(r.cost)||0); },0);
-  var totalIngresos = ingresosHoy.reduce(function(a,e){ return a+(Number(e.amount)||0); },0);
-  var totalEgresos  = egresosHoy.reduce(function(a,e){ return a+(Number(e.amount)||0); },0);
-  var totalEntradas = totalVentas + totalReps + totalAbonosHoy + totalIngresos;
+  var totalVentas   = _hoyC.tv + _hoyC.tcel;
+  var totalReps     = _hoyC.tr;
+  var totalAbonosHoy = _hoyC.tab;
+  var totalIngresos = _hoyC.ti;
+  var totalEgresos  = _hoyC.te;
+  var totalEntradas = _hoyC.total;
   var balanceDia    = totalEntradas - totalEgresos;
 
   // ── TOTAL EN CAJA ACUMULADO (todo el histórico) ──
-  var cajaVentas    = (data.sales||[]).reduce(function(a,s){ return a+(Number(s.total)||0); },0);
-  var cajaReps      = (data.repairs||[]).filter(function(r){ return r.paid; }).reduce(function(a,r){ return a+(Number(r.cost)||0); },0);
+  var _todoC        = _repCalc(data, "0000-01-01", "9999-12-31");
+  var cajaVentas    = _todoC.tv + _todoC.tcel;
+  var cajaReps      = _todoC.tr + _todoC.tab;
   var cajaIngresos  = (data.cashflow||[]).filter(function(e){ return e.type==="ingreso"; }).reduce(function(a,e){ return a+(Number(e.amount)||0); },0);
   var cajaEgresos   = (data.cashflow||[]).filter(function(e){ return e.type==="egreso"; }).reduce(function(a,e){ return a+(Number(e.amount)||0); },0);
   var totalEnCaja   = cajaVentas + cajaReps + cajaIngresos - cajaEgresos;
 
   var movimientos = [
     ventasHoy.map(function(s){ return { tipo:"venta", icon:ShoppingCart, color:T.green, label:"Venta"+(s.customer?" — "+s.customer:""), valor:s.total, positivo:true }; }),
-    repsHoy.map(function(r){ return { tipo:"rep", icon:Wrench, color:"#404040", label:"Reparación — "+(r.customer||r.device||""), valor:r.cost, positivo:true }; }),
-    _abonosHoyItems.map(function(x){ return { tipo:"abono", icon:CreditCard, color:"#545454", label:"Abono — "+(x.repair.customer||x.repair.device||"")+(x.adv.note?" ("+x.adv.note+")":""), valor:x.adv.amount, positivo:true }; }),
+    celHoy.map(function(c){ return { tipo:"cel", icon:Smartphone, color:T.green, label:"Celular vendido — "+(((c.marca||"")+" "+(c.modelo||"")).trim()||"Celular")+(c.vendidoA?" ("+c.vendidoA+")":""), valor:c.precioVenta, positivo:true }; }),
+    pagosRepHoy.map(function(x){ var esPago = x.tipo==="Pago" || x.tipo==="Pago final"; return { tipo: esPago?"rep":"abono", icon: esPago?Wrench:CreditCard, color: esPago?"#404040":"#545454", label:(esPago?"Reparación — ":"Abono — ")+(x.repair.customer||x.repair.device||"")+(x.tipo && x.tipo!=="Abono" && x.tipo!=="Pago"?" ("+x.tipo+")":""), valor:x.amount, positivo:true }; }),
     ingresosHoy.map(function(e){ return { tipo:"ingreso", icon:TrendingUp, color:T.green, label:(e.description||"Ingreso")+" ("+( e.category||"")+") ", valor:e.amount, positivo:true }; }),
     egresosHoy.map(function(e){ return { tipo:"egreso", icon:TrendingDown, color:T.red, label:(e.description||"Egreso")+" ("+( e.category||"")+") ", valor:e.amount, positivo:false }; })
   ].reduce(function(a,b){ return a.concat(b); },[]);
@@ -10704,22 +10701,44 @@ function _repCalc(data, desde, hasta) {
   var ingresos = (data.cashflow || []).filter(function (e) { return e.type === "ingreso" && inRange(e.date); });
   var egresos = (data.cashflow || []).filter(function (e) { return e.type === "egreso" && inRange(e.date); });
 
-  // Abonos parciales de reparaciones aún no saldadas (no se duplican con tr).
+  // Pagos de reparaciones: cada abono cuenta el día en que se recibió (esté o no
+  // saldada, y sin importar el estado). Si quedó pagada y los abonos no cubren el
+  // costo, el resto cuenta el día de entrega/pago (reparaciones pagadas sin abonos).
   var abonos = [];
   (data.repairs || []).forEach(function (r) {
-    if (r.paid) return;
+    var sumAdv = 0;
     (r.advances || []).forEach(function (a) {
-      if (inRange(a.date)) abonos.push({ amount: Number(a.amount) || 0, date: a.date, repair: r });
+      var m = Number(a.amount) || 0;
+      sumAdv += m;
+      if (m > 0 && inRange(a.date)) abonos.push({ amount: m, date: a.date, repair: r, tipo: a.note || "Abono" });
     });
+    if (r.paid) {
+      var resto = (Number(r.cost) || 0) - sumAdv;
+      var fPago = r.deliveryDate || r.date;
+      if (resto > 0 && inRange(fPago)) abonos.push({ amount: resto, date: fPago, repair: r, tipo: "Pago" });
+    }
+  });
+
+  // Celulares vendidos desde el módulo Celulares. Los vendidos con factura ya
+  // entran a Caja por la factura, así que se excluyen para no contarlos dos veces.
+  var celFacturados = {};
+  (data.facturas || []).forEach(function (f) {
+    (f.items || []).forEach(function (it) { if (it.src === "celulares" && it.refId) celFacturados[it.refId] = true; });
+  });
+  var celVentas = (data.celulares || []).filter(function (c) {
+    return c.estado === "Vendido" && inRange(c.fechaVenta) && !celFacturados[c.id];
   });
 
   var tv = ventas.reduce(function (a, s) { return a + (Number(s.total) || 0); }, 0);
-  var tr = repsCerradas.filter(function (r) { return r.paid; }).reduce(function (a, r) { return a + (Number(r.cost) || 0); }, 0);
-  var tab = abonos.reduce(function (a, x) { return a + x.amount; }, 0);
+  var tcel = celVentas.reduce(function (a, c) { return a + (Number(c.precioVenta) || 0); }, 0);
+  var tr = abonos.filter(function (x) { return x.repair.paid; }).reduce(function (a, x) { return a + x.amount; }, 0);
+  var tab = abonos.filter(function (x) { return !x.repair.paid; }).reduce(function (a, x) { return a + x.amount; }, 0);
   var ti = ingresos.reduce(function (a, e) { return a + (Number(e.amount) || 0); }, 0);
   var te = egresos.reduce(function (a, e) { return a + (Number(e.amount) || 0); }, 0);
-  var total = tv + tr + tab + ti;
+  var total = tv + tcel + tr + tab + ti;
   var balance = total - te;
+  // Valor de los equipos que ENTRARON a reparación en el período (no es dinero cobrado)
+  var valorRecibido = repsNuevas.reduce(function (a, r) { return a + (Number(r.cost) || 0); }, 0);
 
   // Costo estimado de las ventas, usando el costo actual del inventario.
   var costMap = {};
@@ -10731,14 +10750,14 @@ function _repCalc(data, desde, hasta) {
     });
   });
 
-  var nOrdenes = ventas.length + repsCerradas.length;
-  var ticket = nOrdenes > 0 ? (tv + tr) / nOrdenes : 0;
+  var nOrdenes = ventas.length + celVentas.length + repsCerradas.length;
+  var ticket = nOrdenes > 0 ? (tv + tcel + tr) / nOrdenes : 0;
 
   return {
     desde: desde, hasta: hasta,
     ventas: ventas, reps: repsCerradas, repsTodas: repsTodas, repsNuevas: repsNuevas,
-    ingresos: ingresos, egresos: egresos, abonos: abonos,
-    tv: tv, tr: tr, tab: tab, ti: ti, te: te,
+    ingresos: ingresos, egresos: egresos, abonos: abonos, celVentas: celVentas,
+    tv: tv, tcel: tcel, tr: tr, tab: tab, ti: ti, te: te, valorRecibido: valorRecibido,
     total: total, balance: balance,
     costoVentas: costoVentas,
     utilidadVentas: tv - costoVentas,
@@ -10784,7 +10803,7 @@ function ReporteView(_props) {
   var _cmp = useState(true), comparar = _cmp[0], setComparar = _cmp[1];
   var _cal = useState(new Date(hoy + "T12:00:00")), calMes = _cal[0], setCalMes = _cal[1];
   var _tab = useState("resumen"), tab = _tab[0], setTab = _tab[1];
-  var _det = useState("ventas"), detTab = _det[0], setDetTab = _det[1];
+  var _det = useState("todo"), detTab = _det[0], setDetTab = _det[1];
 
   var rango = _repRango(periodo, hoy, cDesde, cHasta);
   if (rango.desde > rango.hasta) rango = { desde: rango.hasta, hasta: rango.desde };
@@ -10792,7 +10811,7 @@ function ReporteView(_props) {
   var res = _repCalc(data, rango.desde, rango.hasta);
   var resPrev = _repCalc(data, prev.desde, prev.hasta);
   var dias = _isoDiff(rango.desde, rango.hasta) + 1;
-  var totalActs = res.ventas.length + res.reps.length + res.ingresos.length + res.egresos.length + res.abonos.length;
+  var totalActs = res.ventas.length + res.celVentas.length + res.reps.length + res.repsNuevas.length + res.ingresos.length + res.egresos.length + res.abonos.length;
 
   var etiquetaPeriodo = dias === 1
     ? _fechaLarga(rango.desde)
@@ -10806,7 +10825,7 @@ function ReporteView(_props) {
     var c = _repCalc(data, b.desde, b.hasta);
     serieIngresos.push(c.total);
     serieEgresos.push(c.te);
-    serieVentas.push(c.tv);
+    serieVentas.push(c.tv + c.tcel);
     serieReps.push(c.tr + c.tab);
     serieOrdenes.push(c.nOrdenes);
   });
@@ -10849,6 +10868,7 @@ function ReporteView(_props) {
   // ── Composición y distribuciones (donas) ──
   var composicion = [
     { label: "Ventas de mostrador", value: res.tv, color: CHART_PALETTE[0] },
+    { label: "Celulares vendidos", value: res.tcel, color: CHART_PALETTE[6] },
     { label: "Reparaciones cobradas", value: res.tr, color: CHART_PALETTE[1] },
     { label: "Abonos recibidos", value: res.tab, color: CHART_PALETTE[2] },
     { label: "Otros ingresos", value: res.ti, color: CHART_PALETTE[4] }
@@ -10880,12 +10900,36 @@ function ReporteView(_props) {
   // ── KPIs con comparación ──
   var kpis = [
     { l: "Ingresos totales", v: fmtR(res.total), pct: _repPct(res.total, resPrev.total), color: T.green, icon: Wallet, sub: res.nOrdenes + (res.nOrdenes === 1 ? " orden" : " órdenes") },
-    { l: "Ventas", v: fmtR(res.tv), pct: _repPct(res.tv, resPrev.tv), color: CHART_PALETTE[0], icon: ShoppingCart, sub: res.ventas.length + " ticket" + (res.ventas.length === 1 ? "" : "s") },
-    { l: "Reparaciones", v: fmtR(res.tr + res.tab), pct: _repPct(res.tr + res.tab, resPrev.tr + resPrev.tab), color: CHART_PALETTE[1], icon: Wrench, sub: res.reps.length + " cerrada" + (res.reps.length === 1 ? "" : "s") },
+    { l: "Ventas", v: fmtR(res.tv + res.tcel), pct: _repPct(res.tv + res.tcel, resPrev.tv + resPrev.tcel), color: CHART_PALETTE[0], icon: ShoppingCart, sub: res.ventas.length + " ticket" + (res.ventas.length === 1 ? "" : "s") + (res.celVentas.length ? " · " + res.celVentas.length + " celular" + (res.celVentas.length === 1 ? "" : "es") : "") },
+    { l: "Reparaciones cobradas", v: fmtR(res.tr + res.tab), pct: _repPct(res.tr + res.tab, resPrev.tr + resPrev.tab), color: CHART_PALETTE[1], icon: Wrench, sub: res.abonos.length + " pago" + (res.abonos.length === 1 ? "" : "s") + " · " + res.reps.length + " cerrada" + (res.reps.length === 1 ? "" : "s") },
+    { l: "Equipos recibidos", v: String(res.repsNuevas.length), pct: _repPct(res.repsNuevas.length, resPrev.repsNuevas.length), color: CHART_PALETTE[5] || T.accent, icon: Smartphone, sub: fmtR(res.valorRecibido) + " en órdenes" },
     { l: "Egresos", v: fmtR(res.te), pct: _repPct(res.te, resPrev.te), color: T.red, icon: ArrowDownCircle, invert: true, sub: res.egresos.length + " movimiento" + (res.egresos.length === 1 ? "" : "s") },
     { l: "Ticket promedio", v: fmtR(Math.round(res.ticket)), pct: _repPct(res.ticket, resPrev.ticket), color: CHART_PALETTE[4], icon: Receipt, sub: "por orden cerrada" },
     { l: "Balance", v: fmtR(res.balance), pct: _repPct(res.balance, resPrev.balance), color: res.balance >= 0 ? T.green : T.red, icon: Scale, sub: "margen " + res.margen.toFixed(1).replace(".", ",") + "%" }
   ];
+
+  // ── Todo lo que entra y sale en el período (ventas, reparaciones, celulares,
+  //    caja) + los equipos que entraron a reparación (informativo, signo 0) ──
+  var movsTodos = [];
+  res.ventas.forEach(function (x) {
+    movsTodos.push({ date: x.date, tipo: "Venta", detalle: (x.items || []).map(function (it) { return it.name + " x" + it.qty; }).join(", ") || "Venta", cliente: x.customer || "", monto: Number(x.total) || 0, signo: 1 });
+  });
+  res.celVentas.forEach(function (c) {
+    movsTodos.push({ date: c.fechaVenta, tipo: "Celular vendido", detalle: ((c.marca || "") + " " + (c.modelo || "")).trim() || "Celular", cliente: c.vendidoA || "", monto: Number(c.precioVenta) || 0, signo: 1 });
+  });
+  res.abonos.forEach(function (a) {
+    movsTodos.push({ date: a.date, tipo: a.tipo === "Pago final" || a.tipo === "Pago" ? "Pago reparación" : "Abono reparación", detalle: (a.repair.device || "Reparación") + (a.tipo && a.tipo !== "Abono" && a.tipo !== "Pago" && a.tipo !== "Pago final" ? " — " + a.tipo : ""), cliente: a.repair.customer || "", monto: a.amount, signo: 1 });
+  });
+  res.ingresos.forEach(function (e) {
+    movsTodos.push({ date: e.date, tipo: "Ingreso caja", detalle: (e.description || "Ingreso") + (e.category ? " (" + e.category + ")" : ""), cliente: "", monto: Number(e.amount) || 0, signo: 1 });
+  });
+  res.egresos.forEach(function (e) {
+    movsTodos.push({ date: e.date, tipo: "Egreso", detalle: (e.description || "Egreso") + (e.category ? " (" + e.category + ")" : ""), cliente: "", monto: Number(e.amount) || 0, signo: -1 });
+  });
+  res.repsNuevas.forEach(function (r) {
+    movsTodos.push({ date: r.date, tipo: "Equipo recibido", detalle: (r.device || "Equipo") + (r.problem ? " — " + r.problem : ""), cliente: r.customer || "", monto: Number(r.cost) || 0, signo: 0 });
+  });
+  movsTodos.sort(function (a, b) { return (b.date || "").localeCompare(a.date || "") || (b.signo - a.signo); });
 
   // ── Exportar CSV ──
   var exportarCSV = function () {
@@ -10896,6 +10940,7 @@ function ReporteView(_props) {
     rows.push([]);
     rows.push(["RESUMEN", "Actual", "Periodo anterior", "Variacion %"]);
     rows.push(["Ventas", res.tv, resPrev.tv, _repPct(res.tv, resPrev.tv)]);
+    rows.push(["Celulares vendidos", res.tcel, resPrev.tcel, _repPct(res.tcel, resPrev.tcel)]);
     rows.push(["Reparaciones cobradas", res.tr, resPrev.tr, _repPct(res.tr, resPrev.tr)]);
     rows.push(["Abonos", res.tab, resPrev.tab, _repPct(res.tab, resPrev.tab)]);
     rows.push(["Otros ingresos", res.ti, resPrev.ti, _repPct(res.ti, resPrev.ti)]);
@@ -10903,6 +10948,7 @@ function ReporteView(_props) {
     rows.push(["Egresos", res.te, resPrev.te, _repPct(res.te, resPrev.te)]);
     rows.push(["Balance", res.balance, resPrev.balance, _repPct(res.balance, resPrev.balance)]);
     rows.push(["Ticket promedio", Math.round(res.ticket), Math.round(resPrev.ticket), _repPct(res.ticket, resPrev.ticket)]);
+    rows.push(["Equipos recibidos", res.repsNuevas.length, resPrev.repsNuevas.length, _repPct(res.repsNuevas.length, resPrev.repsNuevas.length)]);
     rows.push([]);
     rows.push(["EVOLUCION"]);
     rows.push(["Periodo", "Ingresos", "Egresos", "Ventas", "Reparaciones", "Ordenes"]);
@@ -10922,10 +10968,10 @@ function ReporteView(_props) {
       rows.push([r.deliveryDate || r.date, r.customer || "", r.device || "", r.problem || "", r.category || "", r.technician || "", r.status, r.paid ? "Si" : "No", r.cost || 0]);
     });
     rows.push([]);
-    rows.push(["MOVIMIENTOS DE CAJA"]);
-    rows.push(["Fecha", "Tipo", "Categoria", "Descripcion", "Monto"]);
-    res.ingresos.concat(res.egresos).sort(function (a, b) { return (a.date || "").localeCompare(b.date || ""); }).forEach(function (e) {
-      rows.push([e.date, e.type, e.category || "", e.description || "", e.amount || 0]);
+    rows.push(["TODOS LOS MOVIMIENTOS"]);
+    rows.push(["Fecha", "Tipo", "Detalle", "Cliente", "Entra", "Sale"]);
+    movsTodos.slice().reverse().forEach(function (m) {
+      rows.push([m.date, m.tipo, m.detalle, m.cliente, m.signo > 0 ? m.monto : "", m.signo < 0 ? m.monto : ""]);
     });
 
     var ok = _downloadCSV("reporte_" + rango.desde + "_" + rango.hasta + ".csv", rows);
@@ -11293,7 +11339,30 @@ function ReporteView(_props) {
   };
 
   var movimientos = res.ingresos.concat(res.egresos).sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+  var _tipoColor = { "Venta": CHART_PALETTE[0], "Celular vendido": CHART_PALETTE[6], "Pago reparación": CHART_PALETTE[1], "Abono reparación": CHART_PALETTE[2], "Ingreso caja": T.green, "Egreso": T.red, "Equipo recibido": T.muted };
+  var entro = res.total, salio = res.te;
   var detalles = {
+    todo: {
+      label: "Todo", icon: Activity, n: movsTodos.length,
+      node: /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 18, padding: "14px 16px", borderBottom: "1px solid " + T.border, fontSize: 13.5 } },
+          /*#__PURE__*/React.createElement("span", { style: { color: T.muted } }, "Entró ", /*#__PURE__*/React.createElement("b", { style: { color: T.green } }, fmtR(entro))),
+          /*#__PURE__*/React.createElement("span", { style: { color: T.muted } }, "Salió ", /*#__PURE__*/React.createElement("b", { style: { color: T.red } }, fmtR(salio))),
+          /*#__PURE__*/React.createElement("span", { style: { color: T.muted } }, "Neto ", /*#__PURE__*/React.createElement("b", { style: { color: entro - salio >= 0 ? T.green : T.red } }, fmtR(entro - salio))),
+          /*#__PURE__*/React.createElement("span", { style: { color: T.muted } }, "Equipos recibidos ", /*#__PURE__*/React.createElement("b", { style: { color: T.text } }, String(res.repsNuevas.length)))
+        ),
+        tabla([{ l: "Fecha" }, { l: "Tipo" }, { l: "Detalle" }, { l: "Cliente" }, { l: "Monto", right: true }],
+          movsTodos.map(function (m) {
+            var c = _tipoColor[m.tipo] || T.text;
+            return [m.date,
+              /*#__PURE__*/React.createElement(Badge, { label: m.tipo, color: c, bg: _cAlpha(c, 0.12) }),
+              m.detalle, m.cliente || "—",
+              m.signo === 0
+                ? /*#__PURE__*/React.createElement("span", { style: { color: T.muted, fontWeight: 500 }, title: "Valor de la orden (aún no es dinero cobrado)" }, fmtR(m.monto))
+                : /*#__PURE__*/React.createElement("span", { style: { color: m.signo > 0 ? T.green : T.red } }, (m.signo > 0 ? "+" : "−") + fmtR(m.monto))];
+          }))
+      )
+    },
     ventas: {
       label: "Ventas", icon: ShoppingCart, n: res.ventas.length,
       node: tabla([{ l: "Fecha" }, { l: "Cliente" }, { l: "Productos" }, { l: "Pago" }, { l: "Total", right: true }],
@@ -11324,10 +11393,24 @@ function ReporteView(_props) {
         }))
     },
     abonos: {
-      label: "Abonos", icon: Banknote, n: res.abonos.length,
-      node: tabla([{ l: "Fecha" }, { l: "Cliente" }, { l: "Equipo" }, { l: "Monto", right: true }],
+      label: "Pagos de reparaciones", icon: Banknote, n: res.abonos.length,
+      node: tabla([{ l: "Fecha" }, { l: "Cliente" }, { l: "Equipo" }, { l: "Tipo" }, { l: "Monto", right: true }],
         res.abonos.slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).map(function (a) {
-          return [a.date, (a.repair && a.repair.customer) || "—", (a.repair && a.repair.device) || "—", fmtR(a.amount)];
+          return [a.date, (a.repair && a.repair.customer) || "—", (a.repair && a.repair.device) || "—", a.tipo || "Abono", fmtR(a.amount)];
+        }))
+    },
+    recibidos: {
+      label: "Equipos recibidos", icon: Smartphone, n: res.repsNuevas.length,
+      node: tabla([{ l: "Fecha" }, { l: "Cliente" }, { l: "Equipo" }, { l: "Problema" }, { l: "Estado" }, { l: "Valor orden", right: true }],
+        res.repsNuevas.slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).map(function (r) {
+          return [r.date, r.customer || "—", r.device || "—", r.problem || "—", /*#__PURE__*/React.createElement(StatusBadge, { status: r.status }), fmtR(r.cost)];
+        }))
+    },
+    celulares: {
+      label: "Celulares vendidos", icon: Smartphone, n: res.celVentas.length,
+      node: tabla([{ l: "Fecha" }, { l: "Cliente" }, { l: "Equipo" }, { l: "Pago" }, { l: "Precio", right: true }],
+        res.celVentas.slice().sort(function (a, b) { return (b.fechaVenta || "").localeCompare(a.fechaVenta || ""); }).map(function (c) {
+          return [c.fechaVenta, c.vendidoA || "—", ((c.marca || "") + " " + (c.modelo || "")).trim() || "—", c.medioPago || "—", fmtR(c.precioVenta)];
         }))
     }
   };
