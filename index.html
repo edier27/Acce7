@@ -7,8 +7,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="CLINICELL">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="clinicell-apple-touch.png">
+  <link rel="icon" type="image/png" href="clinicell-192.png">
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>CLINICELL</title>
   <style>
@@ -14349,7 +14349,7 @@ var _AVISOS_KEY = "acce_avisos_on";
 function _avisosOn() { try { return localStorage.getItem(_AVISOS_KEY) === "1" && typeof Notification !== "undefined" && Notification.permission === "granted"; } catch (e) { return false; } }
 function _avisoMostrar(title, body, tag) {
   if (!_avisosOn()) return;
-  var opts = { body: body, tag: tag || "acce", icon: "icon-192.png", badge: "icon-192.png" };
+  var opts = { body: body, tag: tag || "acce", icon: "clinicell-192.png", badge: "clinicell-192.png" };
   var fallback = function () { try { new Notification(title, opts); } catch (e) {} };
   // En Android solo funcionan las notificaciones a través del service worker
   if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
@@ -17029,7 +17029,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.3.0";
+var APP_VERSION = "1.3.1";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
