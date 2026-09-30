@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consola de Licencias · Global ACCE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F7F8FA;
+    --surface:#FFFFFF;
+    --surface-2:#FBFBFC;
+    --line:#EAECEF;
+    --line-strong:#DCDFE4;
+    --ink:#1A1D21;
+    --ink-2:#5A6169;
+    --ink-3:#8A9099;
+    --side:#14161A;
+    --side-2:#1C1F25;
+    --side-line:#2A2E36;
+    --side-ink:#E7E9EC;
+    --side-ink-2:#9AA0A8;
+    --ok:#0F9D58;
+    --ok-bg:#E8F5EE;
+    --ok-line:#BFE3CE;
+    --warn:#B4690E;
+    --danger:#D93843;
+    --danger-bg:#FDECEC;
+    --radius:12px;
+    --shadow:0 1px 2px rgba(16,19,24,.04), 0 1px 3px rgba(16,19,24,.06);
+    --shadow-lg:0 10px 30px -10px rgba(16,19,24,.25);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+  button{font-family:inherit}
+  ::selection{background:#DDE3FE}
+
+  /* ── Layout ─────────────────────────────────────────── */
+  .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+  .sidebar{background:var(--side);color:var(--side-ink);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;border-right:1px solid #000}
+  .main{min-width:0;display:flex;flex-direction:column}
+
+  /* ── Sidebar ────────────────────────────────────────── */
+  .brand{padding:22px 20px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--side-line)}
+  .brand .mark{width:38px;height:38px;border-radius:10px;background:linear-gradient(145deg,#3D5AFE,#5B7BFF);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;letter-spacing:-.5px;box-shadow:inset 0 1px 1px rgba(255,255,255,.25)}
+  .brand .txt strong{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.2px}
+  .brand .txt span{display:block;font-size:11.5px;color:var(--side-ink-2);margin-top:1px}
+  .nav{padding:14px 12px;flex:1;overflow-y:auto}
+  .nav .lbl{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#6B7079;padding:6px 10px 8px}
+  .nav-item{width:100%;text-align:left;display:flex;align-items:center;gap:11px;padding:10px 11px;margin-bottom:3px;border:none;background:none;color:var(--side-ink-2);border-radius:9px;cursor:pointer;font-size:13.5px;font-weight:500;transition:background .12s,color .12s}
+  .nav-item:hover{background:var(--side-2);color:var(--side-ink)}
+  .nav-item.active{background:var(--side-2);color:#fff;font-weight:600}
+  .nav-item .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .nav-item .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nav-item .cnt{font-size:11px;font-weight:600;color:var(--side-ink-2);background:var(--side-line);padding:1px 7px;border-radius:20px;min-width:20px;text-align:center}
+  .nav-item.active .cnt{background:#33373F;color:#fff}
+  .side-foot{border-top:1px solid var(--side-line);padding:12px}
+  .side-user{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:9px}
+  .side-user .av{width:30px;height:30px;border-radius:50%;background:#33373F;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;flex-shrink:0;text-transform:uppercase}
+  .side-user .em{flex:1;min-width:0;font-size:12px;color:var(--side-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .side-user .em small{display:block;color:var(--side-ink-2);font-size:10.5px;font-weight:500}
+  .logout{width:100%;margin-top:6px;padding:9px;background:none;border:1px solid var(--side-line);color:var(--side-ink-2);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;transition:.12s}
+  .logout:hover{background:var(--side-2);color:var(--side-ink);border-color:#3A3F48}
+
+  /* ── Topbar ─────────────────────────────────────────── */
+  .topbar{background:var(--surface);border-bottom:1px solid var(--line);padding:20px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .topbar .h{display:flex;align-items:center;gap:12px}
+  .topbar .sysdot{width:10px;height:10px;border-radius:50%}
+  .topbar h1{font-size:18px;font-weight:700;letter-spacing:-.3px;margin:0}
+  .topbar .sub{font-size:12.5px;color:var(--ink-3);margin-top:1px}
+  .content{padding:28px 32px 56px;max-width:1080px;width:100%}
+
+  /* ── Stat cards ─────────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+  .stat .k{font-size:11.5px;font-weight:600;color:var(--ink-3);letter-spacing:.02em;display:flex;align-items:center;gap:7px}
+  .stat .k .d{width:7px;height:7px;border-radius:50%}
+  .stat .v{font-size:27px;font-weight:800;letter-spacing:-.8px;margin-top:7px;font-variant-numeric:tabular-nums}
+
+  /* ── Panels/cards ───────────────────────────────────── */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:22px;overflow:hidden}
+  .card-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .card-h .t{font-size:14px;font-weight:700;letter-spacing:-.2px}
+  .card-h .d{font-size:12px;color:var(--ink-3);margin-top:2px;font-weight:400}
+  .card-b{padding:20px}
+
+  /* ── Emitir licencia ────────────────────────────────── */
+  .emit{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .fld{display:flex;flex-direction:column;gap:6px}
+  .fld label{font-size:11.5px;font-weight:600;color:var(--ink-2)}
+  select.control{appearance:none;background:var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M3 4.5L6 7.5L9 4.5' stroke='%238A9099' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 12px center;padding:10px 34px 10px 13px;border:1px solid var(--line-strong);border-radius:9px;font-size:13.5px;font-weight:500;color:var(--ink);min-width:230px;cursor:pointer;outline:none}
+  select.control:focus{border-color:#94A3FF;box-shadow:0 0 0 3px rgba(61,90,254,.12)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 16px;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:.12s;white-space:nowrap}
+  .btn-primary{background:#20242B;color:#fff}
+  .btn-primary:hover{background:#2E333C}
+  .btn-primary:active{transform:translateY(1px)}
+  .btn-ghost{background:var(--surface);border-color:var(--line-strong);color:var(--ink-2)}
+  .btn-ghost:hover{background:var(--surface-2);color:var(--ink)}
+  .emit-result{margin-top:16px;display:none}
+  .emit-result.show{display:block}
+  .code-hero{display:flex;align-items:center;gap:14px;background:var(--ok-bg);border:1px solid var(--ok-line);border-radius:11px;padding:14px 16px}
+  .code-hero .ic{width:34px;height:34px;border-radius:9px;background:var(--ok);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .code-hero .cw{flex:1;min-width:0}
+  .code-hero .cl{font-size:11px;font-weight:600;color:#0B7A46;letter-spacing:.03em;text-transform:uppercase}
+  .code-hero code{display:block;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:16px;font-weight:600;color:#0A5C36;margin-top:2px;word-break:break-all}
+
+  /* ── Toolbar (search/filter) ────────────────────────── */
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .search{position:relative;flex:1;min-width:180px}
+  .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none}
+  .search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--line-strong);border-radius:9px;font-size:13px;color:var(--ink);outline:none;background:var(--surface)}
+  .search input:focus{border-color:#94A3FF;box-shadow:0 0 0 3px rgba(61,90,254,.12)}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:3px}
+  .seg button{border:none;background:none;padding:6px 13px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+  /* ── Table ──────────────────────────────────────────── */
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{text-align:left;font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:.05em;text-transform:uppercase;padding:11px 20px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+  tbody td{padding:13px 20px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--surface-2)}
+  td.code{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:13px;color:var(--ink);letter-spacing:-.2px}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .pill.free{background:var(--ok-bg);color:#0B7A46}
+  .pill.used{background:#F0F1F3;color:var(--ink-2)}
+  .pill .d{width:6px;height:6px;border-radius:50%}
+  .pill.free .d{background:var(--ok)}
+  .pill.used .d{background:var(--ink-3)}
+  .tag{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11.5px;font-weight:600;background:#EEF0FE;color:#3D4EDB;border:1px solid #DDE1FB}
+  .tag.pro{background:#FDF3E7;color:#B4690E;border-color:#F4E1C4}
+  .meta{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+  td.date{color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .row-act{display:flex;gap:6px;justify-content:flex-end}
+  .iconbtn{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;cursor:pointer;color:var(--ink-2);transition:.12s}
+  .iconbtn:hover{background:var(--surface-2);color:var(--ink);border-color:var(--line-strong)}
+  .iconbtn.danger:hover{background:var(--danger-bg);color:var(--danger);border-color:#F3C6C6}
+
+  .state{padding:52px 20px;text-align:center;color:var(--ink-3)}
+  .state .ic{width:48px;height:48px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+  .state .t{font-size:14px;font-weight:600;color:var(--ink-2)}
+  .state .s{font-size:12.5px;margin-top:4px}
+  .spinner{width:20px;height:20px;border:2.5px solid var(--line-strong);border-top-color:var(--ink-3);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── Login ──────────────────────────────────────────── */
+  .auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(1200px 600px at 50% -10%, #EEF1FF 0%, var(--bg) 55%)}
+  .auth-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-lg);padding:34px 32px}
+  .auth-mark{width:46px;height:46px;border-radius:12px;background:linear-gradient(145deg,#3D5AFE,#5B7BFF);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;color:#fff;margin-bottom:20px;box-shadow:inset 0 1px 1px rgba(255,255,255,.25)}
+  .auth h2{font-size:20px;font-weight:700;letter-spacing:-.3px;margin:0 0 5px}
+  .auth p.s{font-size:13px;color:var(--ink-3);margin:0 0 22px}
+  .auth label{font-size:12px;font-weight:600;color:var(--ink-2);display:block;margin-bottom:6px}
+  .auth input{width:100%;padding:11px 13px;margin-bottom:15px;border:1px solid var(--line-strong);border-radius:10px;font-size:14px;color:var(--ink);outline:none}
+  .auth input:focus{border-color:#94A3FF;box-shadow:0 0 0 3px rgba(61,90,254,.12)}
+  .auth .btn-primary{width:100%;padding:12px;font-size:14px}
+  .auth .err{color:var(--danger);font-size:12.5px;margin-top:12px;min-height:16px;text-align:center}
+  .auth .banner{background:var(--danger-bg);color:#A32831;padding:9px 12px;border-radius:9px;font-size:12.5px;margin-bottom:16px;border:1px solid #F3C6C6}
+
+  /* ── Toasts ─────────────────────────────────────────── */
+  .toasts{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:9px;z-index:9000}
+  .toast{display:flex;align-items:center;gap:10px;background:#20242B;color:#fff;padding:11px 15px;border-radius:10px;box-shadow:var(--shadow-lg);font-size:13px;font-weight:500;animation:tin .22s ease;max-width:340px}
+  .toast.ok{background:#0E3D28}
+  .toast.err{background:#4A1D22}
+  @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* ── Modal ──────────────────────────────────────────── */
+  .modal-bg{position:fixed;inset:0;background:rgba(16,19,24,.5);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:8000;padding:20px}
+  .modal-bg.show{display:flex}
+  .modal{width:100%;max-width:400px;background:var(--surface);border-radius:16px;box-shadow:var(--shadow-lg);padding:24px;animation:tin .18s ease}
+  .modal .mic{width:42px;height:42px;border-radius:11px;background:var(--danger-bg);display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+  .modal h3{font-size:16px;font-weight:700;margin:0 0 6px}
+  .modal p{font-size:13px;color:var(--ink-2);margin:0 0 20px;line-height:1.55}
+  .modal p code{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--ink);background:var(--surface-2);padding:1px 6px;border-radius:5px;font-size:12px}
+  .modal-act{display:flex;gap:10px;justify-content:flex-end}
+  .btn-danger{background:var(--danger);color:#fff}
+  .btn-danger:hover{background:#C42F39}
+
+  .hidden{display:none!important}
+
+  @media(max-width:820px){
+    .app{grid-template-columns:1fr}
+    .sidebar{position:static;height:auto;flex-direction:column;border-right:none;border-bottom:1px solid #000}
+    .nav{display:flex;overflow-x:auto;padding:10px}
+    .nav .lbl,.side-foot .side-user small{display:none}
+    .nav-item{margin-bottom:0;white-space:nowrap}
+    .topbar,.content{padding-left:18px;padding-right:18px}
+    .stats{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="authView" class="auth">
+  <div class="auth-card">
+    <div class="auth-mark">GA</div>
+    <h2>Consola de licencias</h2>
+    <p class="s">Acceso restringido al administrador de Global ACCE.</p>
+    <div id="loginBanner"></div>
+    <label for="admEmail">Correo</label>
+    <input id="admEmail" type="email" placeholder="admin@globalacce.com" autocomplete="username">
+    <label for="admPass">Contraseña</label>
+    <input id="admPass" type="password" placeholder="••••••••" autocomplete="current-password">
+    <button class="btn btn-primary" id="loginBtn">Iniciar sesión</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="appView" class="app hidden">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">GA</div>
+      <div class="txt"><strong>Global ACCE</strong><span>Consola de licencias</span></div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="lbl">Sistemas</div>
+      <!-- nav items injected -->
+    </nav>
+    <div class="side-foot">
+      <div class="side-user">
+        <div class="av" id="userAv">A</div>
+        <div class="em" id="userEm">admin<small>Administrador</small></div>
+      </div>
+      <button class="logout" id="logoutBtn">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="h">
+        <span class="sysdot" id="sysDot"></span>
+        <div>
+          <h1 id="sysName">—</h1>
+          <div class="sub" id="sysSub">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="content" id="content"><!-- panel injected --></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- Confirm modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="mic">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#D93843" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <h3>Eliminar código</h3>
+    <p id="modalTxt">¿Seguro?</p>
+    <div class="modal-act">
+      <button class="btn btn-ghost" id="modalCancel">Cancelar</button>
+      <button class="btn btn-danger" id="modalOk">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+//  CONSOLA DE LICENCIAS — ACCE PRO · MotoTaller · Eben-ezer
+//  Un solo proyecto Firebase, un solo ADMIN_UID. La generación de códigos
+//  replica EXACTO la de cada app (hash djb2 + secreto + colección) para que
+//  los códigos sean válidos e indistinguibles de los del panel original.
+// ══════════════════════════════════════════════════════════════════════════
+var ADMIN_UID = "aQdG73vJs2V9gqSl2SKCrLSDott1";
+var firebaseConfig = {
+  apiKey: "AIzaSyAzOoK99y6L95sFAKZFZ0wY42Ljw2YEOM8",
+  authDomain: "globalacce-37997.firebaseapp.com",
+  projectId: "globalacce-37997",
+  storageBucket: "globalacce-37997.firebasestorage.app",
+  messagingSenderId: "779307465490",
+  appId: "1:779307465490:web:848a554272501bbaf251cb"
+};
+var app  = firebase.apps && firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(firebaseConfig);
+var db   = app.firestore();
+var auth = app.auth();
+
+// hash djb2 idéntico al de las tres apps
+function _hash(str){
+  var h=5381; for(var i=0;i<str.length;i++){ h=((h<<5)+h)^str.charCodeAt(i); h=h>>>0; }
+  return h.toString(36).toUpperCase().padStart(8,"0").slice(-8);
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+// Configuración por sistema
+var SYS = {
+  acce:  { name:"ACCE PRO",   full:"Gestión de talleres de celulares", col:"trp_users",   ls:"GLA2024TECHREPAIR", accent:"#4F46E5", biz:"taller" },
+  motos: { name:"MotoTaller", full:"Gestión de talleres de motos",     col:"motos_users", ls:"GLM2026MOTOTALLER", accent:"#7C3AED", biz:"taller" },
+  ebe:   { name:"Eben-ezer",  full:"Gestión de fiados y negocios",     col:"ebe_users",   ls:"EBE2026FIADOSPRO", accent:"#0F9D58", biz:"negocio" }
+};
+var ORDER = ["acce","motos","ebe"];
+var current = "acce";
+var cache = {};      // appKey -> filas cargadas
+var filter = {};     // appKey -> {q, estado}
+
+// Metadatos de tipo de licencia
+var TIPOS = [
+  { v:"demo",  label:"Demo",  dur:"8 días",     pro:false },
+  { v:"trial", label:"Trial", dur:"30 días",    pro:false },
+  { v:"anual", label:"Anual", dur:"365 días",   pro:false },
+  { v:"pro",   label:"PRO",   dur:"Permanente", pro:true  },
+  { v:"test",  label:"Test",  dur:"10 minutos", pro:false }
+];
+function tipoMeta(t){ for(var i=0;i<TIPOS.length;i++) if(TIPOS[i].v===t) return TIPOS[i]; return {v:t,label:(t||"—"),dur:"",pro:false}; }
+
+// ── Generación (misma fórmula que cada app) ────────────────────────────────
+function buildCode(appKey, tipo){
+  var ls = SYS[appKey].ls, now = new Date(), code;
+  if(tipo==="test"){
+    var em = Math.floor((Date.now()+10*60000)/60000).toString();
+    code = "TEST-"+em+"-"+_hash(em+"TEST"+ls);
+  } else if(tipo==="pro"){
+    var id = Math.random().toString(36).slice(2,8).toUpperCase();
+    code = "PRO-"+id+"-"+_hash(id+"PRO"+ls);
+  } else {
+    var days = tipo==="trial"?30 : tipo==="anual"?365 : 8;
+    var exp = new Date(now.getTime()+days*86400000);
+    var ds = exp.getFullYear().toString()+String(exp.getMonth()+1).padStart(2,"0")+String(exp.getDate()).padStart(2,"0");
+    var uniq = ds+Date.now().toString(36).toUpperCase().slice(-3)+Math.random().toString(36).slice(2,5).toUpperCase();
+    var pre = tipo==="trial"?"TRIAL" : tipo==="anual"?"ANUAL" : "DEMO";
+    code = pre+"-"+uniq+"-"+_hash(uniq+ls);
+  }
+  return code;
+}
+
+function emitir(){
+  var appKey = current;
+  var tipo = document.getElementById("emitTipo").value;
+  var btn = document.getElementById("emitBtn");
+  btn.disabled = true;
+  var code = buildCode(appKey, tipo);
+  var codeKey = "code_LIC_"+code.replace(/[^A-Z0-9]/g,"_");
+  db.collection(SYS[appKey].col).doc(codeKey).set({
+    code:code, tipo:tipo, generadoEn:new Date().toISOString(), used:false, createdByAdmin:true
+  },{merge:true}).then(function(){
+    var box = document.getElementById("emitResult");
+    box.className = "emit-result show";
+    box.innerHTML =
+      '<div class="code-hero">'
+      +'<div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 6 9 17l-5-5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
+      +'<div class="cw"><div class="cl">Nuevo código · '+esc(tipoMeta(tipo).label)+'</div><code>'+esc(code)+'</code></div>'
+      +'<button class="btn btn-ghost" onclick="copiar(\''+code+'\',this)">Copiar</button>'
+      +'</div>';
+    btn.disabled = false;
+    toast("Código emitido correctamente", "ok");
+    cargar(appKey);
+  }).catch(function(e){
+    btn.disabled = false;
+    toast("No se pudo guardar: "+(e.message||e), "err");
+  });
+}
+
+function copiar(code, el){
+  navigator.clipboard.writeText(code).then(function(){
+    toast("Código copiado al portapapeles", "ok");
+    if(el && el.tagName==="BUTTON"){ var t=el.textContent; el.textContent="Copiado"; setTimeout(function(){el.textContent=t;},1400); }
+  }).catch(function(){ toast("No se pudo copiar", "err"); });
+}
+
+// ── Carga y render de la tabla ─────────────────────────────────────────────
+function cargar(appKey){
+  var listEl = document.getElementById("codeList");
+  if(current===appKey && listEl) listEl.innerHTML = '<div class="state"><div class="spinner"></div><div class="t" style="margin-top:14px">Cargando códigos…</div></div>';
+  db.collection(SYS[appKey].col).get().then(function(snap){
+    var rows=[];
+    snap.forEach(function(d){ if(d.id.indexOf("code_LIC_")!==0) return; rows.push(d.data()); });
+    rows.sort(function(a,b){ return (b.generadoEn||"").localeCompare(a.generadoEn||""); });
+    cache[appKey] = rows;
+    updateNavCount(appKey, rows.length);
+    if(current===appKey){ renderStats(appKey); renderTable(appKey); }
+  }).catch(function(e){
+    if(current===appKey && listEl) listEl.innerHTML = '<div class="state"><div class="t">No se pudieron cargar los códigos</div><div class="s">'+esc(e.message||e)+'</div></div>';
+  });
+}
+
+function fmtDate(iso){
+  if(!iso) return "—";
+  try{
+    var d = new Date(iso);
+    return d.toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"}) + " · " +
+           d.toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit"});
+  }catch(e){ return "—"; }
+}
+
+function renderStats(appKey){
+  var rows = cache[appKey]||[];
+  var total = rows.length, used = rows.filter(function(x){return x.used;}).length;
+  var el = document.getElementById("stats"); if(!el) return;
+  el.innerHTML =
+    '<div class="stat"><div class="k"><span class="d" style="background:'+SYS[appKey].accent+'"></span>Total emitidos</div><div class="v">'+total+'</div></div>'
+    +'<div class="stat"><div class="k"><span class="d" style="background:var(--ok)"></span>Disponibles</div><div class="v" style="color:var(--ok)">'+(total-used)+'</div></div>'
+    +'<div class="stat"><div class="k"><span class="d" style="background:var(--ink-3)"></span>Activados</div><div class="v">'+used+'</div></div>';
+}
+
+function renderTable(appKey){
+  var el = document.getElementById("codeList"); if(!el) return;
+  var rows = (cache[appKey]||[]).slice();
+  var f = filter[appKey] || (filter[appKey]={q:"",estado:"todos"});
+  if(f.estado==="disp") rows = rows.filter(function(x){return !x.used;});
+  else if(f.estado==="act") rows = rows.filter(function(x){return x.used;});
+  if(f.q){ var q=f.q.toLowerCase(); rows = rows.filter(function(x){return (x.code||"").toLowerCase().indexOf(q)>=0;}); }
+
+  if(!(cache[appKey]||[]).length){
+    el.innerHTML = '<div class="state"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 7h5m-5 4h5M4 7h6v10H4zM4 7l3-3 3 3" stroke="#8A9099" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="t">Aún no hay códigos</div><div class="s">Emite el primer código de '+esc(SYS[appKey].name)+' arriba.</div></div>';
+    return;
+  }
+  if(!rows.length){
+    el.innerHTML = '<div class="state"><div class="t">Sin resultados</div><div class="s">Ningún código coincide con el filtro.</div></div>';
+    return;
+  }
+  var biz = SYS[appKey].biz;
+  var body = rows.map(function(x){
+    var usado = !!x.used;
+    var m = tipoMeta(x.tipo);
+    var used_meta = usado ? ('Activado'+(x.usedByUser?' · '+esc(x.usedByUser):'')+(x.usedClientId?' · '+biz+' '+esc(x.usedClientId):'')) : '';
+    var estado = usado
+      ? '<span class="pill used"><span class="d"></span>Activado</span>' + (used_meta?'<div class="meta">'+used_meta+'</div>':'')
+      : '<span class="pill free"><span class="d"></span>Disponible</span>';
+    var acts = usado
+      ? '<button class="iconbtn danger" title="Eliminar" onclick="pedirEliminar(\''+esc(x.code)+'\')">'+ICO.trash+'</button>'
+      : '<button class="iconbtn" title="Copiar" onclick="copiar(\''+esc(x.code)+'\',this)">'+ICO.copy+'</button>'
+        +'<button class="iconbtn danger" title="Eliminar" onclick="pedirEliminar(\''+esc(x.code)+'\')">'+ICO.trash+'</button>';
+    return '<tr>'
+      +'<td class="code">'+esc(x.code||"")+'</td>'
+      +'<td><span class="tag'+(m.pro?' pro':'')+'">'+esc(m.label)+'</span>'+(m.dur?'<div class="meta">'+esc(m.dur)+'</div>':'')+'</td>'
+      +'<td>'+estado+'</td>'
+      +'<td class="date">'+fmtDate(x.generadoEn)+'</td>'
+      +'<td><div class="row-act">'+acts+'</div></td>'
+      +'</tr>';
+  }).join("");
+  el.innerHTML =
+    '<div class="tbl-wrap"><table><thead><tr>'
+    +'<th>Código</th><th>Licencia</th><th>Estado</th><th>Emitido</th><th style="text-align:right">Acciones</th>'
+    +'</tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+// ── Eliminar (modal) ───────────────────────────────────────────────────────
+var _pendingDelete = null;
+function pedirEliminar(code){
+  _pendingDelete = code;
+  document.getElementById("modalTxt").innerHTML = 'Vas a eliminar <code>'+esc(code)+'</code>. Esta acción no se puede deshacer.';
+  document.getElementById("modalBg").classList.add("show");
+}
+function cerrarModal(){ document.getElementById("modalBg").classList.remove("show"); _pendingDelete=null; }
+function confirmarEliminar(){
+  var code = _pendingDelete; if(!code) return;
+  var appKey = current;
+  var codeKey = "code_LIC_"+code.replace(/[^A-Z0-9]/g,"_");
+  cerrarModal();
+  db.collection(SYS[appKey].col).doc(codeKey).delete().then(function(){
+    toast("Código eliminado", "ok"); cargar(appKey);
+  }).catch(function(e){ toast("No se pudo eliminar: "+(e.message||e), "err"); });
+}
+
+// ── Filtros ────────────────────────────────────────────────────────────────
+function setEstado(estado, btn){
+  filter[current] = filter[current]||{q:"",estado:"todos"};
+  filter[current].estado = estado;
+  var seg = btn.parentNode; seg.querySelectorAll("button").forEach(function(b){ b.classList.toggle("on", b===btn); });
+  renderTable(current);
+}
+function onSearch(v){
+  filter[current] = filter[current]||{q:"",estado:"todos"};
+  filter[current].q = v.trim();
+  renderTable(current);
+}
+
+// ── Render del panel del sistema activo ────────────────────────────────────
+var ICO = {
+  copy:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  trash:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  search:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#8A9099" stroke-width="1.7"/><path d="m20 20-3-3" stroke="#8A9099" stroke-width="1.7" stroke-linecap="round"/></svg>'
+};
+
+function selectSystem(appKey){
+  current = appKey;
+  var s = SYS[appKey];
+  document.querySelectorAll(".nav-item").forEach(function(n){ n.classList.toggle("active", n.getAttribute("data-app")===appKey); });
+  document.getElementById("sysDot").style.background = s.accent;
+  document.getElementById("sysName").textContent = s.name;
+  document.getElementById("sysSub").textContent = s.full;
+  filter[appKey] = filter[appKey]||{q:"",estado:"todos"};
+
+  var opts = TIPOS.map(function(t){ return '<option value="'+t.v+'">'+t.label+' · '+t.dur+'</option>'; }).join("");
+  var f = filter[appKey];
+  document.getElementById("content").innerHTML =
+    '<div class="stats" id="stats"></div>'
+    +'<div class="card"><div class="card-h"><div><div class="t">Emitir licencia</div><div class="d">Genera un código de un solo uso y entrégalo al cliente.</div></div></div>'
+    +'<div class="card-b"><div class="emit">'
+      +'<div class="fld"><label for="emitTipo">Tipo de licencia</label>'
+      +'<select class="control" id="emitTipo">'+opts+'</select></div>'
+      +'<button class="btn btn-primary" id="emitBtn" onclick="emitir()">'
+      +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>Emitir código</button>'
+    +'</div><div class="emit-result" id="emitResult"></div></div></div>'
+    +'<div class="card"><div class="card-h">'
+      +'<div><div class="t">Códigos emitidos</div><div class="d">Historial completo de licencias de '+esc(s.name)+'.</div></div>'
+      +'<div class="toolbar">'
+        +'<div class="search">'+ICO.search+'<input type="text" placeholder="Buscar código…" oninput="onSearch(this.value)" value="'+esc(f.q||"")+'"></div>'
+        +'<div class="seg">'
+          +'<button class="'+(f.estado==="todos"?"on":"")+'" onclick="setEstado(\'todos\',this)">Todos</button>'
+          +'<button class="'+(f.estado==="disp"?"on":"")+'" onclick="setEstado(\'disp\',this)">Disponibles</button>'
+          +'<button class="'+(f.estado==="act"?"on":"")+'" onclick="setEstado(\'act\',this)">Activados</button>'
+        +'</div>'
+        +'<button class="btn btn-ghost" onclick="cargar(current)" title="Actualizar">'
+        +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
+      +'</div>'
+    +'</div><div id="codeList"></div></div>';
+
+  if(cache[appKey]){ renderStats(appKey); renderTable(appKey); }
+  cargar(appKey);
+}
+
+function updateNavCount(appKey, n){
+  var el = document.querySelector('.nav-item[data-app="'+appKey+'"] .cnt');
+  if(el) el.textContent = n;
+}
+
+function buildNav(){
+  var nav = document.getElementById("nav");
+  var html = '<div class="lbl">Sistemas</div>';
+  html += ORDER.map(function(k){
+    var s = SYS[k];
+    return '<button class="nav-item" data-app="'+k+'" onclick="selectSystem(\''+k+'\')">'
+      +'<span class="dot" style="background:'+s.accent+'"></span>'
+      +'<span class="nm">'+esc(s.name)+'</span>'
+      +'<span class="cnt">·</span></button>';
+  }).join("");
+  nav.innerHTML = html;
+}
+
+// ── Toasts ─────────────────────────────────────────────────────────────────
+function toast(msg, kind){
+  var wrap = document.getElementById("toasts");
+  var t = document.createElement("div");
+  t.className = "toast "+(kind||"");
+  var ic = kind==="ok" ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6 9 17l-5-5" stroke="#5FD39B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+         : kind==="err" ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6 6 18M6 6l12 12" stroke="#F6A0A6" stroke-width="2.2" stroke-linecap="round"/></svg>' : '';
+  t.innerHTML = ic + '<span>'+esc(msg)+'</span>';
+  wrap.appendChild(t);
+  setTimeout(function(){ t.style.transition="opacity .3s,transform .3s"; t.style.opacity="0"; t.style.transform="translateY(6px)"; setTimeout(function(){t.remove();},320); }, 2600);
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+function authErr(code){
+  var m = {
+    "auth/invalid-email":"El correo no es válido.",
+    "auth/user-not-found":"No existe una cuenta con ese correo.",
+    "auth/wrong-password":"Contraseña incorrecta.",
+    "auth/invalid-credential":"Correo o contraseña incorrectos.",
+    "auth/too-many-requests":"Demasiados intentos. Espera unos minutos."
+  };
+  return m[code] || "No se pudo iniciar sesión.";
+}
+function doLogin(){
+  var em = (document.getElementById("admEmail").value||"").trim().toLowerCase();
+  var pw = document.getElementById("admPass").value;
+  var err = document.getElementById("loginErr");
+  var btn = document.getElementById("loginBtn");
+  err.textContent=""; btn.disabled=true; btn.textContent="Verificando…";
+  auth.signInWithEmailAndPassword(em, pw).then(function(cred){
+    btn.disabled=false; btn.textContent="Iniciar sesión";
+    if(cred.user.uid !== ADMIN_UID){ err.textContent="Esta cuenta no tiene permisos de administrador."; auth.signOut(); }
+  }).catch(function(e){ btn.disabled=false; btn.textContent="Iniciar sesión"; err.textContent=authErr(e && e.code); });
+}
+
+var _booted=false;
+auth.onAuthStateChanged(function(u){
+  var isAdmin = u && u.uid===ADMIN_UID;
+  document.getElementById("authView").classList.toggle("hidden", !!isAdmin);
+  document.getElementById("appView").classList.toggle("hidden", !isAdmin);
+  if(isAdmin){
+    var em = u.email||"admin";
+    document.getElementById("userEm").innerHTML = esc(em)+'<small>Administrador</small>';
+    document.getElementById("userAv").textContent = (em[0]||"A").toUpperCase();
+    if(!_booted){ buildNav(); selectSystem("acce"); _booted=true; }
+  } else if(u){
+    document.getElementById("loginBanner").innerHTML='<div class="banner">Esa cuenta no tiene permisos de administrador.</div>';
+  }
+});
+
+// listeners
+document.getElementById("loginBtn").addEventListener("click", doLogin);
+document.getElementById("admPass").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
+document.getElementById("logoutBtn").addEventListener("click", function(){ auth.signOut(); });
+document.getElementById("modalCancel").addEventListener("click", cerrarModal);
+document.getElementById("modalOk").addEventListener("click", confirmarEliminar);
+document.getElementById("modalBg").addEventListener("click", function(e){ if(e.target===this) cerrarModal(); });
+document.addEventListener("keydown", function(e){ if(e.key==="Escape") cerrarModal(); });
+</script>
+</body>
+</html>
