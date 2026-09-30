@@ -74,7 +74,7 @@
   .content{padding:28px 32px 56px;max-width:1080px;width:100%}
 
   /* ── Stat cards ─────────────────────────────────────── */
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px}
   .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
   .stat .k{font-size:11.5px;font-weight:600;color:var(--ink-3);letter-spacing:.02em;display:flex;align-items:center;gap:7px}
   .stat .k .d{width:7px;height:7px;border-radius:50%}
@@ -179,6 +179,17 @@
   .btn-danger{background:var(--danger);color:#fff}
   .btn-danger:hover{background:#C42F39}
 
+  .acc-email{font-weight:600;color:var(--ink);word-break:break-all}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px}
+  .pill.old{background:#FDF3E7;color:#B4690E}
+  .pill.old .d{background:#B4690E}
+  .pill.exp{background:var(--danger-bg);color:#A32831}
+  .pill.exp .d{background:var(--danger)}
+  .note{font-size:12px;color:var(--ink-3);padding:12px 20px;border-top:1px solid var(--line);background:var(--surface-2)}
+  .modal .mic.info{background:#EEF0FE}
+  .btn-ok{background:#20242B;color:#fff}
+  .btn-ok:hover{background:#2E333C}
+
   .hidden{display:none!important}
 
   @media(max-width:820px){
@@ -188,7 +199,7 @@
     .nav .lbl,.side-foot .side-user small{display:none}
     .nav-item{margin-bottom:0;white-space:nowrap}
     .topbar,.content{padding-left:18px;padding-right:18px}
-    .stats{grid-template-columns:1fr}
+    .stats{grid-template-columns:1fr 1fr}
   }
 </style>
 </head>
@@ -249,10 +260,8 @@
 <!-- Confirm modal -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
-    <div class="mic">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#D93843" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
-    <h3>Eliminar código</h3>
+    <div class="mic" id="modalIc"></div>
+    <h3 id="modalTitle">Eliminar código</h3>
     <p id="modalTxt">¿Seguro?</p>
     <div class="modal-act">
       <button class="btn btn-ghost" id="modalCancel">Cancelar</button>
@@ -301,6 +310,8 @@ var ORDER = ["acce","motos","ebe"];
 var current = "acce";
 var cache = {};      // appKey -> filas cargadas
 var filter = {};     // appKey -> {q, estado}
+var accCache = {};   // appKey -> cuentas registradas
+var accQ = {};       // appKey -> texto de búsqueda de cuentas
 
 // Metadatos de tipo de licencia
 var TIPOS = [
@@ -371,14 +382,27 @@ function cargar(appKey){
   var listEl = document.getElementById("codeList");
   if(current===appKey && listEl) listEl.innerHTML = '<div class="state"><div class="spinner"></div><div class="t" style="margin-top:14px">Cargando códigos…</div></div>';
   db.collection(SYS[appKey].col).get().then(function(snap){
-    var rows=[];
-    snap.forEach(function(d){ if(d.id.indexOf("code_LIC_")!==0) return; rows.push(d.data()); });
+    var rows=[], accs=[];
+    snap.forEach(function(d){
+      if(d.id.indexOf("code_LIC_")===0){ rows.push(d.data()); return; }
+      // Perfil de cuenta. Nunca se muestra passwordHash (cuentas antiguas).
+      var x = d.data()||{};
+      accs.push({
+        id:d.id, email:x.email||"", username:x.username||"",
+        clientId:x.clientId||"", licenseCode:x.licenseCode||"", licenseType:x.licenseType||"",
+        createdAt:x.createdAt||"", legacy:!x.uid || x.uid!==d.id
+      });
+    });
     rows.sort(function(a,b){ return (b.generadoEn||"").localeCompare(a.generadoEn||""); });
+    accs.sort(function(a,b){ return (a.legacy-b.legacy) || (b.createdAt||"").localeCompare(a.createdAt||""); });
     cache[appKey] = rows;
+    accCache[appKey] = accs;
     updateNavCount(appKey, rows.length);
-    if(current===appKey){ renderStats(appKey); renderTable(appKey); }
+    if(current===appKey){ renderStats(appKey); renderTable(appKey); renderAccounts(appKey); }
   }).catch(function(e){
     if(current===appKey && listEl) listEl.innerHTML = '<div class="state"><div class="t">No se pudieron cargar los códigos</div><div class="s">'+esc(e.message||e)+'</div></div>';
+    var accEl = document.getElementById("accList");
+    if(current===appKey && accEl) accEl.innerHTML = '<div class="state"><div class="t">No se pudieron cargar las cuentas</div><div class="s">'+esc(e.message||e)+'</div></div>';
   });
 }
 
@@ -398,7 +422,8 @@ function renderStats(appKey){
   el.innerHTML =
     '<div class="stat"><div class="k"><span class="d" style="background:'+SYS[appKey].accent+'"></span>Total emitidos</div><div class="v">'+total+'</div></div>'
     +'<div class="stat"><div class="k"><span class="d" style="background:var(--ok)"></span>Disponibles</div><div class="v" style="color:var(--ok)">'+(total-used)+'</div></div>'
-    +'<div class="stat"><div class="k"><span class="d" style="background:var(--ink-3)"></span>Activados</div><div class="v">'+used+'</div></div>';
+    +'<div class="stat"><div class="k"><span class="d" style="background:var(--ink-3)"></span>Activados</div><div class="v">'+used+'</div></div>'
+    +'<div class="stat"><div class="k"><span class="d" style="background:#3D5AFE"></span>Cuentas</div><div class="v">'+(accCache[appKey]||[]).filter(function(a){return !a.legacy;}).length+'</div></div>';
 }
 
 function renderTable(appKey){
@@ -443,19 +468,115 @@ function renderTable(appKey){
     +'</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 
-// ── Eliminar (modal) ───────────────────────────────────────────────────────
-var _pendingDelete = null;
-function pedirEliminar(code){
-  _pendingDelete = code;
-  document.getElementById("modalTxt").innerHTML = 'Vas a eliminar <code>'+esc(code)+'</code>. Esta acción no se puede deshacer.';
+// ── Cuentas registradas ────────────────────────────────────────────────────
+// Vencimiento a partir del código (misma estructura con que se generan).
+function vencimiento(code, tipo){
+  code = code||"";
+  if(tipo==="pro" || code.indexOf("PRO-")===0) return {txt:"Permanente", exp:false};
+  var m = code.match(/^(?:DEMO|TRIAL|ANUAL)-(\d{4})(\d{2})(\d{2})/);
+  if(m){
+    var d = new Date(+m[1], +m[2]-1, +m[3], 23, 59, 59);
+    return {txt:d.toLocaleDateString("es-CO",{day:"2-digit",month:"short",year:"numeric"}), exp:new Date()>d};
+  }
+  var t = code.match(/^TEST-(\d+)-/);
+  if(t){ var e = new Date(+t[1]*60000); return {txt:fmtDate(e.toISOString()), exp:new Date()>e}; }
+  return {txt:"—", exp:false};
+}
+
+function renderAccounts(appKey){
+  var el = document.getElementById("accList"); if(!el) return;
+  var all = accCache[appKey];
+  if(!all){ el.innerHTML = '<div class="state"><div class="spinner"></div><div class="t" style="margin-top:14px">Cargando cuentas…</div></div>'; return; }
+  if(!all.length){ el.innerHTML = '<div class="state"><div class="t">Aún no hay cuentas</div><div class="s">Cuando alguien se registre con un código aparecerá aquí.</div></div>'; return; }
+  var q = (accQ[appKey]||"").toLowerCase();
+  var rows = !q ? all : all.filter(function(a){
+    return [a.email,a.username,a.clientId,a.licenseCode,a.id].join(" ").toLowerCase().indexOf(q)>=0;
+  });
+  if(!rows.length){ el.innerHTML = '<div class="state"><div class="t">Sin resultados</div><div class="s">Ninguna cuenta coincide con la búsqueda.</div></div>'; return; }
+  var biz = SYS[appKey].biz;
+  var body = rows.map(function(a){
+    var m = tipoMeta(a.licenseType);
+    var v = vencimiento(a.licenseCode, a.licenseType);
+    var estado = a.legacy
+      ? '<span class="pill old"><span class="d"></span>Antigua</span><div class="meta">Sin migrar a correo</div>'
+      : v.exp
+        ? '<span class="pill exp"><span class="d"></span>Vencida</span>'
+        : '<span class="pill free"><span class="d"></span>Activa</span>';
+    var acts = a.email
+      ? '<button class="iconbtn" title="Copiar correo" onclick="copiarTxt(\''+esc(a.email)+'\',\'Correo copiado\')">'+ICO.copy+'</button>'
+        +'<button class="iconbtn" title="Enviar enlace para cambiar contraseña" onclick="pedirReset(\''+esc(a.email)+'\')">'+ICO.key+'</button>'
+      : '';
+    return '<tr>'
+      +'<td><div class="acc-email">'+(a.email?esc(a.email):'<span style="color:var(--ink-3)">Sin correo</span>')+'</div>'
+        +'<div class="meta">Usuario: '+esc(a.username||a.id)+'</div></td>'
+      +'<td>'+(a.clientId?'<span class="mono">'+esc(a.clientId)+'</span>':'—')+'</td>'
+      +'<td>'+(a.licenseType?'<span class="tag'+(m.pro?' pro':'')+'">'+esc(m.label)+'</span>':'—')
+        +(a.licenseCode?'<div class="meta mono">'+esc(a.licenseCode)+'</div>':'')+'</td>'
+      +'<td class="date">'+esc(v.txt)+'</td>'
+      +'<td>'+estado+'</td>'
+      +'<td class="date">'+fmtDate(a.createdAt)+'</td>'
+      +'<td><div class="row-act">'+acts+'</div></td>'
+      +'</tr>';
+  }).join("");
+  el.innerHTML =
+    '<div class="tbl-wrap"><table><thead><tr>'
+    +'<th>Correo / usuario</th><th>'+esc(biz.charAt(0).toUpperCase()+biz.slice(1))+'</th><th>Licencia</th><th>Vence</th><th>Estado</th><th>Creada</th><th style="text-align:right">Acciones</th>'
+    +'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<div class="note">Las contraseñas no se pueden ver: Firebase las guarda cifradas y ni el administrador puede leerlas. '
+    +'Si un cliente olvidó la suya, usa el botón de la llave para enviarle a su correo un enlace para crear una nueva.</div>';
+}
+function onAccSearch(v){ accQ[current] = v.trim(); renderAccounts(current); }
+
+function copiarTxt(txt, msg){
+  navigator.clipboard.writeText(txt).then(function(){ toast(msg||"Copiado", "ok"); })
+    .catch(function(){ toast("No se pudo copiar", "err"); });
+}
+
+function pedirReset(email){
+  abrirModal({
+    title:"Restablecer contraseña", danger:false, okText:"Enviar enlace",
+    html:'Se enviará a <code>'+esc(email)+'</code> un correo con un enlace para que el cliente cree una contraseña nueva. Su cuenta y sus datos no cambian.',
+    onOk:function(){
+      auth.sendPasswordResetEmail(email).then(function(){
+        toast("Enlace enviado a "+email, "ok");
+      }).catch(function(e){ toast("No se pudo enviar: "+(e.message||e), "err"); });
+    }
+  });
+}
+
+// ── Modal de confirmación (genérico) ───────────────────────────────────────
+var _modalAction = null;
+var MIC = {
+  danger:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#D93843" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  mail:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#3D5AFE" stroke-width="1.7"/><path d="m3 7 9 6 9-6" stroke="#3D5AFE" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+function abrirModal(o){
+  _modalAction = o.onOk;
+  var ic = document.getElementById("modalIc");
+  ic.className = "mic"+(o.danger?"":" info");
+  ic.innerHTML = o.danger ? MIC.danger : MIC.mail;
+  document.getElementById("modalTitle").textContent = o.title;
+  document.getElementById("modalTxt").innerHTML = o.html;
+  var ok = document.getElementById("modalOk");
+  ok.textContent = o.okText;
+  ok.className = "btn "+(o.danger?"btn-danger":"btn-ok");
   document.getElementById("modalBg").classList.add("show");
 }
-function cerrarModal(){ document.getElementById("modalBg").classList.remove("show"); _pendingDelete=null; }
-function confirmarEliminar(){
-  var code = _pendingDelete; if(!code) return;
+function cerrarModal(){ document.getElementById("modalBg").classList.remove("show"); _modalAction=null; }
+function modalOk(){ var fn=_modalAction; cerrarModal(); if(fn) fn(); }
+
+// ── Eliminar código ────────────────────────────────────────────────────────
+function pedirEliminar(code){
+  abrirModal({
+    title:"Eliminar código", danger:true, okText:"Eliminar",
+    html:'Vas a eliminar <code>'+esc(code)+'</code>. Esta acción no se puede deshacer.',
+    onOk:function(){ confirmarEliminar(code); }
+  });
+}
+function confirmarEliminar(code){
+  if(!code) return;
   var appKey = current;
   var codeKey = "code_LIC_"+code.replace(/[^A-Z0-9]/g,"_");
-  cerrarModal();
   db.collection(SYS[appKey].col).doc(codeKey).delete().then(function(){
     toast("Código eliminado", "ok"); cargar(appKey);
   }).catch(function(e){ toast("No se pudo eliminar: "+(e.message||e), "err"); });
@@ -478,6 +599,7 @@ function onSearch(v){
 var ICO = {
   copy:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   trash:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  key:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.7"/><path d="m10.8 12.2 8.7-8.7M17 6l3 3M14.5 8.5l2 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   search:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#8A9099" stroke-width="1.7"/><path d="m20 20-3-3" stroke="#8A9099" stroke-width="1.7" stroke-linecap="round"/></svg>'
 };
 
@@ -513,9 +635,16 @@ function selectSystem(appKey){
         +'<button class="btn btn-ghost" onclick="cargar(current)" title="Actualizar">'
         +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
       +'</div>'
-    +'</div><div id="codeList"></div></div>';
+    +'</div><div id="codeList"></div></div>'
+    +'<div class="card"><div class="card-h">'
+      +'<div><div class="t">Cuentas registradas</div><div class="d">Clientes que crearon su cuenta en '+esc(s.name)+'.</div></div>'
+      +'<div class="toolbar">'
+        +'<div class="search">'+ICO.search+'<input type="text" placeholder="Buscar correo, usuario o '+esc(s.biz)+'…" oninput="onAccSearch(this.value)" value="'+esc(accQ[appKey]||"")+'"></div>'
+      +'</div>'
+    +'</div><div id="accList"></div></div>';
 
   if(cache[appKey]){ renderStats(appKey); renderTable(appKey); }
+  renderAccounts(appKey);
   cargar(appKey);
 }
 
@@ -592,7 +721,7 @@ document.getElementById("loginBtn").addEventListener("click", doLogin);
 document.getElementById("admPass").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
 document.getElementById("logoutBtn").addEventListener("click", function(){ auth.signOut(); });
 document.getElementById("modalCancel").addEventListener("click", cerrarModal);
-document.getElementById("modalOk").addEventListener("click", confirmarEliminar);
+document.getElementById("modalOk").addEventListener("click", modalOk);
 document.getElementById("modalBg").addEventListener("click", function(e){ if(e.target===this) cerrarModal(); });
 document.addEventListener("keydown", function(e){ if(e.key==="Escape") cerrarModal(); });
 </script>
