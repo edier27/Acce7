@@ -12985,6 +12985,9 @@ function _gdPhotoTarget(ctx) {
   if (ctx.kind === "cel") {
     return { path: base.concat([{ name: "Celulares", tag: "cel_" + cid }]), name: _gdFileSafe([o.marca, o.modelo, o.imei ? "IMEI " + String(o.imei).slice(-4) : ""].join(" ") || "celular") + " " + stamp + ".jpg" };
   }
+  if (ctx.kind === "emp") {
+    return { path: base.concat([{ name: "Empeños", tag: "emp_" + cid }]), name: _gdFileSafe("Empeño " + (o.numero || "") + " " + (o.cliente || "")) + " " + stamp + ".jpg" };
+  }
   var code = String(o.id || "").slice(-6).toUpperCase();
   var folder = _gdFileSafe((o.customer || "Cliente") + " - " + (o.device || "Equipo")) + " (#" + code + ")";
   return {
@@ -13012,6 +13015,7 @@ function _gdCollectPending(d) {
   var out = [];
   (d.repairs || []).forEach(function (r) { (r.photos || []).forEach(function (p) { if (_isDataUrl(p)) out.push({ kind: "rep", owner: r, dataUrl: p }); }); });
   (d.celulares || []).forEach(function (c) { (c.photos || []).forEach(function (p) { if (_isDataUrl(p)) out.push({ kind: "cel", owner: c, dataUrl: p }); }); });
+  (d.empenos || []).forEach(function (e) { (e.photos || []).forEach(function (p) { if (_isDataUrl(p)) out.push({ kind: "emp", owner: e, dataUrl: p }); }); });
   return out;
 }
 function _gdReplacePhotos(d, map) {
@@ -13024,6 +13028,7 @@ function _gdReplacePhotos(d, map) {
     });
   };
   var nd = Object.assign({}, d, { repairs: fix(d.repairs), celulares: fix(d.celulares) });
+  if (d.empenos) nd.empenos = fix(d.empenos);
   return changed ? nd : d;
 }
 var _gdSyncing = false;
@@ -14180,6 +14185,592 @@ function GestionView(props) {
     tab === "respaldo" && _gh(RespaldoTab, p));
 }
 // ═══════════════════ FIN MÓDULO GESTIÓN PRO ═══════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// MÓDULO EMPEÑOS (compraventa con pacto de retroventa)
+// Solo visible para la cuenta del dueño (ver _empHabilitado).
+// Cada empeño guarda: quién lo dejó (documento), qué dejó (serial/IMEI,
+// estado, fotos), cuánto se le entregó, el cargo mensual y el plazo, la
+// firma del cliente y un historial de todo lo que pasa con el contrato.
+// Vive en data.empenos; la configuración en data.empenoCfg.
+// NUNCA se publica: lo público solo lleva los campos de _PUB_*_FIELDS.
+// ═══════════════════════════════════════════════════════════════════
+var EMP_TIPOS = ["Celular", "Tablet", "Computador", "Televisor", "Consola de videojuegos", "Equipo de sonido", "Electrodoméstico", "Herramienta", "Joya / reloj", "Bicicleta / moto", "Otro"];
+var EMP_DOCS = ["CC", "CE", "TI", "Pasaporte", "PPT"];
+var EMP_CFG_DEF = { tasa: 10, plazoMeses: 1, gracia: 5, modo: "mes", caja: true, ciudad: "", representante: "", clausulas: "" };
+var EMP_COLOR = { "Activo": "#16A34A", "Por vencer": "#D97706", "En gracia": "#D97706", "Vencido": "#DC2626", "En venta": "#7C3AED", "Retirado": "#6B7280", "Vendido": "#6B7280", "Anulado": "#9CA3AF" };
+function _empHabilitado() { try { return _isAdminUid(window.__uid || _currentUid()); } catch (e) { return false; } }
+function _empCfg(data) { return Object.assign({}, EMP_CFG_DEF, (data && data.empenoCfg) || {}); }
+function _empAddMonths(iso, n) {
+  var d = new Date(iso + "T12:00:00"), day = d.getDate();
+  d.setMonth(d.getMonth() + (Number(n) || 0));
+  if (d.getDate() !== day) d.setDate(0); // 31 ene + 1 mes → último día de febrero
+  return d.toISOString().slice(0, 10);
+}
+function _empSum(e, tipo) { return (e.pagos || []).filter(function (p) { return p.tipo === tipo; }).reduce(function (s, p) { return s + (Number(p.monto) || 0); }, 0); }
+// Capital que el cliente aún debe (lo entregado menos los abonos a capital)
+function _empCapital(e) { return Math.max(0, (Number(e.monto) || 0) - _empSum(e, "capital")); }
+// Meses de cargo causados y sin pagar a la fecha
+function _empMeses(e, hoy) {
+  var desde = e.pagadoHasta || e.fecha, primero = !e.pagadoHasta;
+  var dias = _gDiff(desde, hoy);
+  if (e.modo === "dia") {
+    if (dias < 1) dias = primero ? 1 : 0;
+    return Math.round(dias / 30 * 100) / 100;
+  }
+  var n = 0;
+  while (n < 600 && _empAddMonths(desde, n) < hoy) n++; // mes o fracción
+  if (primero && n < 1) n = 1; // mínimo un mes
+  return n;
+}
+function _empCargoMes(e) { return Math.round(_empCapital(e) * (Number(e.tasa) || 0) / 100); }
+function _empInteres(e, hoy) { return Math.round(_empCapital(e) * (Number(e.tasa) || 0) / 100 * _empMeses(e, hoy)); }
+function _empLimite(e) { return _gAddDays(e.vence, Number(e.gracia) || 0); }
+// Estado para mostrar: los contratos activos cambian solos según la fecha
+function _empEstado(e, hoy) {
+  if (e.estado !== "Activo") return e.estado;
+  if (hoy > _empLimite(e)) return "Vencido";
+  if (hoy > e.vence) return "En gracia";
+  if (_gDiff(hoy, e.vence) <= 5) return "Por vencer";
+  return "Activo";
+}
+function _empAbierto(e) { return e.estado === "Activo" || e.estado === "En venta"; }
+function _empPendientes(data) {
+  var hoy = getHoyColombia();
+  return (data.empenos || []).filter(function (e) { var s = _empEstado(e, hoy); return s === "Por vencer" || s === "En gracia" || s === "Vencido"; }).length;
+}
+function _empHist(e, txt) { return (e.historial || []).concat([{ at: getNowColombiaISO(), txt: txt }]); }
+function _empArticulo(e) { return [e.tipo, e.marca, e.modelo].filter(Boolean).join(" ") || e.descripcion || "Artículo"; }
+// Movimiento de caja ligado al empeño (así Caja y Reportes cuadran solos)
+function _empCaja(data, e, tipo, monto, desc, metodo) {
+  if (!(Number(monto) > 0)) return data.cashflow || [];
+  return [{
+    id: (tipo === "egreso" ? "egr_" : "ing_") + Date.now() + "_" + Math.random().toString(36).slice(2, 5),
+    type: tipo, amount: Number(monto), description: "Empeño #" + e.numero + " — " + desc + " (" + e.cliente + ")",
+    category: "Empeños", date: getHoyColombia(), notes: metodo ? "Medio: " + metodo : "", empenoId: e.id, origen: "empeno"
+  }].concat(data.cashflow || []);
+}
+function _numLetras(n) {
+  n = Math.round(Number(n) || 0);
+  if (n <= 0) return "cero";
+  var U = ["", "un", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve", "veinte", "veintiún", "veintidós", "veintitrés", "veinticuatro", "veinticinco", "veintiséis", "veintisiete", "veintiocho", "veintinueve"];
+  var D = ["", "", "", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"];
+  var C = ["", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos", "seiscientos", "setecientos", "ochocientos", "novecientos"];
+  var tres = function (x) {
+    if (x === 100) return "cien";
+    var r = x % 100;
+    var t = r < 30 ? U[r] : D[Math.floor(r / 10)] + (r % 10 ? " y " + U[r % 10] : "");
+    return (C[Math.floor(x / 100)] + " " + t).trim();
+  };
+  var mill = Math.floor(n / 1000000), mil = Math.floor((n % 1000000) / 1000), res = n % 1000, out = [];
+  if (mill) out.push(mill === 1 ? "un millón" : tres(mill) + " millones");
+  if (mil) out.push(mil === 1 ? "mil" : tres(mil) + " mil");
+  if (res) out.push(tres(res));
+  return out.join(" ");
+}
+function _empPesos(n) { n = Math.round(Number(n) || 0); return _numLetras(n).toUpperCase() + (n >= 1000000 && n % 1000000 === 0 ? " DE" : "") + " PESOS M/CTE (" + fmt(n) + ")"; }
+
+// ─── Documentos imprimibles ─────────────────────────────────────────
+var _EMP_CSS = "body{font-size:12.5px;line-height:1.45}p{margin:7px 0;text-align:justify}.c{text-align:center}.firmas{display:flex;gap:30px;margin-top:26px}.firmas>div{flex:1;text-align:center;font-size:11px}.linea{border-top:1px solid #555;padding-top:3px}.huella{width:70px;height:85px;border:1px solid #777;margin:6px auto 0;font-size:9px;color:#777;display:flex;align-items:flex-end;justify-content:center}.box{border:1px solid #bbb;padding:8px 10px;border-radius:4px;margin:8px 0}@page{margin:14mm}";
+function _empTienda(settings, cfg) {
+  var s = settings || {};
+  return { nombre: s.storeName || "CLINICELL", nit: s.nit || "", dir: s.address || "", tel: s.whatsapp || "", ciudad: cfg.ciudad || "", rep: cfg.representante || "" };
+}
+function _empTablaBien(e) {
+  var f = function (l, v) { return "<tr><th style='width:26%'>" + l + "</th><td>" + (_escHtml(v || "") || "—") + "</td></tr>"; };
+  return "<table>" + f("Clase de bien", e.tipo) + f("Descripción", e.descripcion) + f("Marca / modelo", [e.marca, e.modelo].filter(Boolean).join(" ")) +
+    f("Serial / IMEI", e.serial) + f("Estado en que se recibe", e.estadoFisico) + f("Accesorios", e.accesorios) + "</table>";
+}
+function _printEmpContrato(e, settings, cfg) {
+  var t = _empTienda(settings, cfg), cargo = Math.round((Number(e.monto) || 0) * (Number(e.tasa) || 0) / 100);
+  var filas = "";
+  for (var i = 1; i <= Math.max(1, Number(e.plazoMeses) || 1); i++) {
+    filas += "<tr><td>Hasta el " + _escHtml(_empAddMonths(e.fecha, i)) + " (mes " + i + ")</td><td class='r'>" + fmt((Number(e.monto) || 0) + cargo * i) + "</td></tr>";
+  }
+  var n = 0, cl = function (titulo, txt) { n++; return "<p><b>" + n + ". " + titulo + ".</b> " + txt + "</p>"; };
+  var html = "<h1 class='c'>CONTRATO DE COMPRAVENTA CON PACTO DE RETROVENTA</h1>" +
+    "<div class='c muted'>No. " + _escHtml(e.numero) + " · " + _escHtml(t.nombre) + (t.nit ? " · NIT/CC " + _escHtml(t.nit) : "") + "</div>" +
+    "<p>Entre <b>" + _escHtml(t.nombre) + "</b>" + (t.nit ? ", identificado con NIT/CC " + _escHtml(t.nit) : "") + (t.rep ? ", representado por " + _escHtml(t.rep) : "") + (t.dir ? ", con domicilio en " + _escHtml(t.dir) : "") +
+    ", quien en adelante se denomina <b>EL COMPRADOR</b>, y <b>" + _escHtml(e.cliente) + "</b>, mayor de edad, identificado(a) con " + _escHtml(e.docTipo || "CC") + " No. " + _escHtml(e.doc) +
+    (e.expedida ? " expedida en " + _escHtml(e.expedida) : "") + (e.direccion ? ", domiciliado(a) en " + _escHtml(e.direccion) : "") + ", teléfono " + _escHtml(e.phone || "—") +
+    ", quien en adelante se denomina <b>EL VENDEDOR</b>, se celebra el presente contrato, regido por los artículos 1939 a 1943 del Código Civil colombiano y por las siguientes cláusulas:</p>" +
+    cl("OBJETO", "EL VENDEDOR transfiere a EL COMPRADOR, a título de venta, el dominio y la posesión del siguiente bien mueble, que entrega en este acto:") + _empTablaBien(e) +
+    cl("PRECIO", "El precio de la venta es la suma de <b>" + _empPesos(e.monto) + "</b>, que EL VENDEDOR declara recibir a entera satisfacción en este acto" + (e.metodo ? ", mediante " + _escHtml(e.metodo).toLowerCase() : "") + ".") +
+    cl("PACTO DE RETROVENTA", "EL VENDEDOR se reserva la facultad de recobrar el bien dentro de un plazo de <b>" + _escHtml(e.plazoMeses) + " mes(es)</b> contado desde la fecha de este contrato, es decir, hasta el <b>" + _escHtml(e.vence) + "</b>, pagando a EL COMPRADOR el precio de retroventa que corresponda según la fecha en que la ejerza:") +
+    "<table><tr><th>Si recobra el bien</th><th class='r'>Precio de retroventa</th></tr>" + filas + "</table>" +
+    cl("PRÓRROGA", "Antes del vencimiento las partes podrán prorrogar el plazo por períodos de un (1) mes, pagando EL VENDEDOR la suma de <b>" + fmt(cargo) + "</b> por cada período" + (e.modo === "dia" ? ", liquidada en proporción a los días transcurridos" : " o fracción") + ". Cada prórroga y cada pago constarán en recibo entregado a EL VENDEDOR. Los pagos por prórroga no se abonan al precio de retroventa.") +
+    cl("VENCIMIENTO", "Si vencido el plazo" + (Number(e.gracia) > 0 ? ", y " + _escHtml(e.gracia) + " día(s) calendario adicionales de gracia," : "") + " EL VENDEDOR no ha ejercido la retroventa ni ha prorrogado el plazo, se extingue su derecho a recobrar el bien y EL COMPRADOR podrá disponer libremente de él, sin necesidad de requerimiento ni aviso previo.") +
+    cl("PROCEDENCIA DEL BIEN", "EL VENDEDOR declara bajo la gravedad de juramento que el bien es de su exclusiva propiedad, que lo adquirió lícitamente, que no ha sido hurtado ni se encuentra reportado como perdido o robado, y que está libre de prendas, embargos y cualquier otra limitación. EL VENDEDOR responderá ante EL COMPRADOR y ante las autoridades por cualquier reclamación de terceros y se obliga al saneamiento." +
+      (e.imeiEstado === "limpio" ? " Se deja constancia de que el IMEI fue consultado en la base de datos oficial sin reporte el " + _escHtml(e.fecha) + "." : "")) +
+    cl("CUSTODIA", "EL COMPRADOR conservará el bien en el estado descrito en la cláusula primera. No responde por la información, cuentas o archivos almacenados en el bien, ni por su deterioro natural, ni por hechos de fuerza mayor o caso fortuito.") +
+    cl("ENTREGA", "El bien solo se entregará a EL VENDEDOR, quien deberá presentar su documento de identidad original, o a un tercero con autorización escrita y firmada por EL VENDEDOR y copia del documento de ambos.") +
+    cl("DATOS PERSONALES", "EL VENDEDOR autoriza a EL COMPRADOR a tratar sus datos personales para la ejecución de este contrato y a contactarlo por teléfono o WhatsApp para informarle sobre vencimientos y pagos, conforme a la Ley 1581 de 2012.") +
+    (cfg.clausulas ? cl("CLÁUSULAS ADICIONALES", _escHtml(cfg.clausulas).replace(/\n/g, "<br>")) : "") +
+    "<p>Para constancia se firma en dos ejemplares del mismo tenor" + (t.ciudad ? ", en " + _escHtml(t.ciudad) : "") + ", el " + _escHtml(e.fecha) + ".</p>" +
+    "<div class='firmas'><div>" + (e.firma ? "<img src='" + e.firma + "' style='height:60px'>" : "<div style='height:60px'></div>") +
+    "<div class='linea'><b>EL VENDEDOR</b><br>" + _escHtml(e.cliente) + "<br>" + _escHtml(e.docTipo || "CC") + " " + _escHtml(e.doc) + "</div><div class='huella'>Huella índice derecho</div></div>" +
+    "<div><div style='height:60px'></div><div class='linea'><b>EL COMPRADOR</b><br>" + _escHtml(t.rep || t.nombre) + (t.nit ? "<br>NIT/CC " + _escHtml(t.nit) : "") + "</div></div></div>";
+  _gPrint("Contrato " + e.numero, html, _EMP_CSS);
+}
+function _printEmpRecibo(e, p, settings, cfg) {
+  var t = _empTienda(settings, cfg);
+  var concepto = { interes: "Prórroga del plazo (" + (p.meses || 1) + " mes(es))", capital: "Abono al precio de retroventa", retiro: "Retroventa: recobro del bien", venta: "Venta del bien" }[p.tipo] || "Pago";
+  var html = "<h1>" + _escHtml(t.nombre) + "</h1><div class='muted'>" + [t.nit ? "NIT/CC " + t.nit : "", t.dir, t.tel].filter(Boolean).map(_escHtml).join(" · ") + "</div>" +
+    "<h2>Recibo de pago · Contrato No. " + _escHtml(e.numero) + "</h2>" +
+    "<table><tr><th>Fecha</th><td>" + _escHtml(p.fecha) + "</td><th>Recibido de</th><td>" + _escHtml(p.tipo === "venta" ? (p.comprador || "") : e.cliente) + "</td></tr>" +
+    "<tr><th>Concepto</th><td colspan='3'>" + concepto + " — " + _escHtml(_empArticulo(e)) + "</td></tr>" +
+    "<tr><th>Valor</th><td colspan='3'><b>" + _empPesos(p.monto) + "</b></td></tr>" +
+    "<tr><th>Medio de pago</th><td>" + _escHtml(p.metodo || "Efectivo") + "</td><th>" + (p.tipo === "interes" ? "Nuevo vencimiento" : "Saldo pendiente") + "</th><td>" +
+    (p.tipo === "interes" ? _escHtml(p.venceNuevo || e.vence) : p.tipo === "capital" ? fmt(p.saldo) : "$ 0") + "</td></tr></table>" +
+    (p.nota ? "<p>" + _escHtml(p.nota) + "</p>" : "") +
+    "<div class='firmas'><div><div style='height:44px'></div><div class='linea'>Recibe: " + _escHtml(t.rep || t.nombre) + "</div></div><div><div style='height:44px'></div><div class='linea'>Paga: " + _escHtml(p.tipo === "venta" ? (p.comprador || "") : e.cliente) + "</div></div></div>";
+  _gPrint("Recibo " + e.numero, html, _EMP_CSS);
+}
+function _printEmpEntrega(e, settings, cfg) {
+  var t = _empTienda(settings, cfg), r = e.retiro || {};
+  var html = "<h1 class='c'>ACTA DE ENTREGA Y PAZ Y SALVO</h1><div class='c muted'>Contrato No. " + _escHtml(e.numero) + " · " + _escHtml(t.nombre) + "</div>" +
+    "<p>El " + _escHtml(r.fecha || "") + ", <b>" + _escHtml(e.cliente) + "</b>, identificado(a) con " + _escHtml(e.docTipo || "CC") + " No. " + _escHtml(e.doc) + ", ejerce la retroventa pactada en el contrato No. " + _escHtml(e.numero) +
+    " del " + _escHtml(e.fecha) + " y paga a <b>" + _escHtml(t.nombre) + "</b> la suma de <b>" + _empPesos(r.total) + "</b>.</p>" +
+    "<p>En este acto recibe el siguiente bien, que revisa y declara recibir a entera satisfacción, en el mismo estado en que lo entregó:</p>" + _empTablaBien(e) +
+    "<p>Con esta entrega las partes se declaran a <b>paz y salvo</b> por todo concepto derivado del contrato, que queda terminado.</p>" +
+    "<div class='firmas'><div>" + (r.firma ? "<img src='" + r.firma + "' style='height:60px'>" : "<div style='height:60px'></div>") + "<div class='linea'>Recibe a satisfacción<br>" + _escHtml(e.cliente) + "<br>" + _escHtml(e.docTipo || "CC") + " " + _escHtml(e.doc) + "</div><div class='huella'>Huella</div></div>" +
+    "<div><div style='height:60px'></div><div class='linea'>Entrega<br>" + _escHtml(t.rep || t.nombre) + "</div></div></div>";
+  _gPrint("Entrega " + e.numero, html, _EMP_CSS);
+}
+function _printEmpEtiqueta(e) {
+  var html = "<div class='lab'><div class='code'>EMP #" + _escHtml(e.numero) + "</div><div class='b'>" + _escHtml(e.cliente) + "</div><div>" + _escHtml(_empArticulo(e)) + "</div>" +
+    "<div class='muted'>" + (e.serial ? "Serial " + _escHtml(e.serial) + " · " : "") + "Ingreso " + _escHtml(e.fecha) + "</div><div class='b'>Vence " + _escHtml(e.vence) + "</div></div>";
+  _gPrint("Etiqueta " + e.numero, html, "body{margin:4mm}.lab{border:1px dashed #999;padding:6px;width:62mm}.code{font-size:18px;font-weight:800;letter-spacing:1px}.b{font-weight:700}@page{size:auto;margin:3mm}");
+}
+function _empMsgAviso(e, storeName, hoy) {
+  var nombre = String(e.cliente || "").split(" ")[0], s = _empEstado(e, hoy), cargo = _empCargoMes(e);
+  var base = "Hola " + nombre + ", le escribimos de *" + storeName + "* sobre su contrato *#" + e.numero + "* (" + _empArticulo(e) + ").\n\n";
+  if (s === "Vencido" || s === "En gracia") {
+    return base + "El plazo venció el *" + e.vence + "*" + (s === "En gracia" ? " y tiene hasta el *" + _empLimite(e) + "* para ponerse al día" : "") +
+      ".\nPara recuperar su artículo hoy: *" + fmt(_empCapital(e) + _empInteres(e, hoy)) + "*.\nPara prorrogar un mes: *" + fmt(Math.max(cargo, _empInteres(e, hoy))) + "*.\n\nPor favor comuníquese con nosotros.";
+  }
+  return base + "Su plazo vence el *" + e.vence + "*.\nPara recuperar su artículo hoy: *" + fmt(_empCapital(e) + _empInteres(e, hoy)) + "*.\nPara prorrogar un mes más: *" + fmt(cargo) + "*.\n\nGracias por su confianza.";
+}
+
+// ─── Foto del artículo (a Google Drive si está conectado) ───────────
+function _empFoto(file, owner, clientId) {
+  return _compressImageFile(file, 1000, 0.72).then(function (dataUrl) {
+    return _gdStorePhoto(dataUrl, { kind: "emp", owner: owner, clientId: clientId, storeName: window.__acceStoreName });
+  });
+}
+function EmpFotos(props) {
+  var fotos = props.fotos || [];
+  var _v = useState(null), ver = _v[0], setVer = _v[1];
+  return _gh("div", null,
+    _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" } },
+      fotos.map(function (p, i) {
+        return _gh("div", { key: i, style: { position: "relative", width: 76, height: 76, borderRadius: 8, overflow: "hidden", border: "1px solid " + T.border } },
+          _gh(DrivePhoto, { src: p, w: 300, style: { width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }, onClick: function () { setVer(p); } }),
+          props.onRemove && _gh("button", { type: "button", onClick: function () { props.onRemove(i); }, title: "Quitar", style: { position: "absolute", top: 2, right: 2, width: 20, height: 20, borderRadius: 10, border: "none", background: "rgba(0,0,0,0.65)", color: "#fff", cursor: "pointer", fontSize: 13, lineHeight: "18px", padding: 0 } }, "×"));
+      }),
+      props.onAdd && fotos.length < 4 && _gh("label", { style: { width: 76, height: 76, borderRadius: 8, border: "1px dashed " + T.border, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, cursor: "pointer", color: T.muted, fontSize: 11 } },
+        _gIco("Camera", 18), props.busy ? "Subiendo..." : "Agregar",
+        _gh("input", { type: "file", accept: "image/*", capture: "environment", style: { display: "none" }, onChange: function (ev) { var f = ev.target.files && ev.target.files[0]; if (f) props.onAdd(f); ev.target.value = ""; } }))),
+    ver && _gh("div", { onClick: function () { setVer(null); }, style: { position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+      _gh(DrivePhoto, { src: ver, w: 1600, style: { maxWidth: "100%", maxHeight: "100%", borderRadius: 8, objectFit: "contain" } })));
+}
+
+// ─── Formulario: nuevo empeño ───────────────────────────────────────
+function EmpenoForm(props) {
+  var data = props.data, cfg = props.cfg, notify = props.notify;
+  var hoy = getHoyColombia();
+  var _f = useState(function () {
+    var num = (data.empenos || []).reduce(function (m, x) { return Math.max(m, Number(x.numero) || 0); }, 0) + 1;
+    return { id: uid(), numero: num, fecha: hoy, vence: _empAddMonths(hoy, cfg.plazoMeses), estado: "Activo",
+      cliente: "", docTipo: "CC", doc: "", expedida: "", phone: "", direccion: "",
+      tipo: "Celular", descripcion: "", marca: "", modelo: "", serial: "", imeiEstado: "", estadoFisico: "", accesorios: "",
+      avaluo: "", monto: "", tasa: cfg.tasa, plazoMeses: cfg.plazoMeses, gracia: cfg.gracia, modo: cfg.modo, metodo: "Efectivo",
+      photos: [], firma: "", declaracion: false, notas: "", enCaja: cfg.caja !== false };
+  }), f = _f[0], setF = _f[1];
+  var _b = useState(false), busy = _b[0], setBusy = _b[1];
+  var set = function (k, v) { setF(function (o) { var n = Object.assign({}, o); n[k] = v; return n; }); };
+  var setPlazo = function (fecha, meses) { setF(function (o) { return Object.assign({}, o, { fecha: fecha, plazoMeses: meses, vence: _empAddMonths(fecha || hoy, Math.max(1, Number(meses) || 1)) }); }); };
+  var esCel = f.tipo === "Celular" || f.tipo === "Tablet";
+  var docLimpio = _gDigits(f.doc) || f.doc.trim();
+  var previos = (data.empenos || []).filter(function (x) { return docLimpio && (_gDigits(x.doc) || String(x.doc || "").trim()) === docLimpio; });
+  var perdidos = previos.filter(function (x) { return x.estado === "Vendido" || x.estado === "En venta"; }).length;
+  var activos = previos.filter(function (x) { return x.estado === "Activo"; }).length;
+  var mismoSerial = f.serial.trim() ? (data.empenos || []).filter(function (x) { return _empAbierto(x) && String(x.serial || "").trim().toLowerCase() === f.serial.trim().toLowerCase(); }) : [];
+  var cargo = Math.round((Number(f.monto) || 0) * (Number(f.tasa) || 0) / 100);
+  var addFoto = function (file) {
+    setBusy(true);
+    _empFoto(file, { numero: f.numero, cliente: f.cliente, id: f.id }, props.clientId).then(function (ref) {
+      setF(function (o) { return Object.assign({}, o, { photos: (o.photos || []).concat([ref]) }); }); setBusy(false);
+    }, function () { setBusy(false); notify("No se pudo leer la foto", "error"); });
+  };
+  var guardar = function () {
+    var falta = !f.cliente.trim() ? "el nombre del cliente" : !f.doc.trim() ? "el número de documento" : _gDigits(f.phone).length < 7 ? "un teléfono válido" :
+      !f.descripcion.trim() ? "la descripción del artículo" : !(Number(f.monto) > 0) ? "el valor que se entrega" : !f.vence || f.vence <= f.fecha ? "una fecha de vencimiento posterior a la del contrato" : "";
+    if (falta) { notify("Falta " + falta, "error"); return; }
+    if (f.imeiEstado === "reportado") { notify("El equipo aparece REPORTADO: no se puede recibir", "error"); return; }
+    if (mismoSerial.length) { notify("Ese serial ya está en el contrato #" + mismoSerial[0].numero, "error"); return; }
+    if (!f.declaracion) { notify("El cliente debe declarar que el artículo es suyo", "error"); return; }
+    if (!f.firma && !confirm("El contrato no tiene la firma del cliente en pantalla. ¿Guardar y hacerlo firmar en el papel impreso?")) return;
+    var e = Object.assign({}, f, { cliente: f.cliente.trim(), doc: f.doc.trim(), monto: Number(f.monto), avaluo: Number(f.avaluo) || 0, tasa: Number(f.tasa) || 0,
+      plazoMeses: Math.max(1, Number(f.plazoMeses) || 1), gracia: Math.max(0, Number(f.gracia) || 0), pagos: [], firmaFecha: f.firma ? new Date().toISOString() : "", creado: new Date().toISOString() });
+    delete e.enCaja;
+    e.historial = _empHist(e, "Contrato creado. Se entregan " + fmt(e.monto) + " (" + e.metodo + "). Vence " + e.vence + ".");
+    props.onSave(e, f.enCaja);
+  };
+  var g2 = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 10 };
+  var sec = function (t) { return _gh("div", { style: { fontWeight: 800, fontSize: 13, margin: "16px 0 8px", color: T.text, display: "flex", alignItems: "center", gap: 6 } }, t); };
+  var aviso = function (color, txt) { return _gh("div", { style: { fontSize: 12, color: color, fontWeight: 700, marginTop: 6 } }, txt); };
+  return _gh("div", { style: _gCard },
+    _gh("div", { style: { fontWeight: 800, fontSize: 17 } }, "Nuevo empeño #" + f.numero),
+    sec("1. Quién deja el artículo"),
+    _gh("datalist", { id: "_emp_cust" }, (data.customers || []).map(function (c) { return _gh("option", { key: c.id, value: c.name }); })),
+    _gh("div", { style: g2 },
+      _gh("div", null, _gh("span", { style: _gLbl }, "Nombre completo *"),
+        _gh("input", { list: "_emp_cust", value: f.cliente, style: IS, placeholder: "Como aparece en la cédula", onChange: function (ev) {
+          var v = ev.target.value; set("cliente", v);
+          var c = (data.customers || []).find(function (x) { return x.name === v; });
+          if (c) { if (c.phone && !f.phone) set("phone", c.phone); if (c.city && !f.direccion) set("direccion", c.city); }
+        } })),
+      _gh(Field, { label: "Tipo de documento", value: f.docTipo, onChange: function (v) { set("docTipo", v || "CC"); }, options: EMP_DOCS }),
+      _gh(Field, { label: "Número de documento", required: true, value: f.doc, onChange: function (v) { set("doc", v); }, placeholder: "Revise la cédula original" }),
+      _gh(Field, { label: "Expedida en", value: f.expedida, onChange: function (v) { set("expedida", v); }, placeholder: "Ciudad" }),
+      _gh(Field, { label: "Teléfono / WhatsApp", required: true, value: f.phone, onChange: function (v) { set("phone", v); }, placeholder: "3001234567" }),
+      _gh(Field, { label: "Dirección", value: f.direccion, onChange: function (v) { set("direccion", v); } })),
+    activos > 0 && aviso(T.orange, "Este cliente ya tiene " + activos + " empeño(s) activo(s)."),
+    perdidos > 0 && aviso(T.red, "Este cliente ha dejado perder " + perdidos + " artículo(s) antes."),
+
+    sec("2. Qué deja"),
+    _gh("div", { style: g2 },
+      _gh(Field, { label: "Clase de artículo", value: f.tipo, onChange: function (v) { set("tipo", v || "Otro"); }, options: EMP_TIPOS }),
+      _gh(Field, { label: "Marca", value: f.marca, onChange: function (v) { set("marca", v); } }),
+      _gh(Field, { label: "Modelo / referencia", value: f.modelo, onChange: function (v) { set("modelo", v); } }),
+      _gh(Field, { label: esCel ? "IMEI (marque *#06#)" : "Serial", value: f.serial, onChange: function (v) { set("serial", v); }, placeholder: esCel ? "15 dígitos" : "Número de serie" })),
+    esCel && _gh("div", { style: { marginTop: 8, maxWidth: 420 } }, _gh(ImeiCheckBtn, { imei: f.serial, estado: f.imeiEstado, onResult: function (v) { set("imeiEstado", v); } })),
+    mismoSerial.length > 0 && aviso(T.red, "Ese serial ya está registrado en el contrato #" + mismoSerial[0].numero + "."),
+    _gh("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 10 } },
+      _gh(Field, { label: "Descripción", required: true, value: f.descripcion, onChange: function (v) { set("descripcion", v); }, textarea: true, rows: 2, placeholder: "Ej: Televisor 43 pulgadas Smart TV, color negro, con control" }),
+      _gh(Field, { label: "Estado en que se recibe (rayones, golpes, fallas)", value: f.estadoFisico, onChange: function (v) { set("estadoFisico", v); }, textarea: true, rows: 2, placeholder: "Ej: enciende y funciona, rayón en la esquina inferior" }),
+      _gh(Field, { label: "Accesorios que entrega", value: f.accesorios, onChange: function (v) { set("accesorios", v); }, placeholder: "Cargador, control, caja..." }),
+      _gh("div", null, _gh("span", { style: _gLbl }, "Fotos del artículo (hasta 4)"),
+        _gh(EmpFotos, { fotos: f.photos, busy: busy, onAdd: addFoto, onRemove: function (i) { set("photos", f.photos.filter(function (_, j) { return j !== i; })); } }))),
+
+    sec("3. Dinero y plazo"),
+    _gh("div", { style: g2 },
+      _gh(Field, { label: "Avalúo del artículo", type: "number", value: f.avaluo, onChange: function (v) { set("avaluo", v); }, placeholder: "Cuánto vale" }),
+      _gh(Field, { label: "Valor que se le entrega", required: true, type: "number", value: f.monto, onChange: function (v) { set("monto", v); } }),
+      _gh(Field, { label: "Cargo mensual (%)", type: "number", value: f.tasa, onChange: function (v) { set("tasa", v); } }),
+      _gh(Field, { label: "Medio de entrega", value: f.metodo, onChange: function (v) { set("metodo", v || "Efectivo"); }, options: PAYMENT_METHODS }),
+      _gh(Field, { label: "Fecha del contrato", type: "date", value: f.fecha, onChange: function (v) { setPlazo(v, f.plazoMeses); } }),
+      _gh(Field, { label: "Plazo (meses)", type: "number", value: f.plazoMeses, onChange: function (v) { setPlazo(f.fecha, v); } }),
+      _gh(Field, { label: "Vence", type: "date", value: f.vence, onChange: function (v) { set("vence", v); } }),
+      _gh(Field, { label: "Días de gracia", type: "number", value: f.gracia, onChange: function (v) { set("gracia", v); } })),
+    Number(f.monto) > 0 && _gh("div", { style: { marginTop: 10, padding: "10px 12px", borderRadius: 8, background: T.surface, border: "1px solid " + T.border, fontSize: 13, color: T.text } },
+      "Cargo por mes: ", _gh("b", null, fmt(cargo)), " · Para recuperarlo al vencer (" + f.vence + "): ", _gh("b", null, fmt(Number(f.monto) + cargo * Math.max(1, Number(f.plazoMeses) || 1))),
+      Number(f.avaluo) > 0 && Number(f.monto) > Number(f.avaluo) * 0.7 ? _gh("div", { style: { color: T.orange, fontWeight: 700, marginTop: 4 } }, "Está entregando más del 70% del avalúo: si no vuelve, puede no recuperar el dinero al vender.") : null),
+    _gh("label", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 13, color: T.text, cursor: "pointer" } },
+      _gh("input", { type: "checkbox", checked: !!f.enCaja, onChange: function (ev) { set("enCaja", ev.target.checked); } }), "Registrar la salida del dinero en Caja"),
+
+    sec("4. Declaración y firma"),
+    _gh("label", { style: { display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: T.text, cursor: "pointer", lineHeight: 1.4 } },
+      _gh("input", { type: "checkbox", checked: !!f.declaracion, onChange: function (ev) { set("declaracion", ev.target.checked); }, style: { marginTop: 3 } }),
+      "Verifiqué la cédula original y el cliente declara que el artículo es suyo, de procedencia lícita y que no está reportado."),
+    _gh("div", { style: { marginTop: 10 } }, _gh("span", { style: _gLbl }, "Firma del cliente"), _gh(SignaturePad, { value: f.firma, onChange: function (v) { set("firma", v); } })),
+    _gh("div", { style: { marginTop: 10 } }, _gh(Field, { label: "Notas internas (no salen en el contrato)", value: f.notas, onChange: function (v) { set("notas", v); }, textarea: true, rows: 2 })),
+    _gh("div", { style: { display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" } },
+      _gh(Btn, { onClick: guardar, disabled: busy, icon: _gIco("Check", 14) }, "Guardar e imprimir contrato"),
+      _gh(Btn, { variant: "ghost", onClick: props.onCancel }, "Cancelar")));
+}
+
+// ─── Detalle de un contrato ─────────────────────────────────────────
+function EmpenoDetalle(props) {
+  var e = props.empeno, data = props.data, cfg = props.cfg, notify = props.notify, settings = props.settings;
+  var hoy = getHoyColombia(), est = _empEstado(e, hoy);
+  var capital = _empCapital(e), meses = _empMeses(e, hoy), interes = _empInteres(e, hoy), cargo = _empCargoMes(e);
+  var _d = useState(null), dlg = _d[0], setDlg = _d[1];
+  var _b = useState(false), busy = _b[0], setBusy = _b[1];
+  var setD = function (k, v) { setDlg(function (o) { var n = Object.assign({}, o); n[k] = v; return n; }); };
+  var abierto = _empAbierto(e);
+  var enCaja = cfg.caja !== false;
+  // Aplica un cambio al contrato y, si corresponde, su movimiento de caja
+  var aplicar = function (cambios, hist, caja) {
+    var ne = Object.assign({}, e, cambios, { historial: _empHist(e, hist) });
+    var nd = Object.assign({}, data, { empenos: (data.empenos || []).map(function (x) { return x.id === e.id ? ne : x; }) });
+    if (caja && enCaja) nd.cashflow = _empCaja(data, e, caja.tipo, caja.monto, caja.desc, caja.metodo);
+    props.save(nd); setDlg(null);
+    return ne;
+  };
+  var abrir = function (tipo) {
+    var m = e.modo === "dia" ? meses : Math.max(1, meses);
+    if (tipo === "interes") setDlg({ tipo: tipo, meses: m, monto: Math.round(cargo * m), metodo: "Efectivo", nota: "" });
+    if (tipo === "capital") setDlg({ tipo: tipo, monto: "", metodo: "Efectivo", nota: "" });
+    if (tipo === "retiro") setDlg({ tipo: tipo, monto: capital + interes, metodo: "Efectivo", nota: "", firma: "" });
+    if (tipo === "venta") setDlg({ tipo: tipo, monto: e.precioVenta || "", metodo: "Efectivo", comprador: "", compradorDoc: "", nota: "" });
+    if (tipo === "pasar") setDlg({ tipo: tipo, monto: e.avaluo || "" });
+    if (tipo === "contacto") setDlg({ tipo: tipo, phone: e.phone || "", direccion: e.direccion || "", notas: e.notas || "" });
+  };
+  var venceTras = function (m) {
+    var desde = e.pagadoHasta || e.fecha;
+    var hasta = e.modo === "dia" ? _gAddDays(desde, Math.round(m * 30)) : _empAddMonths(desde, Math.round(m));
+    var v = _empAddMonths(hasta, 1);
+    return { hasta: hasta, vence: v > e.vence ? v : e.vence };
+  };
+  var confirmar = function () {
+    var monto = Number(dlg.monto) || 0, p;
+    if (dlg.tipo === "interes") {
+      var m = Number(dlg.meses) || 0;
+      if (m <= 0 || monto <= 0) { notify("Indique los meses y el valor", "error"); return; }
+      var vt = venceTras(m);
+      p = { id: uid(), fecha: hoy, tipo: "interes", monto: monto, meses: m, metodo: dlg.metodo, nota: dlg.nota, venceNuevo: vt.vence };
+      aplicar({ pagos: (e.pagos || []).concat([p]), pagadoHasta: vt.hasta, vence: vt.vence, estado: "Activo" },
+        "Prórroga: paga " + fmt(monto) + " por " + m + " mes(es). Nuevo vencimiento " + vt.vence + ".", { tipo: "ingreso", monto: monto, desc: "prórroga", metodo: dlg.metodo });
+      notify("Prórroga registrada"); _printEmpRecibo(e, p, settings, cfg);
+    } else if (dlg.tipo === "capital") {
+      if (monto <= 0 || monto >= capital) { notify(monto >= capital ? "Si paga todo, use «Entregar artículo»" : "Indique el valor", "error"); return; }
+      p = { id: uid(), fecha: hoy, tipo: "capital", monto: monto, metodo: dlg.metodo, nota: dlg.nota, saldo: capital - monto };
+      aplicar({ pagos: (e.pagos || []).concat([p]) }, "Abono de " + fmt(monto) + ". Saldo " + fmt(capital - monto) + ".", { tipo: "ingreso", monto: monto, desc: "abono", metodo: dlg.metodo });
+      notify("Abono registrado"); _printEmpRecibo(e, p, settings, cfg);
+    } else if (dlg.tipo === "retiro") {
+      if (monto <= 0) { notify("Indique el valor que paga", "error"); return; }
+      if (monto < capital + interes && !confirm("Está cobrando " + fmt(monto) + " y lo calculado es " + fmt(capital + interes) + ". ¿Entregar con ese valor?")) return;
+      p = { id: uid(), fecha: hoy, tipo: "retiro", monto: monto, metodo: dlg.metodo, nota: dlg.nota, capital: capital, interes: Math.max(0, monto - capital) };
+      var ne = aplicar({ pagos: (e.pagos || []).concat([p]), estado: "Retirado", retiro: { fecha: hoy, total: monto, firma: dlg.firma || "" } },
+        "Artículo ENTREGADO al cliente. Paga " + fmt(monto) + " (" + dlg.metodo + ").", { tipo: "ingreso", monto: monto, desc: "retroventa", metodo: dlg.metodo });
+      notify("Artículo entregado"); _printEmpEntrega(ne, settings, cfg);
+    } else if (dlg.tipo === "pasar") {
+      aplicar({ estado: "En venta", precioVenta: monto || 0, perdidoEl: hoy }, "Plazo vencido sin pago: el artículo pasa a venta" + (monto ? " por " + fmt(monto) : "") + ".");
+      notify("Artículo pasado a venta");
+    } else if (dlg.tipo === "venta") {
+      if (monto <= 0) { notify("Indique el precio de venta", "error"); return; }
+      p = { id: uid(), fecha: hoy, tipo: "venta", monto: monto, metodo: dlg.metodo, comprador: dlg.comprador, nota: dlg.nota };
+      aplicar({ pagos: (e.pagos || []).concat([p]), estado: "Vendido", venta: { fecha: hoy, precio: monto, comprador: dlg.comprador, doc: dlg.compradorDoc } },
+        "Artículo VENDIDO por " + fmt(monto) + (dlg.comprador ? " a " + dlg.comprador : "") + ".", { tipo: "ingreso", monto: monto, desc: "venta del artículo", metodo: dlg.metodo });
+      notify("Venta registrada");
+    } else if (dlg.tipo === "contacto") {
+      aplicar({ phone: dlg.phone, direccion: dlg.direccion, notas: dlg.notas }, "Se actualizan datos de contacto.");
+      notify("Datos actualizados");
+    }
+  };
+  var anular = function () {
+    if ((e.pagos || []).length) { notify("No se puede anular: ya tiene pagos registrados", "error"); return; }
+    var motivo = prompt("Motivo de la anulación (quedará en el historial):");
+    if (!motivo || !motivo.trim()) return;
+    var nd = Object.assign({}, data, {
+      empenos: (data.empenos || []).map(function (x) { return x.id === e.id ? Object.assign({}, e, { estado: "Anulado", historial: _empHist(e, "ANULADO: " + motivo.trim()) }) : x; }),
+      cashflow: (data.cashflow || []).filter(function (c) { return c.empenoId !== e.id; })
+    });
+    props.save(nd); notify("Contrato anulado");
+  };
+  var addFoto = function (file) {
+    setBusy(true);
+    _empFoto(file, e, props.clientId).then(function (ref) {
+      setBusy(false);
+      var cur = (props.getData().empenos || []).find(function (x) { return x.id === e.id; }) || e;
+      props.save(Object.assign({}, props.getData(), { empenos: (props.getData().empenos || []).map(function (x) { return x.id === e.id ? Object.assign({}, cur, { photos: (cur.photos || []).concat([ref]) }) : x; }) }));
+    }, function () { setBusy(false); notify("No se pudo leer la foto", "error"); });
+  };
+  var fila = function (l, v, strong) { return v ? _gh("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", borderBottom: "1px solid " + T.border, fontSize: 13 } }, _gh("span", { style: { color: T.muted } }, l), _gh("span", { style: { fontWeight: strong ? 800 : 600, color: T.text, textAlign: "right" } }, v)) : null; };
+  var g2 = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 };
+  var TIT = { interes: "Prorrogar el plazo", capital: "Abono", retiro: "Entregar artículo al cliente", venta: "Registrar la venta", pasar: "Pasar el artículo a venta", contacto: "Datos de contacto" };
+
+  return _gh("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    _gh("div", { style: { display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" } },
+      _gh(Btn, { small: true, variant: "ghost", onClick: props.onBack, icon: _gIco("ArrowLeft", 13) }, "Volver"),
+      _gh("span", { style: { fontSize: 12, fontWeight: 800, color: "#fff", background: EMP_COLOR[est] || T.muted, padding: "4px 12px", borderRadius: 14 } }, est.toUpperCase())),
+    _gh("div", { style: _gCard },
+      _gh("div", { style: { fontWeight: 800, fontSize: 18, color: T.text } }, "Contrato #" + e.numero + " · " + e.cliente),
+      _gh("div", { style: { fontSize: 13, color: T.muted, marginBottom: 10 } }, _empArticulo(e) + (e.serial ? " · " + e.serial : "")),
+      abierto && _gh("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 } },
+        _gKpi("Debe de capital", fmt(capital)),
+        _gKpi("Cargo causado (" + meses + (e.modo === "dia" ? " meses" : " mes(es)") + ")", fmt(interes), interes > 0 ? T.orange : T.text),
+        _gKpi("Para recuperarlo hoy", fmt(capital + interes), T.green),
+        _gKpi(hoy > e.vence ? "Venció" : "Vence", e.vence + (hoy > e.vence ? " (hace " + _gDiff(e.vence, hoy) + " d)" : " (en " + _gDiff(hoy, e.vence) + " d)"), EMP_COLOR[est])),
+      _gh("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+        e.estado === "Activo" && _gh(Btn, { small: true, onClick: function () { abrir("interes"); }, icon: _gIco("CalendarPlus", 13) }, "Prorrogar (cobrar cargo)"),
+        e.estado === "Activo" && _gh(Btn, { small: true, variant: "ghost", onClick: function () { abrir("capital"); } }, "Abono"),
+        abierto && _gh(Btn, { small: true, variant: "success", onClick: function () { abrir("retiro"); }, icon: _gIco("PackageCheck", 13) }, "Entregar artículo"),
+        e.estado === "Activo" && est === "Vencido" && _gh(Btn, { small: true, variant: "danger", onClick: function () { abrir("pasar"); } }, "Pasar a venta"),
+        e.estado === "En venta" && _gh(Btn, { small: true, onClick: function () { abrir("venta"); } }, "Registrar venta"),
+        abierto && e.phone && _gh("a", { href: _gWa(e.phone, _empMsgAviso(e, settings.storeName || "CLINICELL", hoy)), target: "_blank", rel: "noopener", style: { textDecoration: "none" } }, _gh(Btn, { small: true, variant: "ghost", icon: _gIco("MessageCircle", 13) }, "Avisar por WhatsApp")),
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { _printEmpContrato(e, settings, cfg); }, icon: _gIco("FileText", 13) }, "Contrato"),
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { _printEmpEtiqueta(e); } }, "Etiqueta"),
+        e.estado === "Retirado" && _gh(Btn, { small: true, variant: "ghost", onClick: function () { _printEmpEntrega(e, settings, cfg); } }, "Acta de entrega"),
+        abierto && _gh(Btn, { small: true, variant: "ghost", onClick: function () { abrir("contacto"); } }, "Editar contacto"),
+        e.estado === "Activo" && !(e.pagos || []).length && _gh(Btn, { small: true, variant: "ghost", onClick: anular }, "Anular"))),
+
+    dlg && _gh("div", { style: Object.assign({}, _gCard, { borderColor: T.accent }) },
+      _gh("div", { style: { fontWeight: 800, fontSize: 15, marginBottom: 10, color: T.text } }, TIT[dlg.tipo]),
+      dlg.tipo === "interes" && _gh("div", { style: g2 },
+        _gh(Field, { label: "Meses que paga", type: "number", value: dlg.meses, onChange: function (v) { setDlg(function (o) { return Object.assign({}, o, { meses: v, monto: Math.round(cargo * (Number(v) || 0)) }); }); } }),
+        _gh(Field, { label: "Valor que paga", type: "number", value: dlg.monto, onChange: function (v) { setD("monto", v); } }),
+        _gh(Field, { label: "Medio de pago", value: dlg.metodo, onChange: function (v) { setD("metodo", v || "Efectivo"); }, options: PAYMENT_METHODS })),
+      dlg.tipo === "interes" && Number(dlg.meses) > 0 && _gh("div", { style: { fontSize: 13, color: T.text, marginTop: 8 } }, "Queda al día hasta el ", _gh("b", null, venceTras(Number(dlg.meses)).hasta), " y el nuevo vencimiento será el ", _gh("b", null, venceTras(Number(dlg.meses)).vence), "."),
+      dlg.tipo === "capital" && _gh("div", { style: g2 },
+        _gh(Field, { label: "Valor del abono (debe " + fmt(capital) + ")", type: "number", value: dlg.monto, onChange: function (v) { setD("monto", v); } }),
+        _gh(Field, { label: "Medio de pago", value: dlg.metodo, onChange: function (v) { setD("metodo", v || "Efectivo"); }, options: PAYMENT_METHODS })),
+      dlg.tipo === "capital" && interes > 0 && _gh("div", { style: { fontSize: 12, color: T.orange, marginTop: 6 } }, "Tiene " + fmt(interes) + " de cargo causado sin pagar: lo normal es cobrarlo primero con «Prorrogar»."),
+      dlg.tipo === "retiro" && _gh("div", null,
+        _gh("div", { style: { fontSize: 13, color: T.text, marginBottom: 8 } }, "Capital " + fmt(capital) + " + cargo " + fmt(interes) + " = ", _gh("b", null, fmt(capital + interes))),
+        _gh("div", { style: g2 },
+          _gh(Field, { label: "Valor que paga", type: "number", value: dlg.monto, onChange: function (v) { setD("monto", v); } }),
+          _gh(Field, { label: "Medio de pago", value: dlg.metodo, onChange: function (v) { setD("metodo", v || "Efectivo"); }, options: PAYMENT_METHODS })),
+        _gh("div", { style: { marginTop: 10 } }, _gh("span", { style: _gLbl }, "Firma de quien recibe el artículo (pida la cédula original)"), _gh(SignaturePad, { value: dlg.firma, onChange: function (v) { setD("firma", v); } }))),
+      dlg.tipo === "pasar" && _gh("div", null,
+        _gh("div", { style: { fontSize: 13, color: T.text, marginBottom: 8 } }, "El plazo venció el " + e.vence + " y los días de gracia terminaron el " + _empLimite(e) + ". El cliente pierde el derecho a recuperarlo."),
+        _gh("div", { style: { maxWidth: 260 } }, _gh(Field, { label: "Precio de venta", type: "number", value: dlg.monto, onChange: function (v) { setD("monto", v); } }))),
+      dlg.tipo === "venta" && _gh("div", { style: g2 },
+        _gh(Field, { label: "Precio de venta", type: "number", value: dlg.monto, onChange: function (v) { setD("monto", v); } }),
+        _gh(Field, { label: "Medio de pago", value: dlg.metodo, onChange: function (v) { setD("metodo", v || "Efectivo"); }, options: PAYMENT_METHODS }),
+        _gh(Field, { label: "Comprador", value: dlg.comprador, onChange: function (v) { setD("comprador", v); } }),
+        _gh(Field, { label: "Documento del comprador", value: dlg.compradorDoc, onChange: function (v) { setD("compradorDoc", v); } })),
+      dlg.tipo === "contacto" && _gh("div", { style: g2 },
+        _gh(Field, { label: "Teléfono", value: dlg.phone, onChange: function (v) { setD("phone", v); } }),
+        _gh(Field, { label: "Dirección", value: dlg.direccion, onChange: function (v) { setD("direccion", v); } }),
+        _gh(Field, { label: "Notas internas", value: dlg.notas, onChange: function (v) { setD("notas", v); }, textarea: true, rows: 2 })),
+      (dlg.tipo === "interes" || dlg.tipo === "capital" || dlg.tipo === "retiro" || dlg.tipo === "venta") && _gh("div", { style: { marginTop: 10 } }, _gh(Field, { label: "Nota (opcional)", value: dlg.nota, onChange: function (v) { setD("nota", v); } })),
+      _gh("div", { style: { display: "flex", gap: 8, marginTop: 12 } },
+        _gh(Btn, { onClick: confirmar, icon: _gIco("Check", 14) }, "Confirmar"),
+        _gh(Btn, { variant: "ghost", onClick: function () { setDlg(null); } }, "Cancelar"))),
+
+    _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 12 } },
+      _gh("div", { style: _gCard },
+        _gh("span", { style: _gLbl }, "Cliente"),
+        fila("Nombre", e.cliente), fila(e.docTipo || "CC", e.doc + (e.expedida ? " (" + e.expedida + ")" : "")), fila("Teléfono", e.phone), fila("Dirección", e.direccion),
+        _gh("span", { style: Object.assign({}, _gLbl, { marginTop: 14 }) }, "Contrato"),
+        fila("Fecha", e.fecha), fila("Se le entregó", fmt(e.monto) + " · " + (e.metodo || "Efectivo"), true), fila("Avalúo", e.avaluo ? fmt(e.avaluo) : ""), fila("Cargo mensual", e.tasa + "% = " + fmt(Math.round(e.monto * e.tasa / 100)) + (e.modo === "dia" ? " (por días)" : "")),
+        fila("Plazo", e.plazoMeses + " mes(es) + " + (e.gracia || 0) + " días de gracia"), fila("Al día hasta", e.pagadoHasta), fila("Firma del cliente", e.firma ? "Firmó en pantalla" : "En el papel"),
+        e.venta && fila("Vendido", e.venta.fecha + " · " + fmt(e.venta.precio), true), e.retiro && fila("Entregado", e.retiro.fecha + " · pagó " + fmt(e.retiro.total), true),
+        e.notas && _gh("div", { style: { fontSize: 12, color: T.muted, marginTop: 8 } }, "Notas: " + e.notas)),
+      _gh("div", { style: _gCard },
+        _gh("span", { style: _gLbl }, "Artículo"),
+        fila("Clase", e.tipo), fila("Marca / modelo", [e.marca, e.modelo].filter(Boolean).join(" ")), fila("Serial / IMEI", e.serial),
+        fila("Consulta IMEI", e.imeiEstado === "limpio" ? "Sin reporte" : e.imeiEstado === "reportado" ? "REPORTADO" : ""), fila("Accesorios", e.accesorios),
+        _gh("div", { style: { fontSize: 13, color: T.text, margin: "8px 0" } }, e.descripcion),
+        e.estadoFisico && _gh("div", { style: { fontSize: 12, color: T.muted, marginBottom: 8 } }, "Estado: " + e.estadoFisico),
+        _gh(EmpFotos, { fotos: e.photos, busy: busy, onAdd: abierto ? addFoto : null }))),
+
+    (e.pagos || []).length > 0 && _gh("div", { style: _gCard },
+      _gh("span", { style: _gLbl }, "Pagos recibidos"),
+      (e.pagos || []).map(function (p) {
+        return _gh("div", { key: p.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid " + T.border, fontSize: 13, color: T.text } },
+          _gh("span", null, p.fecha + " · " + ({ interes: "Prórroga " + (p.meses || 1) + " mes(es)", capital: "Abono", retiro: "Retiro del artículo", venta: "Venta" }[p.tipo] || p.tipo) + " · " + (p.metodo || "")),
+          _gh("span", { style: { display: "flex", alignItems: "center", gap: 8 } }, _gh("b", null, fmt(p.monto)),
+            _gh(Btn, { small: true, variant: "ghost", onClick: function () { _printEmpRecibo(e, p, settings, cfg); } }, "Recibo")));
+      })),
+    _gh("div", { style: _gCard },
+      _gh("span", { style: _gLbl }, "Historial del contrato"),
+      (e.historial || []).slice().reverse().map(function (h, i) {
+        return _gh("div", { key: i, style: { fontSize: 12.5, padding: "5px 0", borderBottom: "1px solid " + T.border, color: T.text } },
+          _gh("span", { style: { color: T.muted } }, String(h.at || "").replace("T", " ").slice(0, 16) + " — "), h.txt);
+      })));
+}
+
+// ─── Configuración del módulo ───────────────────────────────────────
+function EmpenoCfgCard(props) {
+  var _c = useState(props.cfg), c = _c[0], setC = _c[1];
+  var set = function (k, v) { setC(function (o) { var n = Object.assign({}, o); n[k] = v; return n; }); };
+  return _gh("div", { style: _gCard },
+    _gh("div", { style: { fontWeight: 800, fontSize: 16, marginBottom: 4, color: T.text } }, "Condiciones por defecto"),
+    _gh("div", { style: { fontSize: 12, color: T.muted, marginBottom: 12 } }, "Se usan al crear un contrato nuevo. Los contratos ya creados conservan las condiciones con que se firmaron."),
+    _gh("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 10 } },
+      _gh(Field, { label: "Cargo mensual (%)", type: "number", value: c.tasa, onChange: function (v) { set("tasa", v); } }),
+      _gh(Field, { label: "Plazo (meses)", type: "number", value: c.plazoMeses, onChange: function (v) { set("plazoMeses", v); } }),
+      _gh(Field, { label: "Días de gracia", type: "number", value: c.gracia, onChange: function (v) { set("gracia", v); } }),
+      _gh("div", null, _gh("span", { style: _gLbl }, "Cómo se cobra el cargo"),
+        _gh("select", { value: c.modo, style: IS, onChange: function (ev) { set("modo", ev.target.value); } },
+          _gh("option", { value: "mes" }, "Mes completo (mes o fracción)"), _gh("option", { value: "dia" }, "Proporcional a los días"))),
+      _gh(Field, { label: "Ciudad (para el contrato)", value: c.ciudad, onChange: function (v) { set("ciudad", v); } }),
+      _gh(Field, { label: "Quién firma por el negocio", value: c.representante, onChange: function (v) { set("representante", v); }, placeholder: "Nombre y cédula" })),
+    _gh("label", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 13, color: T.text, cursor: "pointer" } },
+      _gh("input", { type: "checkbox", checked: c.caja !== false, onChange: function (ev) { set("caja", ev.target.checked); } }), "Registrar en Caja el dinero que sale y entra por empeños"),
+    _gh("div", { style: { marginTop: 10 } }, _gh(Field, { label: "Cláusulas adicionales del contrato", value: c.clausulas, onChange: function (v) { set("clausulas", v); }, textarea: true, rows: 3, placeholder: "Texto que quiera agregar al final del contrato" })),
+    _gh("div", { style: { fontSize: 12, color: T.muted, marginTop: 10, lineHeight: 1.5 } }, "El NIT, la dirección y el teléfono del contrato se toman de Configuración → Identidad del Negocio. El cargo mensual tiene tope legal (tasa de usura): confirme su porcentaje y el texto del contrato con un abogado o contador antes de usarlo con clientes."),
+    _gh("div", { style: { display: "flex", gap: 8, marginTop: 12 } },
+      _gh(Btn, { onClick: function () { props.onSave(Object.assign({}, c, { tasa: Number(c.tasa) || 0, plazoMeses: Math.max(1, Number(c.plazoMeses) || 1), gracia: Math.max(0, Number(c.gracia) || 0) })); }, icon: _gIco("Check", 14) }, "Guardar"),
+      _gh(Btn, { variant: "ghost", onClick: props.onCancel }, "Cancelar")));
+}
+
+// ─── Vista principal ────────────────────────────────────────────────
+function EmpenosView(props) {
+  var data = props.data, save = props.save, notify = props.notify, settings = props.settings || {};
+  var cfg = _empCfg(data), hoy = getHoyColombia();
+  var lista = data.empenos || [];
+  var _m = useState("lista"), modo = _m[0], setModo = _m[1]; // lista | nuevo | cfg
+  var _s = useState(null), selId = _s[0], setSelId = _s[1];
+  var _f = useState("abiertos"), filtro = _f[0], setFiltro = _f[1];
+  var _q = useState(""), q = _q[0], setQ = _q[1];
+  var dataRef = useRef(data); dataRef.current = data;
+  var sel = selId ? lista.find(function (e) { return e.id === selId; }) : null;
+
+  if (modo === "cfg") return _gh(EmpenoCfgCard, { cfg: cfg, onCancel: function () { setModo("lista"); }, onSave: function (c) { save(Object.assign({}, data, { empenoCfg: c })); notify("Condiciones guardadas"); setModo("lista"); } });
+  if (modo === "nuevo") return _gh(EmpenoForm, { data: data, cfg: cfg, notify: notify, clientId: props.clientId, onCancel: function () { setModo("lista"); },
+    onSave: function (e, enCaja) {
+      var nd = Object.assign({}, data, { empenos: [e].concat(lista) });
+      if (enCaja) nd.cashflow = _empCaja(data, e, "egreso", e.monto, "dinero entregado", e.metodo);
+      save(nd); notify("Empeño #" + e.numero + " guardado"); setModo("lista"); setSelId(e.id);
+      _printEmpContrato(e, settings, cfg);
+    } });
+  if (sel) return _gh(EmpenoDetalle, { key: sel.id, empeno: sel, data: data, cfg: cfg, save: save, notify: notify, settings: settings, clientId: props.clientId, getData: function () { return dataRef.current; }, onBack: function () { setSelId(null); } });
+
+  var conEstado = lista.map(function (e) { return { e: e, s: _empEstado(e, hoy) }; });
+  var abiertos = conEstado.filter(function (x) { return x.e.estado === "Activo"; });
+  var mes = hoy.slice(0, 7);
+  var cobradoMes = lista.reduce(function (s, e) { return s + (e.pagos || []).filter(function (p) { return String(p.fecha).indexOf(mes) === 0; }).reduce(function (a, p) { return a + (p.tipo === "interes" ? Number(p.monto) || 0 : p.tipo === "retiro" ? Number(p.interes) || 0 : 0); }, 0); }, 0);
+  var FILTROS = [["abiertos", "Activos"], ["atencion", "Por vencer y vencidos"], ["venta", "En venta"], ["cerrados", "Cerrados"], ["todos", "Todos"]];
+  var pasa = function (x) {
+    if (filtro === "abiertos") return x.e.estado === "Activo";
+    if (filtro === "atencion") return x.s === "Por vencer" || x.s === "En gracia" || x.s === "Vencido";
+    if (filtro === "venta") return x.e.estado === "En venta";
+    if (filtro === "cerrados") return x.e.estado === "Retirado" || x.e.estado === "Vendido" || x.e.estado === "Anulado";
+    return true;
+  };
+  var qq = q.trim().toLowerCase();
+  var vis = conEstado.filter(pasa).filter(function (x) {
+    if (!qq) return true;
+    var e = x.e;
+    return [e.numero, e.cliente, e.doc, e.phone, e.serial, e.marca, e.modelo, e.descripcion].join(" ").toLowerCase().indexOf(qq) >= 0;
+  }).sort(function (a, b) { return filtro === "atencion" || filtro === "abiertos" ? String(a.e.vence).localeCompare(String(b.e.vence)) : (Number(b.e.numero) || 0) - (Number(a.e.numero) || 0); });
+  var libro = function () {
+    if (!lista.length) { notify("Aún no hay contratos", "error"); return; }
+    var rows = lista.map(function (e) {
+      return { contrato: e.numero, fecha: e.fecha, estado: _empEstado(e, hoy), cliente: e.cliente, tipo_doc: e.docTipo, documento: e.doc, telefono: e.phone, direccion: e.direccion,
+        articulo: e.tipo, marca: e.marca, modelo: e.modelo, serial: e.serial, imei_consulta: e.imeiEstado, descripcion: e.descripcion, avaluo: e.avaluo, entregado: e.monto, cargo_pct: e.tasa, vence: e.vence,
+        debe_capital: _empAbierto(e) ? _empCapital(e) : 0, cargos_cobrados: _empSum(e, "interes"), cierre: (e.retiro && e.retiro.fecha) || (e.venta && e.venta.fecha) || "", valor_cierre: (e.retiro && e.retiro.total) || (e.venta && e.venta.precio) || "" };
+    });
+    _gDownload("libro-empenos-" + hoy + ".csv", _gCsv(rows, Object.keys(rows[0])), "text/csv;charset=utf-8");
+  };
+
+  return _gh("div", null,
+    _gh("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 } },
+      _gh("h2", { style: { margin: 0, fontSize: 22, fontWeight: 800, color: T.text } }, "Empeños"),
+      _gh("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+        _gh(Btn, { small: true, variant: "ghost", onClick: libro, icon: _gIco("Download", 13) }, "Libro (Excel)"),
+        _gh(Btn, { small: true, variant: "ghost", onClick: function () { setModo("cfg"); }, icon: _gIco("Settings", 13) }, "Condiciones"),
+        _gh(Btn, { onClick: function () { setModo("nuevo"); }, icon: _gIco("Plus", 14) }, "Nuevo empeño"))),
+    _gh("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 } },
+      _gKpi("Dinero prestado", fmt(abiertos.reduce(function (s, x) { return s + _empCapital(x.e); }, 0))),
+      _gKpi("Contratos activos", String(abiertos.length)),
+      _gKpi("Por vencer (5 días)", String(conEstado.filter(function (x) { return x.s === "Por vencer"; }).length), T.orange),
+      _gKpi("Vencidos", String(conEstado.filter(function (x) { return x.s === "Vencido" || x.s === "En gracia"; }).length), T.red),
+      _gKpi("Cargos cobrados este mes", fmt(cobradoMes), T.green)),
+    _gh("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12, alignItems: "center" } },
+      _gh("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", flex: 1 } }, FILTROS.map(function (f) {
+        return _gh("button", { key: f[0], onClick: function () { setFiltro(f[0]); }, style: { padding: "6px 12px", borderRadius: 16, border: "1px solid " + T.border, background: filtro === f[0] ? T.accent : "transparent", color: filtro === f[0] ? "#fff" : T.text, cursor: "pointer", fontSize: 12, fontFamily: "inherit" } }, f[1]);
+      })),
+      _gh("input", { value: q, onChange: function (ev) { setQ(ev.target.value); }, placeholder: "Buscar por nombre, cédula, serial o número", style: Object.assign({}, IS, { maxWidth: 320 }) })),
+    vis.length === 0 ? _gEmpty(lista.length ? "No hay contratos en este filtro" : "Aún no hay empeños. Cree el primero con «Nuevo empeño».") :
+      _gh("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, vis.map(function (x) {
+        var e = x.e, ab = _empAbierto(e);
+        return _gh("button", { key: e.id, onClick: function () { setSelId(e.id); },
+          style: Object.assign({}, _gCard, { display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: T.text, borderLeft: "3px solid " + (EMP_COLOR[x.s] || T.border) }) },
+          _gh("div", { style: { minWidth: 0 } },
+            _gh("div", { style: { fontWeight: 700 } }, "#" + e.numero + " · " + e.cliente),
+            _gh("div", { style: { fontSize: 12, color: T.muted } }, _empArticulo(e) + " · " + e.fecha)),
+          _gh("div", { style: { textAlign: "right" } },
+            _gh("div", { style: { fontWeight: 800 } }, fmt(ab ? _empCapital(e) : e.monto)),
+            _gh("div", { style: { fontSize: 11, fontWeight: 700, color: EMP_COLOR[x.s] } }, x.s + (e.estado === "Activo" ? " · vence " + e.vence : ""))));
+      })));
+}
+// ═══════════════════ FIN MÓDULO EMPEÑOS ═══════════════════
 
 // ═══════════════════════════════════════════════════════════════════
 // MÓDULO ASISTENTE IA
@@ -15919,6 +16510,11 @@ function App(_appProps) {
       size: 17
     })
   }];
+  // Empeños: solo en la cuenta del dueño del software y nunca en modo empleado
+  if (_empHabilitado() && !empleado) {
+    var _iGest = navItems.findIndex(function (n) { return n.id === "gestion"; });
+    navItems.splice(_iGest + 1, 0, { id: "empenos", label: "Empeños", icon: _gIco("Landmark", 17), badge: _empPendientes(data) });
+  }
   navItems = navItems.filter(function (n) { return _empCanView(empleado, n.id); });
   var _activeNavItem = navItems.find(function (n) { return n.id === view; });
   return /*#__PURE__*/React.createElement("div", {
@@ -16185,6 +16781,7 @@ function App(_appProps) {
     /*#__PURE__*/React.createElement(DriveSyncBar, { pending: gdPending, bytes: dataBytes, onAction: gdAction }),
     view === "dashboard" && /*#__PURE__*/React.createElement(IAResumenCard, { data: data, setView: setView, clientId: clientId }),
     view === "ia" && /*#__PURE__*/React.createElement(IAView, { data: data, save: save, notify: notify, setView: setView, clientId: clientId, empleado: empleado, settings: settings }),
+    view === "empenos" && _empHabilitado() && !empleado && /*#__PURE__*/React.createElement(EmpenosView, { data: data, save: save, notify: notify, settings: settings, clientId: clientId }),
     view === "gestion" && /*#__PURE__*/React.createElement(GestionView, { data: data, save: save, notify: notify, storeName: settings.storeName, empleado: empleado, onSwitch: switchEmpleado }),
     view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify, clientId: clientId }),
     view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
@@ -17399,7 +17996,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.4.0";
+var APP_VERSION = "1.5.0";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
-  "notes": "Seguridad: el seguimiento público ya no expone teléfonos ni claves de los equipos. Guardado más seguro: los cambios de varios equipos se combinan y se avisa si algo no subió a la nube.",
+  "version": "1.5.0",
+  "notes": "Nuevo módulo de Empeños (contratos, prórrogas, entrega y venta de artículos).",
   "url": "https://edier27.github.io/Acce7/"
 }
