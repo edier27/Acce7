@@ -14995,6 +14995,471 @@ function _gStampRepairs(d) {
   return changed ? Object.assign({}, d, { repairs: reps }) : d;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SINCRONIZACIÓN SEGURA ENTRE EQUIPOS
+// REGLA DE ORO: los datos NUNCA se pierden.
+//  1. Cada cambio se guarda PRIMERO en este equipo y después se sube a la nube.
+//  2. Antes de subir se revisa si otro equipo (el celular, un empleado) guardó
+//     algo mientras tanto; si es así se COMBINAN los dos cambios registro por
+//     registro en vez de que el último borre al primero.
+//  3. La app escucha la nube en vivo: lo que guarda otro equipo aparece solo.
+//  4. Si la nube rechaza o no responde, se avisa en pantalla y se reintenta.
+// ═══════════════════════════════════════════════════════════════════════════
+var _SYNC_DOC_MAX = 1048576 - 4096; // Firestore admite 1 MB por documento
+var _SYNC_SUM_FIELDS = { qty: 1, stock: 1 }; // existencias: se suman los movimientos de cada equipo
+function _syncEq(a, b) {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+function _syncIsObj(v) { return !!v && typeof v === "object" && !Array.isArray(v); }
+function _syncBytes(str) {
+  try { return new Blob([str]).size; } catch (e) { return String(str).length * 3; }
+}
+// ¿Es una lista de registros con id único? (reparaciones, ventas, inventario…)
+function _syncIsIdList(arr) {
+  if (!Array.isArray(arr)) return false;
+  var seen = {};
+  for (var i = 0; i < arr.length; i++) {
+    var it = arr[i];
+    if (!_syncIsObj(it) || it.id === undefined || it.id === null || it.id === "") return false;
+    var k = "k" + it.id;
+    if (seen[k]) return false;
+    seen[k] = 1;
+  }
+  return true;
+}
+// Combina un valor: b = versión común de la que partieron, l = este equipo, r = la nube.
+function _syncMergeVal(b, l, r, key, prefer, top) {
+  if (l === r) return l;
+  if (top) { // una colección que falta nunca se interpreta como "borrar todo"
+    if (l === undefined) return r;
+    if (r === undefined) return l;
+  }
+  var lCh = !_syncEq(l, b), rCh = !_syncEq(r, b);
+  if (!lCh) return r;
+  if (!rCh) return l;
+  if (_syncEq(l, r)) return l;
+  // Cambió en los dos lados
+  if (_syncIsIdList(l) && _syncIsIdList(r)) return _syncMergeList(_syncIsIdList(b) ? b : [], l, r, prefer);
+  if (_SYNC_SUM_FIELDS[key] && typeof l === "number" && typeof r === "number" && typeof b === "number") return l + r - b;
+  if (_syncIsObj(l) && _syncIsObj(r)) return _syncMergeRecord(_syncIsObj(b) ? b : {}, l, r, prefer);
+  return prefer === "remote" ? r : l;
+}
+function _syncMergeRecord(b, l, r, prefer) {
+  var out = {}, seen = {}, keys = [];
+  [l, r].forEach(function (o) {
+    Object.keys(o).forEach(function (k) { if (!seen[k]) { seen[k] = 1; keys.push(k); } });
+  });
+  keys.forEach(function (k) {
+    var v = _syncMergeVal(b[k], l[k], r[k], k, prefer, false);
+    if (v !== undefined) out[k] = v;
+  });
+  return out;
+}
+function _syncMergeList(base, local, remote, prefer) {
+  var bi = {}, ri = {}, li = {}, out = [], i, k;
+  for (i = 0; i < base.length; i++) bi["k" + base[i].id] = base[i];
+  for (i = 0; i < remote.length; i++) ri["k" + remote[i].id] = remote[i];
+  for (i = 0; i < local.length; i++) li["k" + local[i].id] = 1;
+  for (i = 0; i < local.length; i++) {
+    var it = local[i]; k = "k" + it.id;
+    var bv = bi[k], rv = ri[k];
+    if (rv === undefined) {
+      // No está en la nube: es nuevo aquí, o lo borraron allá pero aquí se editó → se conserva
+      if (bv === undefined || !_syncEq(it, bv)) out.push(it);
+    } else if (it === rv) {
+      out.push(it);
+    } else if (bv === undefined) {
+      out.push(_syncEq(it, rv) ? it : _syncMergeRecord({}, it, rv, prefer));
+    } else {
+      var lCh = !_syncEq(it, bv), rCh = !_syncEq(rv, bv);
+      out.push(!lCh ? rv : (!rCh ? it : _syncMergeRecord(bv, it, rv, prefer)));
+    }
+  }
+  // Lo que solo está en la nube: nuevo allá, o borrado aquí
+  var firstKnown = -1;
+  for (i = 0; i < remote.length; i++) { if (li["k" + remote[i].id]) { firstKnown = i; break; } }
+  var head = [], tail = [];
+  for (i = 0; i < remote.length; i++) {
+    var rt = remote[i]; k = "k" + rt.id;
+    if (li[k]) continue;
+    var bb = bi[k];
+    if (bb !== undefined && _syncEq(rt, bb)) continue; // se borró aquí y allá no lo tocaron → queda borrado
+    (firstKnown === -1 || i < firstKnown ? head : tail).push(rt);
+  }
+  return head.concat(out, tail);
+}
+function _syncMerge3(base, local, remote, prefer) {
+  base = base || {}; local = local || {}; remote = remote || {};
+  var out = {}, seen = {}, keys = [];
+  [local, remote].forEach(function (o) {
+    Object.keys(o).forEach(function (k) { if (!seen[k]) { seen[k] = 1; keys.push(k); } });
+  });
+  keys.forEach(function (k) {
+    var v = _syncMergeVal(base[k], local[k], remote[k], k, prefer, true);
+    if (v !== undefined) out[k] = v;
+  });
+  return out;
+}
+// Cuántas colecciones comparte (misma referencia) un cambio con una versión mostrada
+function _syncShared(a, b) {
+  var n = 0;
+  for (var k in a) {
+    if (Object.prototype.hasOwnProperty.call(a, k) && a[k] && typeof a[k] === "object" && a[k] === b[k]) n++;
+  }
+  return n;
+}
+function _syncHasReal(d) {
+  if (!d) return false;
+  var ks = ["repairs", "products", "customers", "sales", "inventory", "cashflow"];
+  for (var i = 0; i < ks.length; i++) { if (Array.isArray(d[ks[i]]) && d[ks[i]].length > 0) return true; }
+  return false;
+}
+
+// Motor de sincronización de un taller. opts: { clientId, ref, seed, onData, onSettings, onState }
+function _syncCreate(opts) {
+  var cid = opts.clientId, ref = opts.ref || null, SEED = opts.seed || {};
+  var KEY = "trp_data_" + cid, K_TS = KEY + "_ts", K_REV = KEY + "_rev", K_BASE = KEY + "_base", K_PEND = "trp_pending_sync_" + cid;
+  var base = SEED, baseRev = null, baseTs = 0, baseIsSeed = true, baseDirty = true, noBase = false, cacheLegacy = false;
+  var pending = null, pendingTs = 0;
+  var inFlight = false, flightRev = null, flightToken = 0, deferred = null;
+  var shown = null, hist = [], trusted = false, contacted = false, dead = false, localOk = true;
+  var unsub = null, retryT = null, slowT = null, rescueT = null, relistenT = null, fails = 0, listenFails = 0, listenAt = 0;
+  var state = { status: "ok" };
+
+  function ls(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  function parse(str) {
+    if (!str) return null;
+    try { var o = JSON.parse(str); return _syncIsObj(o) ? o : null; } catch (e) { return null; }
+  }
+  function setState(s) {
+    s.localOk = localOk;
+    state = s;
+    try { if (opts.onState) opts.onState(s); } catch (e) {}
+  }
+  function emit(d, info) {
+    shown = Object.assign({}, SEED, d);
+    hist.push(shown); if (hist.length > 6) hist.shift();
+    try { opts.onData(shown, info || {}); } catch (e) {}
+  }
+  function setBase(d, rev, ts) { base = d; baseRev = rev || null; baseTs = ts || 0; baseIsSeed = false; baseDirty = true; }
+  // Copia en este equipo: lo pendiente por subir, o la última versión confirmada por la nube
+  function persist() {
+    var d = pending || (baseIsSeed ? null : base);
+    if (!d) return;
+    var str;
+    try { str = JSON.stringify(d); } catch (e) { return; }
+    var ok = lsSet(KEY, str);
+    if (!ok) { lsDel(K_BASE); baseDirty = true; ok = lsSet(KEY, str); }
+    localOk = ok;
+    lsSet(K_TS, String(pending ? pendingTs : (baseTs || Date.now())));
+    if (baseRev) lsSet(K_REV, baseRev); else lsDel(K_REV);
+    if (pending) {
+      lsSet(K_PEND, "1");
+      if (ok && !baseIsSeed && baseDirty) {
+        // se guarda también la versión de partida, para poder combinar bien si se cierra la app sin internet
+        try { if (lsSet(K_BASE, JSON.stringify(base))) baseDirty = false; else lsDel(K_BASE); } catch (e) {}
+      }
+    } else {
+      lsDel(K_PEND); lsDel(K_BASE); baseDirty = true;
+    }
+  }
+  function preferFor(remoteTs) {
+    return noBase && remoteTs > pendingTs ? "remote" : "local";
+  }
+
+  function noRemoteData(first) {
+    if (first && !pending && !baseIsSeed && _syncHasReal(base)) {
+      // Hay datos en este equipo y la nube está vacía → subirlos (primer equipo)
+      pending = base; pendingTs = baseTs || Date.now();
+    }
+    if (!shown) emit(pending || base, {});
+    if (pending) flush();
+  }
+
+  function adoptSettings(dd) {
+    if (!dd.settingsData || !opts.onSettings) return;
+    var cur = ls("trp_settings_v1"), curTs = ls("trp_settings_ts") || "", rTs = dd.settingsUpdatedAt || "";
+    if (cur === dd.settingsData) return;
+    if (cur && !(rTs > curTs)) return;
+    var obj = parse(dd.settingsData);
+    if (!obj) return;
+    lsSet("trp_settings_v1", dd.settingsData);
+    if (rTs) lsSet("trp_settings_ts", rTs);
+    try { opts.onSettings(obj); } catch (e) {}
+  }
+
+  // Llega una versión confirmada por el servidor
+  function handleRemote(snap, localEcho) {
+    if (dead) return;
+    var first = !contacted;
+    contacted = true; trusted = true;
+    clearTimeout(rescueT);
+    if (!snap.exists) { noRemoteData(first); return; }
+    var dd = snap.data() || {};
+    var rev = dd.rev || dd.updatedAt || "";
+    if (!localEcho) adoptSettings(dd);
+    if (rev === baseRev || (flightRev && rev === flightRev)) {
+      if (!shown) emit(pending || base, {});
+      if (pending) flush();
+      return;
+    }
+    if (inFlight) { deferred = snap; return; } // la subida en curso ya la tiene en cuenta
+    var remote = parse(dd.appData);
+    if (!remote) { noRemoteData(first); return; }
+    var rTs = Date.parse(dd.updatedAt || "") || 0;
+    if (first && !pending && cacheLegacy && baseTs > rTs && _syncHasReal(base)) {
+      // copia de una versión anterior del programa que quedó más nueva que la nube → no se descarta
+      pending = base; pendingTs = baseTs; base = SEED; baseIsSeed = true; noBase = true;
+    }
+    cacheLegacy = false;
+    if (pending) {
+      var merged = _syncMerge3(base, pending, remote, preferFor(rTs));
+      setBase(remote, rev, rTs); noBase = false;
+      if (_syncEq(merged, remote)) {
+        pending = null; persist(); emit(remote, { remote: !first });
+        setState({ status: "ok" });
+        return;
+      }
+      pending = merged; pendingTs = Date.now();
+      persist(); emit(merged, { remote: !first, merged: true });
+      flush();
+    } else {
+      var same = !baseIsSeed && _syncEq(remote, base);
+      setBase(remote, rev, rTs); persist();
+      if (!shown || !same) emit(remote, { remote: !first });
+    }
+  }
+
+  function listen() {
+    clearTimeout(relistenT);
+    if (!ref || dead || unsub) return;
+    listenAt = Date.now();
+    try {
+      unsub = ref.onSnapshot(function (snap) {
+        if (dead) return;
+        listenFails = 0;
+        var md = snap.metadata || {};
+        if (md.fromCache) return; // solo cuenta lo confirmado por el servidor
+        handleRemote(snap, !!md.hasPendingWrites);
+      }, function (err) {
+        unsub = null;
+        if (dead) return;
+        console.warn("[TRP] Sin lectura en vivo de la nube:", err && err.code);
+        clearTimeout(rescueT);
+        if (!shown) emit(pending || base, { seed: baseIsSeed && !pending });
+        listenFails++;
+        relistenT = setTimeout(listen, Math.min(300000, 30000 * listenFails));
+      });
+    } catch (e) { unsub = null; }
+  }
+
+  function buildPayload(out, rev) {
+    var uid = window.__uid || _currentUid();
+    if (!uid) { var e0 = new Error("Sin sesión"); e0.code = "no-auth"; throw e0; }
+    var app = JSON.stringify(out);
+    var p = { appData: app, updatedAt: new Date().toISOString(), rev: rev, savedBy: _trpSessionId, ownerUid: uid };
+    var ss = ls("trp_settings_v1");
+    if (ss && parse(ss)) p.settingsData = ss;
+    var st = ls("trp_settings_ts");
+    if (st) p.settingsUpdatedAt = st;
+    if (_syncBytes(app) + _syncBytes(p.settingsData || "") > _SYNC_DOC_MAX) {
+      var e1 = new Error("Los datos superan el límite de la nube"); e1.code = "doc-too-big"; throw e1;
+    }
+    return p;
+  }
+
+  function flush() {
+    if (dead || inFlight || !pending) return;
+    clearTimeout(retryT);
+    if (!ref) { setState({ status: "error", code: "nocloud" }); return; }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) { setState({ status: "offline" }); return; }
+    var d = pending;
+    var myRev = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    var token = ++flightToken, info = {}, settled = false;
+    inFlight = true; flightRev = myRev;
+    setState({ status: "saving" });
+    clearTimeout(slowT);
+    slowT = setTimeout(function () { if (!settled && !dead) setState({ status: "saving", slow: true }); }, 6000);
+    var watchdog = setTimeout(function () { var e = new Error("timeout"); e.code = "timeout"; finish(e); }, 40000);
+
+    function finish(err) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog); clearTimeout(slowT);
+      if (dead || token !== flightToken) return;
+      inFlight = false; flightRev = null;
+      var df = deferred; deferred = null;
+      if (!err) {
+        var out = info.out;
+        fails = 0; noBase = false; contacted = true; trusted = true;
+        setBase(out, myRev, Date.now());
+        if (pending === d) pending = null;
+        else if (info.merged) pending = _syncMerge3(d, pending, out, "local");
+        persist();
+        if (info.merged) emit(pending || out, { remote: true, merged: true });
+        setState(pending ? { status: "saving" } : { status: "ok", at: Date.now() });
+        if (df) {
+          var x = df.data() || {}, drev = x.rev || x.updatedAt || "", dts = Date.parse(x.updatedAt || "") || 0;
+          if (drev !== myRev && drev !== info.readRev && dts >= (info.readTs || 0)) handleRemote(df, false);
+        }
+        if (pending) flush();
+        if (!unsub) { listenFails = 0; listen(); }
+        return;
+      }
+      fails++;
+      var code = String((err && err.code) || ""), msg = String((err && err.message) || "");
+      console.warn("[TRP] No se pudo guardar en la nube:", code, msg);
+      var delay = Math.min(60000, 4000 * Math.pow(2, Math.min(fails - 1, 4)));
+      if (code === "doc-too-big" || /maximum allowed size|exceeds the maximum/i.test(msg)) {
+        setState({ status: "error", code: "toobig" }); delay = 0;
+      } else if (code === "permission-denied" || code === "unauthenticated" || code === "no-auth") {
+        setState({ status: "error", code: "denied" }); delay = 60000;
+      } else if ((typeof navigator !== "undefined" && navigator.onLine === false) || code === "unavailable" || code === "timeout") {
+        setState({ status: "offline" });
+      } else {
+        setState({ status: "error", code: "other", detail: code || msg });
+      }
+      if (delay) retryT = setTimeout(flush, delay);
+      if (df) handleRemote(df, false);
+    }
+
+    try {
+      var db = opts.db || ref.firestore;
+      db.runTransaction(function (tx) {
+        return tx.get(ref).then(function (doc) {
+          info.readOk = true;
+          var out = d, merged = false, readRev = null, readTs = 0;
+          if (doc.exists) {
+            var dd = doc.data() || {};
+            readRev = dd.rev || dd.updatedAt || "";
+            readTs = Date.parse(dd.updatedAt || "") || 0;
+            if (readRev !== baseRev) {
+              // otro equipo guardó después de nuestra última lectura → combinar, no pisar
+              var remote = parse(dd.appData);
+              if (remote) { out = _syncMerge3(base, d, remote, preferFor(readTs)); merged = true; }
+            }
+          }
+          tx.set(ref, buildPayload(out, myRev));
+          info.out = out; info.merged = merged; info.readRev = readRev; info.readTs = readTs;
+        });
+      }).then(function () { finish(null); }, function (err) {
+        if (err && err.code === "permission-denied" && !baseRev && !info.readOk && !settled) {
+          // Cuenta nueva: el documento aún no existe y no se puede leer algo inexistente.
+          // Se crea directamente (si existiera y fuera de este taller, la lectura no habría fallado).
+          var payload;
+          try { payload = buildPayload(d, myRev); } catch (e2) { finish(e2); return; }
+          info.out = d; info.merged = false; info.readRev = null; info.readTs = 0;
+          ref.set(payload).then(function () { finish(null); }, function (e3) { finish(e3 || err); });
+          return;
+        }
+        finish(err || new Error("error"));
+      });
+    } catch (e) { finish(e); }
+  }
+
+  function save(d) {
+    if (dead || !d) return d;
+    // ¿De qué versión partió este cambio? Un formulario abierto puede traer datos de
+    // antes de la última actualización: en ese caso se aplica SOLO lo que cambió.
+    var last = hist.length ? hist[hist.length - 1] : null;
+    if (last && hist.length > 1) {
+      var best = last, bestN = _syncShared(d, last);
+      for (var i = hist.length - 2; i >= 0; i--) {
+        var n = _syncShared(d, hist[i]);
+        if (n > bestN) { best = hist[i]; bestN = n; }
+      }
+      if (best !== last) d = _syncMerge3(best, d, last, "local");
+    }
+    pending = d; pendingTs = Date.now();
+    shown = d; hist.push(d); if (hist.length > 6) hist.shift();
+    persist();
+    flush();
+    return d;
+  }
+
+  function relistenSoon() { if (!unsub && Date.now() - listenAt > 20000) listen(); }
+  function onOnline() { if (dead) return; listenAt = 0; relistenSoon(); flush(); }
+  function onVisible() { if (dead || typeof document === "undefined" || document.visibilityState !== "visible") return; relistenSoon(); flush(); }
+
+  function start() {
+    var local = parse(ls(KEY));
+    var flag = ls(K_PEND) === "1";
+    var ts = parseInt(ls(K_TS) || "0", 10) || 0;
+    var rev = ls(K_REV) || null;
+    if (local) {
+      trusted = true;
+      if (flag) {
+        pending = local; pendingTs = ts || Date.now();
+        var b = parse(ls(K_BASE));
+        if (b) { base = b; baseIsSeed = false; baseDirty = false; }
+        else { base = SEED; baseIsSeed = true; noBase = true; }
+        baseRev = rev;
+      } else {
+        base = local; baseIsSeed = false; baseRev = rev; baseTs = ts; cacheLegacy = !rev;
+      }
+      emit(local, { local: true });
+    }
+    setState(pending ? { status: "saving" } : { status: "ok" });
+    if (!ref) {
+      if (!shown) emit(SEED, { seed: true });
+      if (pending) setState({ status: "error", code: "nocloud" });
+    } else {
+      // Rescate: si la nube no responde en 6 s, se abre con lo que haya
+      rescueT = setTimeout(function () { if (!dead && !shown) emit(SEED, { seed: true }); }, 6000);
+      listen();
+    }
+    if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("online", onOnline);
+    if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("visibilitychange", onVisible);
+  }
+  function stop() {
+    dead = true;
+    try { if (unsub) unsub(); } catch (e) {}
+    unsub = null;
+    clearTimeout(retryT); clearTimeout(slowT); clearTimeout(rescueT); clearTimeout(relistenT);
+    if (typeof window !== "undefined" && window.removeEventListener) window.removeEventListener("online", onOnline);
+    if (typeof document !== "undefined" && document.removeEventListener) document.removeEventListener("visibilitychange", onVisible);
+  }
+
+  return {
+    start: start, stop: stop, save: save,
+    retry: function () { fails = 0; listenFails = 0; listen(); flush(); },
+    hasPending: function () { return !!pending || inFlight; },
+    trusted: function () { return trusted; },
+    getState: function () { return state; }
+  };
+}
+
+// Barra de aviso: solo aparece cuando algo NO quedó guardado en la nube
+function SyncStatusBar(props) {
+  var s = props.sync || {}, st = s.status;
+  if (st === "ok" || !st) return null;
+  if (st === "saving" && !s.slow) return null;
+  var color = T.accent, icon, text, retry = false;
+  if (st === "saving") {
+    icon = React.createElement(Loader2, { size: 15, className: "trp-spin" });
+    text = "Guardando en la nube… la conexión está lenta. Sus cambios ya quedaron en este equipo.";
+  } else if (st === "offline") {
+    color = "#d97706"; retry = true;
+    icon = React.createElement(AlertTriangle, { size: 15, color: color });
+    text = "Sin conexión con la nube. Sus cambios están guardados en este equipo y se subirán solos al volver el internet.";
+  } else {
+    color = T.red;
+    icon = React.createElement(AlertTriangle, { size: 15, color: color });
+    if (s.code === "toobig") text = "Los datos del taller ya no caben en la nube (límite alcanzado). Lo nuevo quedó guardado SOLO en este equipo. Conecte Google Drive en Configuración para mover las fotos y descargue un respaldo.";
+    else if (s.code === "denied") { retry = true; text = "La nube rechazó el guardado (sesión sin permiso). Sus cambios están en este equipo. Cierre sesión y vuelva a entrar."; }
+    else if (s.code === "nocloud") text = "No hay conexión con la nube en este equipo. Sus cambios quedan guardados solo aquí.";
+    else { retry = true; text = "No se pudo guardar en la nube. Sus cambios están en este equipo y se reintenta automáticamente."; }
+  }
+  if (s.localOk === false) text += " ATENCIÓN: tampoco hay espacio para la copia en este equipo; no cierre esta ventana hasta que se guarde.";
+  return React.createElement("div", { role: "status", style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: T.card, border: "1px solid " + T.border, borderLeft: "3px solid " + color, borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: T.text } },
+    icon, React.createElement("span", { style: { flex: 1, minWidth: 180 } }, text),
+    retry && React.createElement(Btn, { small: true, variant: "ghost", onClick: props.onRetry, icon: React.createElement(RefreshCw, { size: 13 }) }, "Reintentar"));
+}
+
 function App(_appProps) {
   var clientId = (_appProps && _appProps.clientId) ? _appProps.clientId : "demo";
   var onLogout = _appProps && _appProps.onLogout ? _appProps.onLogout : function(){};
@@ -15146,281 +15611,84 @@ function App(_appProps) {
   var isMobile = _wsize.w < 640;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SINCRONIZACIÓN — REGLA DE ORO: los datos NUNCA se borran.
-  // localStorage = fuente de verdad absoluta.
-  // Firebase = copia de seguridad en la nube + carga en dispositivos nuevos.
+  // SINCRONIZACIÓN — ver _syncCreate (arriba). Cada cambio queda primero en este
+  // equipo y luego sube a la nube, combinándose con lo que hayan guardado otros
+  // equipos en vez de pisarlo. Lo que guarda otro equipo aparece aquí en vivo.
   // ═══════════════════════════════════════════════════════════════════════════
-
+  var _syncRef = React.useRef(null);
+  var _syncS = useState({ status: "ok" }), _syncSA = _slicedToArray(_syncS, 2), syncState = _syncSA[0], setSyncState = _syncSA[1];
+  var _remoteToastRef = React.useRef(0);
   useEffect(function () {
-    var KEY  = "trp_data_" + clientId;
-    var done = false;
-
-    // Rescate: si en 6s no cargó nada → INIT (no debería pasar)
-    var rescue = setTimeout(function() {
-      if (done) return;
-      try {
-        var s = localStorage.getItem(KEY);
-        setData(s ? _objectSpread(_objectSpread({}, INIT), JSON.parse(s)) : INIT);
-      } catch(e) { setData(INIT); }
-      done = true;
-    }, 6000);
-
-    // PASO 1 — Leer localStorage (siempre primero, instantáneo)
-    var localRaw = null;
-    var localData = null;
-    try {
-      localRaw = localStorage.getItem(KEY);
-      if (localRaw) localData = JSON.parse(localRaw);
-    } catch(e) {}
-
-    // ¿Tiene datos reales (algo más que los datos de ejemplo)?
-    var hasReal = !!(localData && (
-      (localData.repairs   && localData.repairs.length   > 0) ||
-      (localData.products  && localData.products.length  > 0) ||
-      (localData.customers && localData.customers.length > 0) ||
-      (localData.sales     && localData.sales.length     > 0) ||
-      (localData.inventory && localData.inventory.length > 0) ||
-      (localData.cashflow  && localData.cashflow.length  > 0)
-    ));
-
-    if (hasReal) {
-      // Tiene datos reales → mostrar inmediatamente, no esperar Firebase
-      setData(_objectSpread(_objectSpread({}, INIT), localData));
-      done = true;
-      clearTimeout(rescue);
-    } else if (localData) {
-      // Tiene localStorage pero solo datos de ejemplo → mostrar mientras carga Firebase
-      setData(_objectSpread(_objectSpread({}, INIT), localData));
-    }
-
-    // PASO 2 — Firebase: SOLO para subir/bajar en la nube
-    if (!clientDataRef) {
-      if (!done) { setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT); }
-      done = true; clearTimeout(rescue);
-      return;
-    }
-
-    clientDataRef.get().then(function(doc) {
-      var fbData   = null;
-      var fbTsStr  = null;
-      if (doc.exists && doc.data()) {
-        try { fbData  = doc.data().appData  ? JSON.parse(doc.data().appData)  : null; } catch(e) {}
-        fbTsStr = doc.data().updatedAt || null;
-      }
-
-      if (hasReal) {
-        // Ya tenemos datos locales reales → NUNCA sobreescribir con Firebase
-        // Solo subir a Firebase si no está actualizado (o no existe)
-        if (!doc.exists) {
-          // Subir los datos locales a Firebase (primer dispositivo)
-          var ts1 = Date.now();
-          var firstPayload = { appData: JSON.stringify(localData), updatedAt: new Date(ts1).toISOString(), savedBy: _trpSessionId, ownerUid: window.__uid || _currentUid() };
-          var curSets = localStorage.getItem("trp_settings_v1");
-          if (curSets) firstPayload.settingsData = curSets;
-          clientDataRef.set(firstPayload).catch(function(){});
-          try { localStorage.setItem(KEY + "_ts", ts1.toString()); } catch(e) {}
-          console.log("[TRP] Datos locales subidos a Firebase (primera sincronización)");
-        } else {
-          // Firebase existe: verificar si hay cambios de OTRO dispositivo más recientes
-          var localTs = parseInt(localStorage.getItem(KEY + "_ts") || "0") || 0;
-          var fbTs    = fbTsStr ? new Date(fbTsStr).getTime() : 0;
-          if (fbTs > (localTs + 30000) && fbData) {
-            // Firebase tiene datos con más de 30s de diferencia → otro dispositivo actualizó
-            // CONFIRMAR antes de sobreescribir: solo si las colecciones principales tienen más datos
-            var fbTotal = ((fbData.repairs||[]).length + (fbData.products||[]).length +
-                          (fbData.customers||[]).length + (fbData.sales||[]).length +
-                          (fbData.inventory||[]).length + (fbData.cashflow||[]).length);
-            var localTotal = ((localData.repairs||[]).length + (localData.products||[]).length +
-                              (localData.customers||[]).length + (localData.sales||[]).length +
-                              (localData.inventory||[]).length + (localData.cashflow||[]).length);
-            if (fbTotal >= localTotal) {
-              // Firebase tiene igual o más datos → actualizar (cambios de otro dispositivo)
-              setData(_objectSpread(_objectSpread({}, INIT), fbData));
-              try {
-                localStorage.setItem(KEY, JSON.stringify(fbData));
-                localStorage.setItem(KEY + "_ts", fbTs.toString());
-              } catch(e) {}
-              // Restaurar settings del otro dispositivo
-              if (doc.data().settingsData) {
-                try {
-                  var sOther = JSON.parse(doc.data().settingsData);
-                  localStorage.setItem("trp_settings_v1", JSON.stringify(sOther));
-                  setSettings(_objectSpread(_objectSpread({}, DEFAULT_SETTINGS), sOther));
-                  applyTheme(_objectSpread(_objectSpread({}, DEFAULT_SETTINGS), sOther));
-                } catch(e) {}
-              }
-              console.log("[TRP] Actualizado desde otro dispositivo (Firebase más completo)");
-            } else {
-              // Local tiene más datos → subir local a Firebase
-              clientDataRef.set({
-                appData: JSON.stringify(localData),
-                updatedAt: new Date(localTs || Date.now()).toISOString(),
-                savedBy: _trpSessionId,
-                ownerUid: window.__uid || _currentUid()
-              }).catch(function(){});
-            }
-          } else if (localTs > fbTs || localTs === 0) {
-            // Local es más reciente o no tiene timestamp → subir a Firebase
-            var ts2 = localTs || Date.now();
-            clientDataRef.set({
-              appData: JSON.stringify(localData),
-              updatedAt: new Date(ts2).toISOString(),
-              savedBy: _trpSessionId,
-              ownerUid: window.__uid || _currentUid()
-            }).catch(function(){});
-            try { localStorage.setItem(KEY + "_ts", ts2.toString()); } catch(e) {}
-          }
+    var eng = _syncCreate({
+      clientId: clientId, ref: clientDataRef, seed: INIT,
+      onData: function (d, info) {
+        setData(d);
+        if (info && info.remote && Date.now() - _remoteToastRef.current > 15000) {
+          _remoteToastRef.current = Date.now();
+          setToast({ msg: "Datos actualizados desde otro equipo", type: "success" });
+          setTimeout(function () { setToast(null); }, 3000);
         }
-
-      } else {
-        // Sin datos locales reales → dispositivo nuevo, cargar de Firebase
-        if (fbData) {
-          setData(_objectSpread(_objectSpread({}, INIT), fbData));
-          var fbTs2 = fbTsStr ? new Date(fbTsStr).getTime() : Date.now();
-          try {
-            localStorage.setItem(KEY, JSON.stringify(fbData));
-            localStorage.setItem(KEY + "_ts", fbTs2.toString());
-          } catch(e) {}
-          // Restaurar settings desde Firebase (tema, nombre, logo, etc.)
-          if (doc.data().settingsData) {
-            try {
-              var restoredS = JSON.parse(doc.data().settingsData);
-              localStorage.setItem("trp_settings_v1", JSON.stringify(restoredS));
-              setSettings(_objectSpread(_objectSpread({}, DEFAULT_SETTINGS), restoredS));
-              applyTheme(_objectSpread(_objectSpread({}, DEFAULT_SETTINGS), restoredS));
-            } catch(e) {}
-          }
-          console.log("[TRP] Datos cargados desde Firebase (dispositivo nuevo)");
-        } else if (!done) {
-          setData(INIT);
-        }
-      }
-
-      if (!done) { done = true; clearTimeout(rescue); }
-      done = true; clearTimeout(rescue);
-
-    }).catch(function(err) {
-      console.warn("[TRP] Firebase no disponible:", err);
-      if (!done) {
-        setData(localData ? _objectSpread(_objectSpread({}, INIT), localData) : INIT);
-        done = true; clearTimeout(rescue);
-      }
+      },
+      onSettings: function (s) {
+        var merged = _objectSpread(_objectSpread({}, DEFAULT_SETTINGS), s);
+        setSettings(merged);
+        applyTheme(merged);
+      },
+      onState: setSyncState
     });
-
+    _syncRef.current = eng;
+    eng.start();
+    // Solo se frena el cierre de la ventana si un cambio no quedó ni en la nube ni en este equipo
+    var warn = function (e) {
+      if (eng.hasPending() && eng.getState().localOk === false) { e.preventDefault(); e.returnValue = ""; return ""; }
+    };
+    window.addEventListener("beforeunload", warn);
+    return function () {
+      window.removeEventListener("beforeunload", warn);
+      eng.stop();
+      if (_syncRef.current === eng) _syncRef.current = null;
+    };
   }, [clientId]);
 
-  // ─── PUBLICAR ESPEJO PÚBLICO (una vez al cargar) ─────────────────────────────
-  // Garantiza que el catálogo/seguimiento públicos existan tras la migración,
-  // aun si el dueño todavía no ha guardado ningún cambio.
-  var _mirrorDoneRef = React.useRef(false);
-  useEffect(function() {
-    if (!_mirrorDoneRef.current && data && clientId) {
-      _mirrorDoneRef.current = true;
-      var _sset = null;
-      try { _sset = JSON.parse(localStorage.getItem("trp_settings_v1") || "null"); } catch(e) {}
-      _writePublicMirror(clientId, data, _sset);
-    }
-  }, [data, clientId]);
+  // ─── PUBLICAR LO PÚBLICO (catálogo + seguimiento) ────────────────────────────
+  // Se publica al cargar y cada vez que cambian los datos o la configuración.
+  // Solo sube lo que realmente cambió, y nunca con los datos de ejemplo.
+  useEffect(function () {
+    if (!data || !clientId) return;
+    var eng = _syncRef.current;
+    if (!eng || !eng.trusted()) return;
+    var t = setTimeout(function () { _writePublicMirror(clientId, data, settings); }, 1200);
+    return function () { clearTimeout(t); };
+  }, [data, settings, clientId]);
 
   // ─── GUARDAR ─────────────────────────────────────────────────────────────────
-  // Guarda en localStorage PRIMERO (nunca falla), luego sube a Firebase
   var save = function save(d) {
     d = _gStampRepairs(d);
-    var KEY = "trp_data_" + clientId;
-    var ts  = Date.now();
+    var eng = _syncRef.current;
+    if (eng) d = eng.save(d);
     setData(d);
-    _trpLastSaveTs = ts;
-
-    // ══ FIREBASE PRIMERO — caché nunca se llena ═══════════════════════════════
-    var settingsSnap = null;
-    try { var ss = localStorage.getItem("trp_settings_v1"); if (ss) settingsSnap = JSON.parse(ss); } catch(e) {}
-    var payload = {
-      appData: JSON.stringify(d),
-      updatedAt: new Date(ts).toISOString(),
-      savedBy: _trpSessionId,
-      ownerUid: window.__uid || _currentUid()
-    };
-    if (settingsSnap) payload.settingsData = JSON.stringify(settingsSnap);
-
-    // Publicar subconjunto seguro para catálogo/seguimiento públicos
-    _writePublicMirror(clientId, d, settingsSnap);
-
-    if (clientDataRef && navigator.onLine) {
-      // CON INTERNET: Firebase primero, localStorage se libera
-      clientDataRef.set(payload).then(function() {
-        // Firebase OK → solo guardar timestamp, borrar datos del caché
-        try {
-          localStorage.removeItem(KEY);
-          localStorage.setItem(KEY + "_ts", ts.toString());
-          localStorage.removeItem("trp_pending_sync_" + clientId);
-        } catch(e) {}
-        console.log("[TRP] ✅ Firebase guardado — caché liberado");
-      }).catch(function(e) {
-        // Firebase falló → guardar en localStorage como emergencia
-        try {
-          localStorage.setItem(KEY, JSON.stringify(d));
-          localStorage.setItem(KEY + "_ts", ts.toString());
-          localStorage.setItem("trp_pending_sync_" + clientId, "1");
-        } catch(e2) {}
-        console.warn("[TRP] Firebase falló — respaldo local");
-      });
-    } else {
-      // SIN INTERNET: localStorage como emergencia temporal
-      try {
-        localStorage.setItem(KEY, JSON.stringify(d));
-        localStorage.setItem(KEY + "_ts", ts.toString());
-        localStorage.setItem("trp_pending_sync_" + clientId, "1");
-      } catch(e) {}
-      console.warn("[TRP] Sin internet — guardado local temporal");
-    }
-    // 3. Actualizar lastSeen + estado online del usuario (perfil por uid)
+    _trpLastSaveTs = Date.now();
+    // Actualizar lastSeen + estado online del usuario (perfil por uid)
     try {
       var _uRefOnline = _profileRef(window.__uid || _currentUid());
       if (_uRefOnline) _uRefOnline.set({ lastSeen: new Date().toISOString(), online: true, software: "ACCE PRO" }, { merge: true }).catch(function(){});
     } catch(e) {}
+    return d;
   };
 
   // ─── GUARDAR SETTINGS ────────────────────────────────────────────────────────
   var saveSettings = function saveSettings(s) {
     setSettings(s);
     applyTheme(s);
-    try { localStorage.setItem("trp_settings_v1", JSON.stringify(s)); } catch(e) {}
+    var sTs = new Date().toISOString();
+    try { localStorage.setItem("trp_settings_v1", JSON.stringify(s)); localStorage.setItem("trp_settings_ts", sTs); } catch(e) {}
     // Subir a Firebase con merge (no toca appData, solo actualiza settingsData)
     if (clientDataRef) {
-      clientDataRef.set({ settingsData: JSON.stringify(s), settingsUpdatedAt: new Date().toISOString(), ownerUid: window.__uid || _currentUid() }, { merge: true })
-        .then(function(){ console.log("[TRP] ✅ Configuración guardada en Firebase"); })
+      clientDataRef.set({ settingsData: JSON.stringify(s), settingsUpdatedAt: sTs, ownerUid: window.__uid || _currentUid() }, { merge: true })
+        .then(function(){ console.log("[TRP] Configuración guardada en Firebase"); })
         .catch(function(e){ console.warn("[TRP] Settings no subieron a Firebase:", e); });
     }
-    // Actualizar también el espejo público (nombre/logo/tema del catálogo)
-    try { _writePublicMirror(clientId, data, s); } catch(e) {}
   };
-
-  // ─── AUTO-SYNC cuando vuelve el internet ──────────────────────────────────────
-  useEffect(function() {
-    var sync = function() {
-      var pending = localStorage.getItem("trp_pending_sync_" + clientId);
-      if (!pending || !clientDataRef) return;
-      var KEY = "trp_data_" + clientId;
-      try {
-        var stored = localStorage.getItem(KEY);
-        var ts     = localStorage.getItem(KEY + "_ts");
-        if (!stored) return;
-        var d = JSON.parse(stored);
-        clientDataRef.set({
-          appData: JSON.stringify(d),
-          updatedAt: new Date(parseInt(ts) || Date.now()).toISOString(),
-          savedBy: _trpSessionId,
-          ownerUid: window.__uid || _currentUid()
-        }).then(function() {
-          localStorage.removeItem("trp_pending_sync_" + clientId);
-          console.log("[TRP] ✅ Datos sincronizados automáticamente");
-        }).catch(function(){});
-      } catch(e) {}
-    };
-    window.addEventListener("online", sync);
-    if (navigator.onLine) setTimeout(sync, 2000);
-    return function() { window.removeEventListener("online", sync); };
-  }, [clientId]);
 
 
   var openCatalog = function openCatalog() {
@@ -15913,6 +16181,7 @@ function App(_appProps) {
       style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24, paddingBottom: isMobile ? 78 : 24 }
     },
     /*#__PURE__*/React.createElement(EmpleadoBar, { empleado: empleado, data: data, onSwitch: switchEmpleado, notify: notify }),
+    /*#__PURE__*/React.createElement(SyncStatusBar, { sync: syncState, onRetry: function () { if (_syncRef.current) _syncRef.current.retry(); } }),
     /*#__PURE__*/React.createElement(DriveSyncBar, { pending: gdPending, bytes: dataBytes, onAction: gdAction }),
     view === "dashboard" && /*#__PURE__*/React.createElement(IAResumenCard, { data: data, setView: setView, clientId: clientId }),
     view === "ia" && /*#__PURE__*/React.createElement(IAView, { data: data, save: save, notify: notify, setView: setView, clientId: clientId, empleado: empleado, settings: settings }),
@@ -16232,24 +16501,127 @@ function _authErrMsg(code) {
 
 // ─── ESPEJO PÚBLICO (catálogo + seguimiento) ───────────────────────────────
 // El catálogo y el seguimiento de reparaciones son páginas PÚBLICAS (sin login).
-// Para no exponer toda la base del taller (ventas, caja, clientes, inventario),
-// publicamos solo un subconjunto seguro en catalogos_publicos/{clientId}.
+// Lo público NUNCA lleva teléfonos, claves o patrones de desbloqueo, costos de
+// compra, caja ni clientes. Se publica en dos lugares:
+//   catalogos_publicos/{clientId}            → productos visibles + marca del taller
+//   seguimiento_publico/{clientId}_{CÓDIGO}  → UNA reparación por documento, así el
+//       enlace de un cliente solo deja ver SU orden (la colección no se puede listar).
+var _PUB_PRODUCT_FIELDS = ["id", "name", "category", "price", "description", "image", "specs", "stock", "featured", "active"];
+var _PUB_REPAIR_FIELDS = ["id", "status", "customer", "device", "category", "problem", "technician", "date", "cost", "paid", "notes", "photos", "readyDate", "deliveryDate", "warrantyDays"];
+var _PUB_SETTINGS_FIELDS = ["storeName", "storeSubtitle", "logo", "address", "whatsapp", "theme", "accentColor", "themePreset"];
+function _pubPick(o, fields) {
+  var out = {};
+  for (var i = 0; i < fields.length; i++) {
+    var v = o ? o[fields[i]] : undefined;
+    if (v !== undefined && v !== null) out[fields[i]] = v;
+  }
+  return out;
+}
+// Código corto de la orden: el mismo que va en el enlace y en el QR
+function _pubRepairCode(id) {
+  return String(id || "").slice(-6).toUpperCase().replace(/[^A-Z0-9_-]/g, "_");
+}
+function _pubRepair(r) {
+  var o = _pubPick(r, _PUB_REPAIR_FIELDS);
+  o.advances = (Array.isArray(r.advances) ? r.advances : []).map(function (a) {
+    return { amount: Number(a && a.amount) || 0, date: (a && a.date) || "" };
+  });
+  return o;
+}
+function _pubHash(str) {
+  var h = 5381;
+  for (var i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + "." + str.length;
+}
+var _pubBusy = {};
 function _writePublicMirror(clientId, appDataObj, settingsObj) {
   try {
     var db = window.__firebaseDB;
-    if (!db || !clientId) return;
+    var uid = window.__uid || _currentUid();
+    if (!db || !clientId || !uid || !appDataObj) return;
+
+    // 1) Catálogo: solo productos visibles y solo sus campos de vitrina
     var pub = {
-      products: (appDataObj && appDataObj.products) || [],
-      repairs:  (appDataObj && appDataObj.repairs)  || []
+      products: (appDataObj.products || []).filter(function (p) { return p && p.active; }).map(function (p) { return _pubPick(p, _PUB_PRODUCT_FIELDS); }),
+      repairs: []
     };
-    var payload = {
-      appData: JSON.stringify(pub),
-      updatedAt: new Date().toISOString(),
-      ownerUid: window.__uid || _currentUid()
+    var payload = { appData: JSON.stringify(pub), ownerUid: uid };
+    if (settingsObj) payload.settingsData = JSON.stringify(_pubPick(settingsObj, _PUB_SETTINGS_FIELDS));
+    var catKey = "trp_pub_cat_" + clientId;
+    var catHash = _pubHash(payload.appData + "|" + (payload.settingsData || "") + "|" + uid);
+    var catPrev = ""; try { catPrev = localStorage.getItem(catKey) || ""; } catch (e) {}
+    if (catPrev !== catHash) {
+      payload.updatedAt = new Date().toISOString();
+      // Sin merge: reemplaza el documento entero para que no quede nada de versiones viejas
+      var catRef = db.collection("catalogos_publicos").doc(clientId);
+      (settingsObj ? catRef.set(payload) : catRef.set(payload, { merge: true }))
+        .then(function () { try { localStorage.setItem(catKey, catHash); } catch (e) {} })
+        .catch(function () {});
+    }
+
+    // 2) Seguimiento: una orden por documento; solo se escriben las que cambiaron
+    if (_pubBusy[clientId]) { _pubBusy[clientId] = { data: appDataObj, settings: settingsObj }; return; }
+    var segKey = "trp_pub_seg_" + clientId;
+    var prev = {}; try { prev = JSON.parse(localStorage.getItem(segKey) || "{}") || {}; } catch (e) { prev = {}; }
+    var next = {}, ops = [];
+    (appDataObj.repairs || []).forEach(function (r) {
+      if (!r || !r.id) return;
+      var code = _pubRepairCode(r.id);
+      if (!code || next[code]) return; // códigos repetidos: queda la primera, igual que al buscar
+      var body = JSON.stringify(_pubRepair(r));
+      var h = _pubHash(body + "|" + uid);
+      next[code] = h;
+      if (prev[code] !== h) ops.push({ code: code, body: body, hash: h });
+    });
+    Object.keys(prev).forEach(function (code) { if (!next[code]) ops.push({ code: code, del: true }); });
+    if (!ops.length) return;
+
+    _pubBusy[clientId] = true;
+    var col = db.collection("seguimiento_publico");
+    var now = new Date().toISOString();
+    var finish = function () {
+      var again = _pubBusy[clientId];
+      _pubBusy[clientId] = null;
+      if (again && again !== true) _writePublicMirror(clientId, again.data, again.settings);
     };
-    if (settingsObj) payload.settingsData = JSON.stringify(settingsObj);
-    db.collection("catalogos_publicos").doc(clientId).set(payload, { merge: true }).catch(function(){});
-  } catch(e) {}
+    var step = function (from) {
+      if (from >= ops.length) { finish(); return; }
+      var chunk = ops.slice(from, from + 200);
+      var batch = db.batch();
+      chunk.forEach(function (op) {
+        var ref = col.doc(clientId + "_" + op.code);
+        if (op.del) batch.delete(ref);
+        else batch.set(ref, { clientId: clientId, code: op.code, ownerUid: uid, updatedAt: now, repair: op.body });
+      });
+      batch.commit().then(function () {
+        chunk.forEach(function (op) { if (op.del) delete prev[op.code]; else prev[op.code] = op.hash; });
+        try { localStorage.setItem(segKey, JSON.stringify(prev)); } catch (e) {}
+        step(from + 200);
+      }).catch(function (e) {
+        console.warn("[TRP] Seguimiento público no se pudo publicar:", e && e.code);
+        _pubBusy[clientId] = null; // se reintenta en el próximo cambio o al volver a abrir
+      });
+    };
+    step(0);
+  } catch (e) {}
+}
+// Lee la orden pública de un enlace de seguimiento/calificación.
+// Devuelve una promesa con la reparación (o null). Si el taller todavía no ha
+// abierto la versión nueva, cae al formato anterior (lista dentro del catálogo).
+function _readPublicRepair(db, clientId, repairId, legacyAppData) {
+  var legacy = function () {
+    try {
+      var d = legacyAppData ? JSON.parse(legacyAppData) : null;
+      var up = String(repairId).toUpperCase();
+      return ((d && d.repairs) || []).find(function (r) { return (r.id || "").slice(-6).toUpperCase() === up || r.id === repairId; }) || null;
+    } catch (e) { return null; }
+  };
+  return db.collection("seguimiento_publico").doc(clientId + "_" + _pubRepairCode(repairId)).get().then(function (doc) {
+    if (doc.exists && doc.data().repair) {
+      try { return JSON.parse(doc.data().repair); } catch (e) {}
+    }
+    return legacy();
+  }).catch(function () { return legacy(); });
 }
 
 // ─── PANTALLA: INICIO DE SESIÓN ────────────────────────────
@@ -16674,25 +17046,23 @@ function TrackingLoader(_ref) {
         db = firebase.apps[0].firestore();
       if (!db) { setLoading(false); setErrorMsg("Sin conexión al servidor."); return; }
       db.collection("catalogos_publicos").doc(clientId).get().then(function(doc) {
-        if (doc.exists && doc.data().appData) {
-          try {
-            var d = JSON.parse(doc.data().appData);
-            var found = (d.repairs||[]).find(function(r){ return (r.id||"").slice(-6).toUpperCase() === repairId.toUpperCase() || r.id === repairId; });
-            var st = {};
-            if (doc.data().settingsData) { try { st = JSON.parse(doc.data().settingsData); } catch(e2){} }
-            setStore(st);
-            if (found) {
-              setRepair(found);
-              setLoading(false);
-              try {
-                db.collection("calificaciones").doc(clientId + "_" + found.id).get().then(function(rdoc) {
-                  if (rdoc.exists) setExistingRating(rdoc.data());
-                }).catch(function(){});
-              } catch(e3) {}
-            }
-            else { setLoading(false); setErrorMsg("No encontramos una reparación con este código."); }
-          } catch(e) { setLoading(false); setErrorMsg("Error al leer los datos."); }
-        } else { setLoading(false); setErrorMsg("No encontramos información de este taller."); }
+        if (!doc.exists) { setLoading(false); setErrorMsg("No encontramos información de este taller."); return; }
+        var st = {};
+        if (doc.data().settingsData) { try { st = JSON.parse(doc.data().settingsData); } catch(e2){} }
+        setStore(st);
+        // Cada orden vive en su propio documento público (sin teléfono ni clave del equipo)
+        return _readPublicRepair(db, clientId, repairId, doc.data().appData).then(function(found) {
+          if (found) {
+            setRepair(found);
+            setLoading(false);
+            try {
+              db.collection("calificaciones").doc(clientId + "_" + found.id).get().then(function(rdoc) {
+                if (rdoc.exists) setExistingRating(rdoc.data());
+              }).catch(function(){});
+            } catch(e3) {}
+          }
+          else { setLoading(false); setErrorMsg("No encontramos una reparación con este código."); }
+        });
       }).catch(function(e) {
         if (retries > 0) { setTimeout(function(){ loadTrack(retries-1); }, 2000); }
         else { setLoading(false); setErrorMsg("No se pudo cargar. Verifica tu conexión."); }
@@ -16799,7 +17169,7 @@ function TrackingLoader(_ref) {
         style:{ background:"#fff", borderRadius:10, padding:"22px 24px", boxShadow:"0 4px 20px rgba(18,18,18,0.06)", marginBottom:16, border:"1px solid rgba(18,18,18,0.05)" }
       },
         /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:7, fontSize:14, fontWeight:700, color:"#131313", marginBottom:16 } }, /*#__PURE__*/React.createElement(Smartphone,{size:14}), "Datos del equipo"),
-        [["Cliente", r.customer], ["Equipo", r.device], ["Categoría", r.category], ["Problema", r.problem], ["Técnico", r.technician], ["Fecha de ingreso", r.date], ["Bloqueo", (r.lockType==="pin"&&r.lockValue)?("Clave: "+r.lockValue):((r.lockType==="pattern"&&r.lockPattern&&r.lockPattern.length)?("Patrón: "+r.lockPattern.map(function(n){return n+1;}).join(" → ")):"")]].map(function(row){
+        [["Cliente", r.customer], ["Equipo", r.device], ["Categoría", r.category], ["Problema", r.problem], ["Técnico", r.technician], ["Fecha de ingreso", r.date]].map(function(row){
           if(!row[1]) return null;
           return /*#__PURE__*/React.createElement("div", { key:row[0], style:{ display:"flex", justifyContent:"space-between", gap:16, padding:"9px 0", borderBottom:"1px solid #f3f3f3" } },
             /*#__PURE__*/React.createElement("span", { style:{ fontSize:13, color:"#878787", fontWeight:500, flexShrink:0 } }, row[0]),
@@ -17029,7 +17399,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.3.1";
+var APP_VERSION = "1.4.0";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

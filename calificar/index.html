@@ -374,30 +374,37 @@
         return;
       }
 
-      var repairId = rParam, customer = "", device = "";
-      if (data.appData) {
+      // Cada orden vive en su propio documento público: seguimiento_publico/{taller}_{CÓDIGO}.
+      // Si el taller aún no abrió la versión nueva, se busca en el formato anterior.
+      var legacyFind = function(){
         try {
-          var d = JSON.parse(data.appData);
-          var found = (d.repairs || []).find(function(x){
+          var d = data.appData ? JSON.parse(data.appData) : null;
+          return ((d && d.repairs) || []).find(function(x){
             return (x.id || "").slice(-6).toUpperCase() === rParam.toUpperCase() || x.id === rParam;
-          });
-          if (found) {
-            repairId = found.id;
-            customer = found.customer || "";
-            device = found.device || "";
-          }
-        } catch(e){}
-      }
-
-      db.collection("calificaciones").doc(clientId + "_" + repairId).get().then(function(rdoc){
-        if (rdoc.exists) {
-          var rd = rdoc.data();
-          renderThanks(storeName, logo, rd.rating || 0, rd.comment || "");
-        } else {
-          renderForm({ storeName: storeName, logo: logo, repairId: repairId, customer: customer, device: device });
+          }) || null;
+        } catch(e){ return null; }
+      };
+      var code = rParam.slice(-6).toUpperCase().replace(/[^A-Z0-9_-]/g, "_");
+      return db.collection("seguimiento_publico").doc(clientId + "_" + code).get().then(function(sdoc){
+        if (sdoc.exists && sdoc.data().repair) {
+          try { return JSON.parse(sdoc.data().repair); } catch(e){}
         }
-      }).catch(function(){
-        renderState(ICON_WIFI_OFF, "Sin conexión", "No pudimos conectarnos. Revisa tu internet e intenta de nuevo.", true);
+        return legacyFind();
+      }).catch(function(){ return legacyFind(); }).then(function(found){
+        var repairId = rParam, customer = "", device = "";
+        if (found) {
+          repairId = found.id || rParam;
+          customer = found.customer || "";
+          device = found.device || "";
+        }
+        return db.collection("calificaciones").doc(clientId + "_" + repairId).get().then(function(rdoc){
+          if (rdoc.exists) {
+            var rd = rdoc.data();
+            renderThanks(storeName, logo, rd.rating || 0, rd.comment || "");
+          } else {
+            renderForm({ storeName: storeName, logo: logo, repairId: repairId, customer: customer, device: device });
+          }
+        });
       });
     }).catch(function(){
       renderState(ICON_WIFI_OFF, "Sin conexión", "No pudimos conectarnos. Revisa tu internet e intenta de nuevo.", true);

@@ -1,5 +1,5 @@
 {
-  "version": "1.3.1",
-  "notes": "CLINICELL — el ícono de la app instalada (escritorio y celular) ahora es el logo de CLINICELL",
+  "version": "1.4.0",
+  "notes": "Seguridad: el seguimiento público ya no expone teléfonos ni claves de los equipos. Guardado más seguro: los cambios de varios equipos se combinan y se avisa si algo no subió a la nube.",
   "url": "https://edier27.github.io/Acce7/"
 }
