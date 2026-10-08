@@ -1,5 +1,5 @@
 {
-  "version": "1.5.0",
-  "notes": "Nuevo módulo de Empeños (contratos, prórrogas, entrega y venta de artículos).",
+  "version": "1.5.1",
+  "notes": "Empeños: botón de imprimir contrato en la lista y el detalle, firma en pantalla después de crear y contrato de muestra desde Condiciones.",
   "url": "https://edier27.github.io/Acce7/"
 }
