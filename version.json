@@ -1,5 +1,5 @@
 {
-  "version": "1.6.0",
-  "notes": "Los estilos ahora cambian la distribución: Windows 10/11 con barra de tareas y menú Inicio, macOS con dock, Software clásico con barra de herramientas.",
+  "version": "1.6.1",
+  "notes": "Estilos Windows: buscador que encuentra secciones o pregunta a la IA, centro de notificaciones en la barra y sin botón Inicio.",
   "url": "https://edier27.github.io/Acce7/"
 }

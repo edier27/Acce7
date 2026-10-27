@@ -16952,7 +16952,14 @@ function App(_appProps) {
   // Distribución según el estilo de interfaz (solo en computador; en celular se deja la de siempre).
   var _uiL = !isMobile && UI_LAYOUTS.indexOf(settings.uiStyle) >= 0 ? settings.uiStyle : null;
   var _uiProps = { estilo: _uiL, navItems: navItems, view: view, setView: setView, storeName: settings.storeName,
-    onCatalog: function () { openCatalog(); }, onRating: function () { copyRatingLink(); }, onLogout: function () { handleLogoutFromMenu(); } };
+    onCatalog: function () { openCatalog(); }, onRating: function () { copyRatingLink(); }, onLogout: function () { handleLogoutFromMenu(); },
+    // Centro de notificaciones de la barra de tareas
+    readyCount: readyRepairs.length, lowStockCount: lowStock.length, unclaimed: unclaimedRepairs, unreadUnclaimed: unreadUnclaimedCount,
+    ratings: ratings, unseenRatings: unseenRatings.length, markUnclaimedRead: markUnclaimedRead,
+    onRatingsSeen: function () { var now = new Date().toISOString(); try { localStorage.setItem("trp_ratings_seen_" + clientId, now); } catch (e) {} setRatingsSeenAt(now); },
+    waFor: function (r) { return r.phone ? ("https://wa.me/57" + r.phone.replace(/\D/g, "") + "?text=" + encodeURIComponent(buildAbandonoWAMessage(r.customer, r.device, r._daysUnclaimed, settings && settings.storeName))) : null; } };
+  // En los estilos Windows los avisos de arriba pasan al centro de notificaciones de la barra.
+  var _uiWin = _uiL === "win10" || _uiL === "win11";
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -17117,14 +17124,14 @@ function App(_appProps) {
         style: { margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.03em" }
       }, (_activeNavItem && _activeNavItem.label) || "Dashboard"),
       /*#__PURE__*/React.createElement("div", { style: { flex: 1 } }),
-      !isMobile && /*#__PURE__*/React.createElement("div", {
+      !isMobile && !_uiWin && /*#__PURE__*/React.createElement("div", {
         style: { fontSize: 13, color: T.muted, fontWeight: 500, textTransform: "capitalize" }
       }, new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })),
-      !isMobile && lowStock.length > 0 && /*#__PURE__*/React.createElement("div", {
+      !isMobile && !_uiWin && lowStock.length > 0 && /*#__PURE__*/React.createElement("div", {
         onClick: function onClick() { return setView("inventory"); },
         style: { display: "flex", alignItems: "center", gap: 6, background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.3)", borderRadius: 20, padding: "5px 14px", fontSize: 13, fontWeight: 600, color: T.yellow, cursor: "pointer" }
       }, /*#__PURE__*/React.createElement(AlertTriangle, { size: 13 }), " ", lowStock.length, " bajo stock"),
-      !isMobile && readyRepairs.length > 0 && /*#__PURE__*/React.createElement("div", {
+      !isMobile && !_uiWin && readyRepairs.length > 0 && /*#__PURE__*/React.createElement("div", {
         onClick: function onClick() { return setView("repairs"); },
         style: { display: "flex", alignItems: "center", gap: 6, background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.3)", borderRadius: 20, padding: "5px 14px", fontSize: 13, fontWeight: 600, color: T.green, cursor: "pointer" }
       }, /*#__PURE__*/React.createElement(CheckCircle, { size: 13 }), " ", readyRepairs.length, " lista", readyRepairs.length > 1 ? "s" : "", " para entregar"),
@@ -17138,7 +17145,7 @@ function App(_appProps) {
         title: "Listas para entregar",
         style: { width: 10, height: 10, borderRadius: "50%", background: T.green, flexShrink: 0, cursor: "pointer" }
       }),
-      /*#__PURE__*/React.createElement("div", { style: { position: "relative" } },
+      !_uiWin && /*#__PURE__*/React.createElement("div", { style: { position: "relative" } },
         /*#__PURE__*/React.createElement("button", {
           onClick: handleOpenNotif,
           title: "Notificaciones",
@@ -17315,152 +17322,179 @@ function _uiIco(name, size) {
 function _uiIcono(item, size) {
   return item && item.icon && React.isValidElement(item.icon) ? React.cloneElement(item.icon, { size: size }) : _uiIco("Circle", size);
 }
-// Secciones fijadas en la barra; la abierta se agrega si no está.
-function _uiFijados(items, view) {
-  var ids = ["dashboard", "repairs", "inventory", "products", "celulares", "customers", "sales", "facturas", "caja", "reporte"];
-  var out = ids.map(function (id) { return items.find(function (n) { return n.id === id; }); }).filter(Boolean);
-  var cur = items.find(function (n) { return n.id === view; });
-  if (cur && out.indexOf(cur) < 0) out.push(cur);
-  return out;
-}
-function _WinLogo(p) {
-  var s = p.size || 16, c = p.color || "#fff", g = s * 0.06, m = (s - g) / 2;
-  var r = p.w11 ? s * 0.08 : 0;
-  var cols = p.w11 ? ["#0078D4", "#0091F0", "#0091F0", "#00A2FF"] : [c, c, c, c];
-  return React.createElement("svg", { width: s, height: s, viewBox: "0 0 " + s + " " + s, style: { display: "block" } },
-    React.createElement("rect", { x: 0, y: 0, width: m, height: m, rx: r, fill: cols[0] }),
-    React.createElement("rect", { x: m + g, y: 0, width: m, height: m, rx: r, fill: cols[1] }),
-    React.createElement("rect", { x: 0, y: m + g, width: m, height: m, rx: r, fill: cols[2] }),
-    React.createElement("rect", { x: m + g, y: m + g, width: m, height: m, rx: r, fill: cols[3] }));
-}
-
-// ── Windows 10 / Windows 11: barra de tareas + menú Inicio ──
+// ── Windows 10 / Windows 11: barra de tareas con buscador (secciones + IA) y centro de notificaciones ──
+var _UI_SUGERENCIAS_IA = ["¿Cuánto vendí hoy?", "¿Qué repuestos están por agotarse?", "¿Qué equipos están listos para entregar?"];
 function UiTaskbar(p) {
   var h = React.createElement;
   var w11 = p.estilo === "win11";
-  var _o = useState(false), abierto = _o[0], setAbierto = _o[1];
   var _q = useState(""), q = _q[0], setQ = _q[1];
-  var ahora = _useReloj();
+  var _b = useState(false), buscando = _b[0], setBuscando = _b[1];
+  var _n = useState(false), notifAbierto = _n[0], setNotifAbierto = _n[1];
   var items = p.navItems || [];
-  var cerrar = function () { setAbierto(false); setQ(""); };
-  var ir = function (id) { p.setView(id); cerrar(); };
   var barH = w11 ? 48 : 40;
   var fg = w11 ? T.text : "#f2f2f2";
   var sel = w11 ? T.bg : "rgba(255,255,255,0.10)";
-  var hora = ahora.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" });
-  var fecha = ahora.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
-  var ql = q.trim().toLowerCase();
-  var lista = items.filter(function (n) { return !ql || n.label.toLowerCase().indexOf(ql) >= 0; });
-  var extras = [
-    { id: "__cat", label: "Catálogo Público", icon: h(ExternalLink, { size: 17 }), run: p.onCatalog },
-    { id: "__cal", label: "Link para Calificar", icon: h(Star, { size: 17 }), run: p.onRating }
-  ].filter(function (x) { return !ql || x.label.toLowerCase().indexOf(ql) >= 0; });
-  var abrirConBusqueda = function () { setAbierto(true); };
+  // Colores de los paneles: Windows 10 oscuro, Windows 11 según el tema.
+  var pBg = w11 ? T.surface : "#1f1f1f", pFg = w11 ? T.text : "#f2f2f2", pMuted = w11 ? T.muted : "#bdbdbd",
+    pCard = w11 ? T.card : "#2b2b2b", pBorde = w11 ? T.border : "#333";
 
+  var ql = q.trim().toLowerCase();
+  var secciones = ql ? items.filter(function (n) { return n.label.toLowerCase().indexOf(ql) >= 0; }).slice(0, 6) : [];
+  // Una sola palabra que coincide con el inicio de una sección: Enter abre esa sección. Si no, Enter pregunta a la IA.
+  var atajo = ql && !/[\s?¿]/.test(q.trim()) ? items.find(function (n) { return n.label.toLowerCase().indexOf(ql) === 0; }) : null;
+  var cerrarBusqueda = function () { setBuscando(false); setQ(""); try { document.activeElement && document.activeElement.blur(); } catch (e) {} };
+  var preguntarIA = function (texto) {
+    cerrarBusqueda();
+    if (typeof window.__acceAskAI === "function") window.__acceAskAI(texto);
+    else p.setView("ia");
+  };
+  var ir = function (id) { p.setView(id); cerrarBusqueda(); setNotifAbierto(false); };
+
+  // ── Botones de la barra ──
   var appBtn = function (item) {
     var on = p.view === item.id;
     return h("button", {
       key: item.id, title: item.label, onClick: function () { ir(item.id); },
-      style: { position: "relative", width: w11 ? 40 : 46, height: w11 ? 40 : barH, display: "flex", alignItems: "center", justifyContent: "center",
+      style: { position: "relative", width: w11 ? 40 : 44, height: w11 ? 40 : barH, display: "flex", alignItems: "center", justifyContent: "center",
         border: "none", cursor: "pointer", color: fg, background: on ? sel : "transparent", borderRadius: w11 ? 6 : 0, flexShrink: 0, padding: 0 }
     },
       _uiIcono(item, w11 ? 19 : 18),
       on && h("span", { style: w11
         ? { position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 16, height: 3, borderRadius: 2, background: T.accent }
         : { position: "absolute", bottom: 0, left: 3, right: 3, height: 2, background: T.accent } }),
-      item.badge > 0 && h("span", { style: { position: "absolute", top: w11 ? 1 : 4, right: w11 ? 1 : 5, minWidth: 14, height: 14, padding: "0 3px", borderRadius: 7,
+      item.badge > 0 && h("span", { style: { position: "absolute", top: w11 ? 1 : 4, right: w11 ? 1 : 4, minWidth: 14, height: 14, padding: "0 3px", borderRadius: 7,
         background: T.orange, color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" } }, item.badge > 9 ? "9+" : item.badge));
   };
-  var inicio = h("button", {
-    key: "inicio", title: "Inicio", onClick: function () { abierto ? cerrar() : setAbierto(true); },
-    style: { width: w11 ? 40 : 46, height: w11 ? 40 : barH, display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer",
-      background: abierto ? sel : "transparent", borderRadius: w11 ? 6 : 0, flexShrink: 0, padding: 0 }
-  }, _WinLogo({ size: w11 ? 19 : 16, w11: w11, color: fg }));
-  var busquedaW10 = !w11 && h("div", {
-    key: "busq", onClick: abrirConBusqueda,
-    style: { width: 250, height: barH, display: "flex", alignItems: "center", gap: 10, padding: "0 12px", background: "#f2f2f2", color: "#555", fontSize: 13, cursor: "text", flexShrink: 0 }
-  }, _uiIco("Search", 16), "Escribe aquí para buscar");
-  var bandeja = h("div", { key: "reloj", style: { display: "flex", flexDirection: "column", alignItems: w11 ? "flex-end" : "center", justifyContent: "center", padding: "0 12px", color: fg, fontSize: 11.5, lineHeight: 1.35, flexShrink: 0 } },
-    h("span", null, hora), h("span", null, fecha));
 
-  // Menú Inicio
-  var buscador = h("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: w11 ? 999 : 0,
-      background: w11 ? T.bg : "#3a3a3a", border: "1px solid " + (w11 ? T.border : "#3a3a3a"), color: w11 ? T.muted : "#cfcfcf" } },
-    _uiIco("Search", 15),
-    h("input", { className: "ui-sin-sombra", autoFocus: true, value: q, onChange: function (e) { setQ(e.target.value); }, placeholder: "Buscar sección…",
-      onKeyDown: function (e) { if (e.key === "Escape") cerrar(); if (e.key === "Enter" && lista[0]) ir(lista[0].id); },
-      style: { flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", color: w11 ? T.text : "#fff", fontSize: 14, fontFamily: "inherit" } }));
-  var menu;
-  if (w11) {
-    menu = h("div", { style: { position: "fixed", zIndex: 301, bottom: barH + 10, left: "50%", transform: "translateX(-50%)", width: 600, maxWidth: "calc(100vw - 24px)",
-        maxHeight: "calc(100dvh - " + (barH + 30) + "px)", display: "flex", flexDirection: "column", background: T.surface, color: T.text,
-        border: "1px solid " + T.border, borderRadius: 8, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", overflow: "hidden" } },
-      h("div", { style: { padding: "22px 26px 6px" } }, buscador),
-      h("div", { style: { padding: "14px 26px 4px", fontSize: 13.5, fontWeight: 600 } }, ql ? "Resultados" : "Anclado"),
-      h("div", { className: "trp-scroll", style: { flex: 1, overflow: "auto", padding: "6px 18px 18px", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 4 } },
-        lista.map(function (n) {
-          var on = p.view === n.id;
-          return h("button", { key: n.id, onClick: function () { ir(n.id); }, title: n.label,
-            style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 4px", border: "none", borderRadius: 6, cursor: "pointer",
-              background: on ? T.bg : "transparent", color: T.text, fontFamily: "inherit" } },
-            h("span", { style: { color: T.accent, display: "flex" } }, _uiIcono(n, 24)),
-            h("span", { style: { fontSize: 11.5, lineHeight: 1.25, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", width: "100%", whiteSpace: "nowrap" } }, n.label));
-        }),
-        extras.map(function (x) {
-          return h("button", { key: x.id, onClick: function () { cerrar(); x.run && x.run(); }, title: x.label,
-            style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 4px", border: "none", borderRadius: 6, cursor: "pointer", background: "transparent", color: T.text, fontFamily: "inherit" } },
-            h("span", { style: { color: T.accent, display: "flex" } }, React.cloneElement(x.icon, { size: 24 })),
-            h("span", { style: { fontSize: 11.5, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", width: "100%", whiteSpace: "nowrap" } }, x.label));
-        }),
-        lista.length + extras.length === 0 && h("div", { style: { gridColumn: "1 / -1", padding: 20, textAlign: "center", color: T.muted, fontSize: 13 } }, "No se encontró esa sección")),
-      h("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "12px 26px", borderTop: "1px solid " + T.border, background: T.bg } },
-        h("span", { style: { width: 30, height: 30, borderRadius: "50%", background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 } },
-          (p.storeName || "C").charAt(0).toUpperCase()),
-        h("span", { style: { flex: 1, fontSize: 13, fontWeight: 600 } }, p.storeName || "Mi taller"),
-        h("button", { title: "Configuración", onClick: function () { ir("settings"); }, style: { width: 34, height: 34, border: "none", borderRadius: 6, background: "transparent", color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" } }, _uiIco("Settings", 17)),
-        h("button", { title: "Cerrar sesión", onClick: function () { cerrar(); p.onLogout && p.onLogout(); }, style: { width: 34, height: 34, border: "none", borderRadius: 6, background: "transparent", color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" } }, _uiIco("Power", 17))));
-  } else {
-    var railBtn = function (key, icon, title, fn) {
-      return h("button", { key: key, title: title, onClick: fn, style: { width: 48, height: 46, border: "none", background: "transparent", color: "#f2f2f2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 } }, icon);
-    };
-    var fila = function (key, icon, label, fn, on) {
-      return h("button", { key: key, onClick: fn, title: label,
-        style: { display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "5px 12px", border: "none", cursor: "pointer", textAlign: "left",
-          background: on ? "rgba(255,255,255,0.10)" : "transparent", color: "#f2f2f2", fontFamily: "inherit", fontSize: 13.5 } },
-        h("span", { style: { width: 32, height: 32, background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, icon),
-        h("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, label));
-    };
-    menu = h("div", { style: { position: "fixed", zIndex: 301, bottom: barH, left: 0, width: 360, height: "min(600px, calc(100dvh - " + (barH + 10) + "px))",
-        display: "flex", background: "#262626", color: "#f2f2f2", boxShadow: "0 0 24px rgba(0,0,0,0.4)" } },
-      h("div", { style: { width: 48, display: "flex", flexDirection: "column", justifyContent: "flex-end", background: "#1f1f1f", paddingBottom: 4 } },
-        railBtn("u", h("span", { style: { width: 26, height: 26, borderRadius: "50%", background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12 } }, (p.storeName || "C").charAt(0).toUpperCase()), p.storeName || "Mi taller", function () {}),
-        railBtn("s", _uiIco("Settings", 18), "Configuración", function () { ir("settings"); }),
-        railBtn("x", _uiIco("Power", 18), "Cerrar sesión", function () { cerrar(); p.onLogout && p.onLogout(); })),
-      h("div", { style: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column" } },
-        h("div", { style: { padding: "12px 12px 8px" } }, buscador),
-        h("div", { style: { padding: "4px 14px 6px", fontSize: 12, color: "#bdbdbd" } }, ql ? "Resultados" : "Todas las secciones"),
-        h("div", { className: "trp-scroll", style: { flex: 1, overflow: "auto", paddingBottom: 8 } },
-          lista.map(function (n) { return fila(n.id, _uiIcono(n, 17), n.label, function () { ir(n.id); }, p.view === n.id); }),
-          extras.map(function (x) { return fila(x.id, x.icon, x.label, function () { cerrar(); x.run && x.run(); }, false); }),
-          lista.length + extras.length === 0 && h("div", { style: { padding: 20, color: "#bdbdbd", fontSize: 13 } }, "No se encontró esa sección"))));
-  }
+  var cajaBusqueda = h("div", {
+    key: "busq",
+    style: { width: w11 ? 230 : 270, height: w11 ? 34 : barH, display: "flex", alignItems: "center", gap: 9, padding: "0 12px", flexShrink: 0,
+      background: w11 ? T.bg : "#f2f2f2", border: w11 ? "1px solid " + T.border : "none", borderRadius: w11 ? 999 : 0, color: w11 ? T.muted : "#555" }
+  },
+    _uiIco("Search", 16),
+    h("input", {
+      className: "ui-sin-sombra", value: q, placeholder: "Buscar o preguntar a la IA",
+      onFocus: function () { setBuscando(true); setNotifAbierto(false); },
+      onChange: function (e) { setQ(e.target.value); setBuscando(true); },
+      onKeyDown: function (e) {
+        if (e.key === "Escape") cerrarBusqueda();
+        if (e.key === "Enter" && q.trim()) {
+          if (atajo) ir(atajo.id); else preguntarIA(q.trim());
+        }
+      },
+      style: { flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", color: w11 ? T.text : "#222", fontSize: 13, fontFamily: "inherit", padding: 0 }
+    }));
 
-  var fijados = _uiFijados(items, p.view);
+  var noLeidas = (p.unreadUnclaimed || 0) + (p.unseenRatings || 0);
+  var botonNotif = h("button", {
+    key: "notif", title: "Notificaciones",
+    onClick: function () { var abrir = !notifAbierto; setNotifAbierto(abrir); cerrarBusqueda(); if (abrir && p.onRatingsSeen) p.onRatingsSeen(); },
+    style: { position: "relative", width: w11 ? 40 : 46, height: w11 ? 40 : barH, display: "flex", alignItems: "center", justifyContent: "center", border: "none",
+      cursor: "pointer", color: fg, background: notifAbierto ? sel : "transparent", borderRadius: w11 ? 6 : 0, flexShrink: 0, padding: 0 }
+  },
+    _uiIco(w11 ? "Bell" : "MessageSquare", 18),
+    noLeidas > 0 && h("span", { style: { position: "absolute", top: w11 ? 3 : 5, right: w11 ? 3 : 6, minWidth: 15, height: 15, padding: "0 3px", borderRadius: 8,
+      background: T.red, color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" } }, noLeidas > 9 ? "9+" : noLeidas));
+
+  // ── Resultados de la búsqueda ──
+  var filaRes = function (key, icon, texto, sub, fn, destacado) {
+    return h("button", { key: key, onMouseDown: function (e) { e.preventDefault(); }, onClick: fn,
+      style: { display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "9px 14px", border: "none", cursor: "pointer", textAlign: "left",
+        background: destacado ? (w11 ? T.accentDim : "rgba(255,255,255,0.08)") : "transparent", color: pFg, fontFamily: "inherit", borderRadius: w11 ? 6 : 0 } },
+      h("span", { style: { width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#fff", background: T.accent, borderRadius: w11 ? 6 : 0 } }, icon),
+      h("span", { style: { minWidth: 0 } },
+        h("span", { style: { display: "block", fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, texto),
+        sub && h("span", { style: { display: "block", fontSize: 11.5, color: pMuted, marginTop: 1 } }, sub)));
+  };
+  var panelBusqueda = h("div", {
+    style: { position: "fixed", zIndex: 301, bottom: barH + (w11 ? 8 : 0), left: w11 ? "50%" : 0, transform: w11 ? "translateX(-50%)" : "none",
+      width: w11 ? 520 : 400, maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100dvh - " + (barH + 40) + "px)", overflow: "auto",
+      background: pBg, color: pFg, border: "1px solid " + pBorde, borderRadius: w11 ? 8 : 0, boxShadow: "0 12px 40px rgba(0,0,0,0.3)", padding: w11 ? 10 : "8px 0" }
+  },
+    ql
+      ? h(React.Fragment, null,
+          atajo && filaRes("at", _uiIcono(atajo, 16), atajo.label, "Enter para abrir", function () { ir(atajo.id); }, true),
+          filaRes("ia", _uiIco("Sparkles", 16), "Preguntar a la IA: «" + q.trim() + "»", atajo ? null : "Enter para enviar", function () { preguntarIA(q.trim()); }, !atajo),
+          secciones.filter(function (n) { return n !== atajo; }).length > 0 && h("div", { style: { padding: "10px 14px 4px", fontSize: 11.5, color: pMuted, fontWeight: 600 } }, "Secciones"),
+          secciones.filter(function (n) { return n !== atajo; }).map(function (n) { return filaRes(n.id, _uiIcono(n, 16), n.label, null, function () { ir(n.id); }, false); }))
+      : h(React.Fragment, null,
+          h("div", { style: { padding: "8px 14px 6px", fontSize: 12.5, color: pMuted } }, "Escribe el nombre de una sección o hazle una pregunta a la IA."),
+          h("div", { style: { padding: "6px 14px 4px", fontSize: 11.5, color: pMuted, fontWeight: 600 } }, "Preguntas sugeridas"),
+          _UI_SUGERENCIAS_IA.map(function (s, i) { return filaRes("s" + i, _uiIco("Sparkles", 16), s, null, function () { preguntarIA(s); }, false); })));
+
+  // ── Centro de notificaciones (como el de Windows 10) ──
+  var tarjeta = function (key, icon, color, titulo, sub, fn, extra, tenue) {
+    return h("div", { key: key, onClick: fn,
+      style: { display: "flex", gap: 12, padding: "12px 14px", background: pCard, border: "1px solid " + pBorde, borderRadius: w11 ? 8 : 0, cursor: fn ? "pointer" : "default", opacity: tenue ? 0.6 : 1 } },
+      h("span", { style: { color: color, display: "flex", paddingTop: 1, flexShrink: 0 } }, icon),
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        h("div", { style: { fontSize: 13.5, fontWeight: 600, color: pFg } }, titulo),
+        sub && h("div", { style: { fontSize: 12, color: pMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, sub),
+        extra || null));
+  };
+  var listos = p.readyCount || 0, bajos = p.lowStockCount || 0;
+  var sinReclamar = (p.unclaimed || []).slice(0, 8);
+  var cals = (p.ratings || []).slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).slice(0, 6);
+  var hayAlgo = listos || bajos || sinReclamar.length || cals.length;
+  var accion = function (key, icon, label, fn) {
+    return h("button", { key: key, onClick: function () { setNotifAbierto(false); fn && fn(); },
+      style: { display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "space-between", gap: 10, height: 64, padding: "9px 10px",
+        border: "1px solid " + pBorde, cursor: "pointer", background: pCard, color: pFg, fontFamily: "inherit", textAlign: "left", borderRadius: w11 ? 8 : 0 } },
+      h("span", { style: { display: "flex", color: T.accent } }, icon),
+      h("span", { style: { fontSize: 11.5, lineHeight: 1.2 } }, label));
+  };
+  var panelNotif = h("div", {
+    style: w11
+      ? { position: "fixed", zIndex: 301, right: 10, bottom: barH + 10, width: 380, maxHeight: "calc(100dvh - " + (barH + 30) + "px)", display: "flex", flexDirection: "column",
+          background: pBg, color: pFg, border: "1px solid " + pBorde, borderRadius: 8, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", overflow: "hidden" }
+      : { position: "fixed", zIndex: 301, right: 0, top: 0, bottom: barH, width: 380, maxWidth: "100vw", display: "flex", flexDirection: "column",
+          background: pBg, color: pFg, borderLeft: "1px solid " + pBorde, boxShadow: "0 0 24px rgba(0,0,0,0.4)" }
+  },
+    h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px" } },
+      h("div", { style: { fontSize: 15, fontWeight: 700 } }, "Notificaciones"),
+      h("button", { onClick: function () { setNotifAbierto(false); }, title: "Cerrar", style: { border: "none", background: "transparent", color: pMuted, cursor: "pointer", display: "flex", padding: 4 } }, _uiIco("X", 16))),
+    h("div", { className: "trp-scroll", style: { flex: 1, overflow: "auto", padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 8 } },
+      !hayAlgo && h("div", { style: { padding: "30px 10px", textAlign: "center", color: pMuted, fontSize: 13 } }, "No hay notificaciones nuevas"),
+      listos > 0 && tarjeta("listos", _uiIco("CheckCircle", 18), T.green, listos + " equipo" + (listos > 1 ? "s" : "") + " listo" + (listos > 1 ? "s" : "") + " para entregar", "Toca para ver las reparaciones", function () { ir("repairs"); }),
+      bajos > 0 && tarjeta("bajos", _uiIco("AlertTriangle", 18), T.orange, bajos + " repuesto" + (bajos > 1 ? "s" : "") + " con bajo stock", "Toca para ver el inventario", function () { ir("inventory"); }),
+      sinReclamar.length > 0 && h("div", { key: "t1", style: { fontSize: 11.5, color: pMuted, fontWeight: 600, padding: "6px 2px 0" } }, "Equipos sin reclamar"),
+      sinReclamar.map(function (r, i) {
+        var wa = p.waFor ? p.waFor(r) : null;
+        return tarjeta("u" + (r.id || i), _uiIco("Clock", 18), r._daysUnclaimed >= 30 ? T.red : T.orange,
+          (r.customer || "Cliente") + " · " + r._daysUnclaimed + " días", r.device || "",
+          function () { if (p.markUnclaimedRead) p.markUnclaimedRead(r.id, r._tier); ir("repairs"); },
+          wa && h("a", { href: wa, target: "_blank", rel: "noopener noreferrer",
+            onClick: function (e) { e.stopPropagation(); if (p.markUnclaimedRead) p.markUnclaimedRead(r.id, r._tier); },
+            style: { display: "inline-flex", alignItems: "center", gap: 4, marginTop: 6, fontSize: 12, fontWeight: 700, color: "#16A34A", textDecoration: "none" } },
+            _uiIco("MessageCircle", 12), r._daysUnclaimed >= 30 ? "Enviar requerimiento" : "Enviar recordatorio"),
+          r._isRead);
+      }),
+      cals.length > 0 && h("div", { key: "t2", style: { fontSize: 11.5, color: pMuted, fontWeight: 600, padding: "6px 2px 0" } }, "Calificaciones de clientes"),
+      cals.map(function (rt, i) {
+        var estrellas = "★★★★★".slice(0, Math.max(0, Math.min(5, rt.rating || 0))) + "☆☆☆☆☆".slice(0, 5 - Math.max(0, Math.min(5, rt.rating || 0)));
+        return tarjeta("c" + i, _uiIco("Star", 18), "#F59E0B", (rt.customer || "Cliente anónimo") + "  " + estrellas,
+          rt.comment ? "“" + rt.comment + "”" : (rt.date ? new Date(rt.date).toLocaleDateString("es-CO", { day: "2-digit", month: "short" }) : ""), function () { ir("dashboard"); });
+      })),
+    h("div", { style: { padding: 12, borderTop: "1px solid " + pBorde, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 } },
+      accion("rep", _uiIco("Wrench", 17), "Reparaciones", function () { ir("repairs"); }),
+      accion("cat", h(ExternalLink, { size: 17 }), "Catálogo", p.onCatalog),
+      accion("cal", h(Star, { size: 17 }), "Link calificar", p.onRating),
+      accion("out", _uiIco("Power", 17), "Cerrar sesión", p.onLogout)));
+
   return h(React.Fragment, null,
-    abierto && h("div", { onClick: cerrar, style: { position: "fixed", inset: 0, zIndex: 300 } }),
-    abierto && menu,
+    (buscando || notifAbierto) && h("div", { onClick: function () { cerrarBusqueda(); setNotifAbierto(false); }, style: { position: "fixed", inset: 0, zIndex: 300 } }),
+    buscando && panelBusqueda,
+    notifAbierto && panelNotif,
     h("div", { style: { height: barH, flexShrink: 0, display: "flex", alignItems: "center", gap: w11 ? 4 : 0, padding: w11 ? "0 8px" : 0,
-        background: w11 ? T.surface : "#1c1c1c", borderTop: w11 ? "1px solid " + T.border : "none", position: "relative", zIndex: 100 } },
+        background: w11 ? T.surface : "#1c1c1c", borderTop: w11 ? "1px solid " + T.border : "none", position: "relative", zIndex: buscando || notifAbierto ? 302 : 100 } },
       w11
         ? h(React.Fragment, null,
             h("div", { style: { flex: 1 } }),
-            h("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, inicio,
-              h("button", { title: "Buscar", onClick: abrirConBusqueda, style: { width: 40, height: 40, border: "none", borderRadius: 6, background: "transparent", color: fg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 } }, _uiIco("Search", 18)),
-              fijados.map(appBtn)),
-            h("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" } }, bandeja))
-        : h(React.Fragment, null, inicio, busquedaW10,
-            h("div", { style: { display: "flex", alignItems: "stretch", height: "100%", overflow: "hidden" } }, fijados.map(appBtn)),
-            h("div", { style: { flex: 1 } }), bandeja)));
+            h("div", { style: { display: "flex", alignItems: "center", gap: 4, minWidth: 0, overflow: "hidden" } }, cajaBusqueda, items.map(appBtn)),
+            h("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" } }, botonNotif))
+        : h(React.Fragment, null, cajaBusqueda,
+            h("div", { style: { display: "flex", alignItems: "stretch", height: "100%", overflow: "hidden", minWidth: 0 } }, items.map(appBtn)),
+            h("div", { style: { flex: 1 } }), botonNotif)));
 }
 
 // ── macOS: dock flotante ──
@@ -18712,7 +18746,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.0";
+var APP_VERSION = "1.6.1";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
@@ -19466,6 +19500,14 @@ body:not(.acce-en-app) #acce-ai-panel { display: none !important; }
     panel.classList.add("hidden");
     isOpen = false;
   }
+
+  // Permite preguntarle a la IA desde otras partes (buscador de la barra de tareas).
+  window.__acceAskAI = function (text) {
+    openPanel();
+    if (!text) return;
+    inputEl.value = String(text);
+    if (localStorage.getItem(KEY_STORE)) sendMessage();
+  };
 
   btn.addEventListener("click", function() {
     isOpen ? closePanel() : openPanel();
