@@ -810,7 +810,55 @@ var applyTheme = function applyTheme(settings) {
   document.body.classList.toggle("dark", isDark);
   document.body.setAttribute("data-theme", isDark ? "dark" : "light");
   document.body.style.background = base.bg;
+  _aplicarEstiloUI(settings.uiStyle);
 };
+
+// ─── Estilos de interfaz (forma del programa: letra, esquinas y sombras) ───
+// Se aplican con CSS global según <html data-ui="...">; "moderno" es el diseño original.
+var UI_STYLES = {
+  moderno: { label: "Moderno", desc: "El diseño original de CLINICELL" },
+  win10:   { label: "Windows 10", desc: "Plano, esquinas rectas, letra Segoe UI" },
+  win11:   { label: "Windows 11", desc: "Esquinas suaves, letra Segoe UI" },
+  mac:     { label: "macOS", desc: "Redondeado y limpio, letra de Apple" },
+  clasico: { label: "Software clásico", desc: "Sobrio, sin sombras, letra Tahoma" }
+};
+var _UI_FONTS = {
+  win10: "'Segoe UI', Tahoma, Arial, sans-serif",
+  win11: "'Segoe UI Variable Text', 'Segoe UI', Tahoma, Arial, sans-serif",
+  mac: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+  clasico: "Tahoma, Verdana, 'Segoe UI', Arial, sans-serif"
+};
+// [radio general, radio de botones/campos, ¿las pastillas siguen redondas?, ¿sin sombras?]
+var _UI_FORMA = { win10: ["0", "0", false, true], win11: ["8px", "4px", true, false], mac: ["12px", "7px", true, false], clasico: ["2px", "2px", false, true] };
+function _uiStyleCss() {
+  var css = "";
+  Object.keys(_UI_FONTS).forEach(function (k) {
+    var s = 'html[data-ui="' + k + '"] ';
+    css += [s + "body", s + "input", s + "select", s + "textarea", s + "button"].join(",") +
+      "{font-family:" + _UI_FONTS[k] + "!important;letter-spacing:0!important}";
+  });
+  Object.keys(_UI_FORMA).forEach(function (k) {
+    var f = _UI_FORMA[k], s = 'html[data-ui="' + k + '"] ';
+    css += s + '[style*="border-radius"]{border-radius:' + f[0] + "!important}";
+    css += s + ':is(button,input,select,textarea)[style*="border-radius"]{border-radius:' + f[1] + "!important}";
+    if (f[2]) css += s + ':is(div,span,button,a,label)[style*="border-radius: 999px"]{border-radius:999px!important}';
+    css += s + ':is(div,span,button,img,a,label,input)[style*="border-radius: 50%"]{border-radius:50%!important}';
+    if (f[3]) css += s + '[style*="box-shadow"]{box-shadow:none!important}';
+  });
+  return css;
+}
+function _aplicarEstiloUI(estilo) {
+  var k = UI_STYLES[estilo] ? estilo : "moderno";
+  try {
+    if (!document.getElementById("ui-style-css")) {
+      var st = document.createElement("style");
+      st.id = "ui-style-css";
+      st.textContent = _uiStyleCss();
+      document.head.appendChild(st);
+    }
+    document.documentElement.setAttribute("data-ui", k);
+  } catch (e) {}
+}
 // ─── Sistema de Licencias GlobalAcce ─────────────────────
 var LICENSE_WA = "573214016292";
 var LICENSE_PRICE = "$ 350.000 / mes";
@@ -9427,7 +9475,48 @@ function SettingsView(_ref20) {
 
   // ¿Hay cambios sin guardar?
   var _norm = function (v) { return v === undefined || v === null || v === false ? "" : String(v); };
-  var CAMPOS = ["storeName", "storeSubtitle", "logo", "loginBrand", "nit", "address", "email", "whatsapp", "theme", "accentColor", "themePreset"];
+  var CAMPOS = ["storeName", "storeSubtitle", "logo", "loginBrand", "nit", "address", "email", "whatsapp", "theme", "accentColor", "themePreset", "uiStyle"];
+  var handleUiStyle = function (key) {
+    var updated = Object.assign({}, form, { uiStyle: key });
+    setForm(updated);
+    saveSettings(updated);
+    notify("Estilo aplicado: " + UI_STYLES[key].label);
+  };
+  var estiloActual = UI_STYLES[form.uiStyle] ? form.uiStyle : "moderno";
+  // Miniatura de una ventana en cada estilo (en SVG para que el CSS de estilos no la altere).
+  var uiPreview = function (k) {
+    var r = { moderno: 10, win10: 0, win11: 6, mac: 9, clasico: 1 }[k];
+    var rc = { moderno: 8, win10: 0, win11: 3, mac: 5, clasico: 1 }[k];
+    var font = _UI_FONTS[k] || "'DM Sans', system-ui, sans-serif";
+    var ac = T.accent;
+    var kids = [
+      h("rect", { key: "w", x: 0.5, y: 0.5, width: 159, height: 95, rx: r, fill: T.bg, stroke: T.border }),
+      h("rect", { key: "tb", x: 1, y: 1, width: 158, height: 13, rx: r, fill: k === "clasico" ? ac : T.surface }),
+      h("rect", { key: "tb2", x: 1, y: 8, width: 158, height: 6, fill: k === "clasico" ? ac : T.surface }),
+      h("line", { key: "tl", x1: 1, y1: 14, x2: 159, y2: 14, stroke: T.border })
+    ];
+    if (k === "mac") {
+      ["#ff5f57", "#febc2e", "#28c840"].forEach(function (c, i) { kids.push(h("circle", { key: "d" + i, cx: 9 + i * 8, cy: 7.5, r: 2.6, fill: c })); });
+    } else if (k === "win10" || k === "win11" || k === "clasico") {
+      var col = k === "clasico" ? "#fff" : T.muted;
+      kids.push(h("line", { key: "m", x1: 128, y1: 8, x2: 133, y2: 8, stroke: col, strokeWidth: 1 }));
+      kids.push(h("rect", { key: "x1", x: 139, y: 5.5, width: 5, height: 5, fill: "none", stroke: col, strokeWidth: 1, rx: k === "win11" ? 1 : 0 }));
+      kids.push(h("path", { key: "x2", d: "M150 5.5 L155 10.5 M155 5.5 L150 10.5", stroke: col, strokeWidth: 1 }));
+    }
+    kids.push(
+      h("rect", { key: "sb", x: 6, y: 20, width: 34, height: 70, rx: rc, fill: T.card, stroke: T.border }),
+      h("rect", { key: "s1", x: 11, y: 27, width: 24, height: 5, rx: Math.min(rc, 2), fill: ac, opacity: 0.85 }),
+      h("rect", { key: "s2", x: 11, y: 37, width: 20, height: 4, rx: Math.min(rc, 2), fill: T.muted, opacity: 0.35 }),
+      h("rect", { key: "s3", x: 11, y: 46, width: 22, height: 4, rx: Math.min(rc, 2), fill: T.muted, opacity: 0.35 }),
+      h("rect", { key: "c", x: 46, y: 20, width: 108, height: 44, rx: rc, fill: T.card, stroke: T.border }),
+      h("text", { key: "t", x: 54, y: 43, fontFamily: font, fontSize: 15, fontWeight: 600, fill: T.text }, "Aa"),
+      h("text", { key: "t2", x: 54, y: 56, fontFamily: font, fontSize: 7, fill: T.muted }, "Taller de celulares"),
+      h("rect", { key: "b", x: 46, y: 71, width: 44, height: 14, rx: k === "moderno" ? 7 : Math.min(rc, 4), fill: ac }),
+      h("text", { key: "bt", x: 68, y: 80.5, textAnchor: "middle", fontFamily: font, fontSize: 6.5, fontWeight: 600, fill: "#fff" }, "Guardar"),
+      h("rect", { key: "i", x: 96, y: 71, width: 58, height: 14, rx: k === "moderno" ? 7 : Math.min(rc, 4), fill: T.surface, stroke: T.border })
+    );
+    return h("svg", { viewBox: "0 0 160 96", width: "100%", style: { display: "block" } }, kids);
+  };
   var dirty = CAMPOS.some(function (k) { return _norm(form[k]) !== _norm(settings[k]); });
 
   // ── Piezas de interfaz ──
@@ -9505,6 +9594,22 @@ function SettingsView(_ref20) {
   var rgb = parseInt(accent.slice(1, 3), 16) + "," + parseInt(accent.slice(3, 5), 16) + "," + parseInt(accent.slice(5, 7), 16);
   var subt = function (t) { return h("div", { style: { fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 10 } }, t); };
   var vistaApariencia = h("div", { style: { display: "flex", flexDirection: "column", gap: 18 } },
+    seccion("AppWindow", "Estilo de la interfaz", "Cambia la forma del programa: letra, esquinas y sombras. Se aplica al instante y combina con cualquier tema.",
+      h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 } },
+        Object.keys(UI_STYLES).map(function (key) {
+          var st = UI_STYLES[key];
+          var active = estiloActual === key;
+          return h("button", {
+            key: key, type: "button", onClick: function () { if (!active) handleUiStyle(key); },
+            style: { textAlign: "left", padding: 10, borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+              border: "2px solid " + (active ? T.accent : T.border), background: T.card, display: "flex", flexDirection: "column", gap: 9 }
+          },
+            uiPreview(key),
+            h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 } },
+              h("span", { style: { fontSize: 13.5, fontWeight: 700, color: T.text } }, st.label),
+              active && h("span", { style: { width: 18, height: 18, borderRadius: "50%", background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, h(Check, { size: 12 }))),
+            h("span", { style: { fontSize: 12, color: T.muted, lineHeight: 1.4, marginTop: -4 } }, st.desc));
+        }))),
     seccion("Palette", "Tema", "Haz clic en un tema y se aplica al instante.",
       h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 } },
         Object.keys(THEME_PRESETS).map(function (key) {
@@ -9615,8 +9720,15 @@ function SettingsView(_ref20) {
     h("div", { style: { flex: 1, minWidth: 160 } },
       h("div", { style: { fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: "-0.02em" } }, (settings.storeName || "").trim() || "Tu negocio"),
       h("div", { style: { fontSize: 13, color: T.muted, marginTop: 2 } }, [settings.storeSubtitle, settings.address].filter(function (x) { return x && String(x).trim(); }).join(" · ") || "Completa los datos de tu negocio")),
-    h("span", { style: { display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, color: licColor, border: "1px solid " + T.border, background: T.bg } },
-      h("span", { style: { width: 7, height: 7, borderRadius: "50%", background: licColor } }), licTxt));
+    h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+      h("button", {
+        type: "button", onClick: function () { setTab("apariencia"); },
+        title: "Cambiar el estilo del programa",
+        style: { display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+          fontFamily: "inherit", color: T.text, border: "1px solid " + T.border, background: T.card }
+      }, Ico("AppWindow", 14), "Estilo: " + UI_STYLES[estiloActual].label),
+      h("span", { style: { display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, color: licColor, border: "1px solid " + T.border, background: T.bg } },
+        h("span", { style: { width: 7, height: 7, borderRadius: "50%", background: licColor } }), licTxt)));
 
   var contenido = tab === "apariencia" ? vistaApariencia : tab === "cuenta" ? vistaCuenta : tab === "integraciones" ? vistaIntegraciones : vistaNegocio;
 
@@ -18347,7 +18459,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.8";
+var APP_VERSION = "1.5.9";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

@@ -1,5 +1,5 @@
 {
-  "version": "1.5.8",
-  "notes": "Configuración rediseñada: secciones Negocio, Apariencia, Cuenta y seguridad e Integraciones, con barra para guardar cambios.",
+  "version": "1.5.9",
+  "notes": "Nuevos estilos de interfaz en Configuración → Apariencia: Moderno, Windows 10, Windows 11, macOS y Software clásico.",
   "url": "https://edier27.github.io/Acce7/"
 }
