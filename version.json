@@ -1,5 +1,5 @@
 {
-  "version": "1.5.6",
-  "notes": "Las reparaciones ahora suman a Ganancias: lo cobrado menos el costo de los repuestos.",
+  "version": "1.5.7",
+  "notes": "Cada producto y repuesto puede tener su proveedor, visible en Productos e Inventario.",
   "url": "https://edier27.github.io/Acce7/"
 }

@@ -1467,6 +1467,27 @@ var Field = function Field(_ref4) {
     style: IS
   }));
 };
+// ─── Proveedor de un producto / repuesto (lista de la sección Proveedores) ───
+function _provNombre(data, id) {
+  if (!id) return "";
+  var p = (data.providers || []).find(function (x) { return x.id === id; });
+  return p ? p.name : "";
+}
+var ProveedorField = function ProveedorField(_p) {
+  var provs = (_p.data.providers || []).slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+  var value = _p.value || "";
+  var existe = !value || provs.some(function (p) { return p.id === value; });
+  return /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 5 } },
+    /*#__PURE__*/React.createElement("label", { style: { fontSize: 15, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, "Proveedor"),
+    /*#__PURE__*/React.createElement("select", {
+      value: existe ? value : "",
+      onChange: function (e) { _p.onChange(e.target.value); },
+      style: IS
+    },
+      /*#__PURE__*/React.createElement("option", { value: "" }, provs.length ? "Sin proveedor" : "No hay proveedores registrados"),
+      provs.map(function (p) { return /*#__PURE__*/React.createElement("option", { key: p.id, value: p.id }, p.name); })),
+    !provs.length && /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: T.muted } }, "Agrégalos en la sección Proveedores para poder elegirlos aquí."));
+};
 var Card = function Card(_ref5) {
   var children = _ref5.children,
     s = _ref5.style;
@@ -3452,7 +3473,8 @@ function InventoryView(_ref11) {
     price: ""
   };
   var filtered = (data.inventory || []).filter(function (i) {
-    return (!search || i.name.toLowerCase().includes(search.toLowerCase()) || i.brand.toLowerCase().includes(search.toLowerCase())) && (!filterCat || i.category === filterCat);
+    var q = search.toLowerCase();
+    return (!search || (i.name || "").toLowerCase().includes(q) || (i.brand || "").toLowerCase().includes(q) || _provNombre(data, i.proveedorId).toLowerCase().includes(q)) && (!filterCat || i.category === filterCat);
   });
   var del = function del(id) {
     if (!confirm("¿Eliminar este repuesto?")) return;
@@ -3612,7 +3634,7 @@ function InventoryView(_ref11) {
     style: {
       borderBottom: "1px solid ".concat(T.border)
     }
-  }, ["Repuesto / Parte", "Categoría", "Marca", "Stock", "Mín.", "Costo", "Precio Venta", "Acciones"].map(function (h) {
+  }, ["Repuesto / Parte", "Categoría", "Marca", "Proveedor", "Stock", "Mín.", "Costo", "Precio Venta", "Acciones"].map(function (h) {
     return /*#__PURE__*/React.createElement("th", {
       key: h,
       style: {
@@ -3671,6 +3693,12 @@ function InventoryView(_ref11) {
         color: T.dim
       }
     }, item.brand), /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: "11px 14px",
+        color: _provNombre(data, item.proveedorId) ? T.text : T.muted,
+        whiteSpace: "nowrap"
+      }
+    }, _provNombre(data, item.proveedorId) || "—"), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "11px 14px"
       }
@@ -3781,7 +3809,7 @@ function InventoryView(_ref11) {
       size: 14
     })))));
   }), filtered.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
-    colSpan: 8,
+    colSpan: 9,
     style: {
       padding: 40,
       textAlign: "center",
@@ -3832,16 +3860,19 @@ function InventoryModal(_ref12) {
       return p.id === item.productId ||
              p.name.toLowerCase().trim() === item.name.toLowerCase().trim();
     });
-    var syncedProduct = {
+    // Se conservan los datos propios del producto (foto, destacado...) y se actualiza lo compartido.
+    var syncedProduct = _objectSpread(_objectSpread({}, prodIdx >= 0 ? products[prodIdx] : {}), {}, {
       id:       prodIdx >= 0 ? products[prodIdx].id : (item.productId || uid()),
       name:     item.name,
       category: item.category || "General",
       brand:    item.brand || "",
       price:    Number(item.price) || 0,
+      cost:     Number(item.cost) || 0,
+      proveedorId: item.proveedorId || "",
       stock:    Number(item.qty) || 0,
       specs:    prodIdx >= 0 ? (products[prodIdx].specs || []) : [],
       description: prodIdx >= 0 ? (products[prodIdx].description || "") : ""
-    };
+    });
     // Actualizar productId en inventory para enlazar
     var inventoryFinal = inventory.map(function(i) {
       return i.id === item.id ? _objectSpread(_objectSpread({}, i), {}, { productId: syncedProduct.id }) : i;
@@ -3929,7 +3960,13 @@ function InventoryModal(_ref12) {
     },
     type: "number",
     placeholder: "0"
-  })), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement(ProveedorField, {
+    data: data,
+    value: form.proveedorId,
+    onChange: function onChange(v) {
+      return set("proveedorId", v);
+    }
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -4159,7 +4196,12 @@ function ProductsView(_ref13) {
         color: T.green,
         marginBottom: 14
       }
-    }, fmt(Number(p.price)||0)), verCostos && _ganCostoLinea(_ganCostoActual(data, "products", p.id), Number(p.price) || 0), p.specs && p.specs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, fmt(Number(p.price)||0)), (function () {
+      var inv = (data.inventory || []).find(function (i) { return i.productId === p.id; });
+      var pn = _provNombre(data, p.proveedorId || (inv && inv.proveedorId));
+      return pn ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: -8, marginBottom: 12 } },
+        "Proveedor: ", /*#__PURE__*/React.createElement("b", { style: { color: T.text } }, pn)) : null;
+    })(), verCostos && _ganCostoLinea(_ganCostoActual(data, "products", p.id), Number(p.price) || 0), p.specs && p.specs.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 14
       }
@@ -4249,11 +4291,14 @@ function ProductModal(_ref14) {
   // El precio de compra vive en el repuesto vinculado del inventario; se muestra aquí para editarlo.
   var _useState19 = useState(function () {
       var p = modal.product || {};
-      if (p.cost !== undefined && p.cost !== null && p.cost !== "") return p;
       var inv = (data.inventory || []).find(function (i) {
         return (p.id && i.productId === p.id) || (p.name && (i.name || "").toLowerCase() === p.name.toLowerCase());
       });
-      return _objectSpread(_objectSpread({}, p), {}, { cost: inv && Number(inv.cost) > 0 ? inv.cost : "" });
+      var tieneCosto = p.cost !== undefined && p.cost !== null && p.cost !== "";
+      return _objectSpread(_objectSpread({}, p), {}, {
+        cost: tieneCosto ? p.cost : (inv && Number(inv.cost) > 0 ? inv.cost : ""),
+        proveedorId: p.proveedorId || (inv && inv.proveedorId) || ""
+      });
     }),
     _useState20 = _slicedToArray(_useState19, 2),
     form = _useState20[0],
@@ -4298,7 +4343,7 @@ function ProductModal(_ref14) {
     var invIdx = inventory.findIndex(function (i) {
       return i.productId === prod.id || i.name.toLowerCase() === prod.name.toLowerCase();
     });
-    var invItem = {
+    var invItem = _objectSpread(_objectSpread({}, invIdx >= 0 ? inventory[invIdx] : {}), {}, {
       id: invIdx >= 0 ? inventory[invIdx].id : uid(),
       productId: prod.id,
       name: prod.name,
@@ -4307,8 +4352,9 @@ function ProductModal(_ref14) {
       qty: Number(prod.stock),
       minQty: invIdx >= 0 ? inventory[invIdx].minQty : 2,
       cost: prod.cost > 0 ? prod.cost : (invIdx >= 0 ? inventory[invIdx].cost : 0),
-      price: Number(prod.price)
-    };
+      price: Number(prod.price),
+      proveedorId: prod.proveedorId || ""
+    });
     if (invIdx >= 0) inventory[invIdx] = invItem;else inventory = [].concat(_toConsumableArray(inventory), [invItem]);
     save(_objectSpread(_objectSpread({}, data), {}, {
       products: products,
@@ -4438,6 +4484,12 @@ function ProductModal(_ref14) {
       return set("stock", v);
     },
     type: "number"
+  }), /*#__PURE__*/React.createElement(ProveedorField, {
+    data: data,
+    value: form.proveedorId,
+    onChange: function onChange(v) {
+      return set("proveedorId", v);
+    }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -11967,7 +12019,8 @@ function _aplicarRecepcion(data, lineas, opts) {
       var it = inventory[idx];
       inventory[idx] = _objectSpread(_objectSpread({}, it), {}, {
         qty: (Number(it.qty) || 0) + qty,
-        cost: cost > 0 ? cost : (Number(it.cost) || 0)
+        cost: cost > 0 ? cost : (Number(it.cost) || 0),
+        proveedorId: opts.proveedorId || it.proveedorId || ""
       });
       sumados.push(nombre);
     } else {
@@ -11979,7 +12032,8 @@ function _aplicarRecepcion(data, lineas, opts) {
         qty: qty,
         minQty: 1,
         cost: cost,
-        price: 0
+        price: 0,
+        proveedorId: opts.proveedorId || ""
       });
       creados.push(nombre);
     }
@@ -12245,6 +12299,7 @@ function ProveedoresView(_pRef) {
   var abrirRecepcionPedido = function (ped) {
     setRecepcion({
       pedidoId: ped.id,
+      proveedorId: ped.providerId || "",
       titulo: "Recibir pedido de " + ped.providerName,
       descripcion: "Compra a " + ped.providerName,
       fecha: getHoyColombia(),
@@ -12260,8 +12315,13 @@ function ProveedoresView(_pRef) {
     setIaLeyendo(true);
     _leerFacturaIA(file).then(function (r) {
       setIaLeyendo(false);
+      var _provLeido = r.proveedor ? (data.providers || []).find(function (p) {
+        var a = _normName(p.name), b = _normName(r.proveedor);
+        return a && b && (a === b || (Math.min(a.length, b.length) >= 4 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)));
+      }) : null;
       setRecepcion({
         pedidoId: null,
+        proveedorId: _provLeido ? _provLeido.id : "",
         titulo: "Factura le\u00EDda" + (r.proveedor ? " \u2014 " + r.proveedor : ""),
         descripcion: "Compra de inventario" + (r.proveedor ? " \u2014 " + r.proveedor : ""),
         fecha: /^\d{4}-\d{2}-\d{2}$/.test(r.fecha) ? r.fecha : getHoyColombia(),
@@ -12307,6 +12367,7 @@ function ProveedoresView(_pRef) {
     });
     if (!lineas.length) { notify("No hay l\u00EDneas v\u00E1lidas para registrar", "error"); return; }
     var r = _aplicarRecepcion(data, lineas, {
+      proveedorId: recepcion.proveedorId || "",
       registrarEgreso: recepcion.registrarEgreso,
       descripcion: recepcion.descripcion,
       fecha: recepcion.fecha || getHoyColombia()
@@ -18480,7 +18541,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.6";
+var APP_VERSION = "1.5.7";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
