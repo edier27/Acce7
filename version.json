@@ -1,5 +1,5 @@
 {
-  "version": "1.6.1",
-  "notes": "Estilos Windows: buscador que encuentra secciones o pregunta a la IA, centro de notificaciones en la barra y sin botón Inicio.",
+  "version": "1.6.2",
+  "notes": "Estilos Windows: sin botones flotantes; el Asistente IA y el Catálogo PDF están en la barra y en las notificaciones.",
   "url": "https://edier27.github.io/Acce7/"
 }

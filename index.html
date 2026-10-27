@@ -846,6 +846,13 @@ function _uiStyleCss() {
     css += s + "#acce-ai-btn{bottom:" + (24 + d) + "px!important}" + s + "#acce-pdf-btn{bottom:" + (90 + d) + "px!important}" +
       s + "#acce-pdf-tooltip{bottom:" + (103 + d) + "px!important}" + s + "#acce-ai-panel{bottom:" + (92 + d) + "px!important}";
   });
+  // En Windows el buscador de la barra hace de IA y el catálogo PDF está en las notificaciones:
+  // se ocultan los botones flotantes (el panel del asistente sigue abriéndose desde el buscador).
+  ["win10", "win11"].forEach(function (k) {
+    var s = 'html[data-ui="' + k + '"] ';
+    css += s + "#acce-ai-btn," + s + "#acce-pdf-btn," + s + "#acce-pdf-tooltip{display:none!important}" +
+      s + "#acce-ai-panel{bottom:" + (sube[k] + 8) + "px!important;right:12px!important}";
+  });
   css += "}";
   Object.keys(_UI_FORMA).forEach(function (k) {
     var f = _UI_FORMA[k], s = 'html[data-ui="' + k + '"] ';
@@ -17475,9 +17482,11 @@ function UiTaskbar(p) {
         return tarjeta("c" + i, _uiIco("Star", 18), "#F59E0B", (rt.customer || "Cliente anónimo") + "  " + estrellas,
           rt.comment ? "“" + rt.comment + "”" : (rt.date ? new Date(rt.date).toLocaleDateString("es-CO", { day: "2-digit", month: "short" }) : ""), function () { ir("dashboard"); });
       })),
-    h("div", { style: { padding: 12, borderTop: "1px solid " + pBorde, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 } },
+    h("div", { style: { padding: 12, borderTop: "1px solid " + pBorde, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 } },
+      accion("ia", _uiIco("Sparkles", 17), "Asistente IA", function () { if (typeof window.__acceAskAI === "function") window.__acceAskAI(""); else ir("ia"); }),
       accion("rep", _uiIco("Wrench", 17), "Reparaciones", function () { ir("repairs"); }),
       accion("cat", h(ExternalLink, { size: 17 }), "Catálogo", p.onCatalog),
+      accion("pdf", _uiIco("FileDown", 17), "Catálogo PDF", function () { var b = document.getElementById("acce-pdf-btn"); if (b) b.click(); }),
       accion("cal", h(Star, { size: 17 }), "Link calificar", p.onRating),
       accion("out", _uiIco("Power", 17), "Cerrar sesión", p.onLogout)));
 
@@ -18746,7 +18755,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.1";
+var APP_VERSION = "1.6.2";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
