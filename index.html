@@ -3925,6 +3925,7 @@ function InventoryModal(_ref12) {
 // ─── PRODUCTS ────────────────────────────────────────────
 
 function ProductsView(_ref13) {
+  var verCostos = _ref13.verCostos !== false;
   var data = _ref13.data,
     save = _ref13.save,
     notify = _ref13.notify,
@@ -4133,7 +4134,7 @@ function ProductsView(_ref13) {
         color: T.green,
         marginBottom: 14
       }
-    }, fmt(Number(p.price)||0)), p.specs && p.specs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, fmt(Number(p.price)||0)), verCostos && _ganCostoLinea(_ganCostoActual(data, "products", p.id), Number(p.price) || 0), p.specs && p.specs.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 14
       }
@@ -4220,7 +4221,15 @@ function ProductModal(_ref14) {
     data = _ref14.data,
     save = _ref14.save,
     notify = _ref14.notify;
-  var _useState19 = useState(modal.product),
+  // El precio de compra vive en el repuesto vinculado del inventario; se muestra aquí para editarlo.
+  var _useState19 = useState(function () {
+      var p = modal.product || {};
+      if (p.cost !== undefined && p.cost !== null && p.cost !== "") return p;
+      var inv = (data.inventory || []).find(function (i) {
+        return (p.id && i.productId === p.id) || (p.name && (i.name || "").toLowerCase() === p.name.toLowerCase());
+      });
+      return _objectSpread(_objectSpread({}, p), {}, { cost: inv && Number(inv.cost) > 0 ? inv.cost : "" });
+    }),
     _useState20 = _slicedToArray(_useState19, 2),
     form = _useState20[0],
     setForm = _useState20[1];
@@ -4250,6 +4259,7 @@ function ProductModal(_ref14) {
     }
     var prod = _objectSpread(_objectSpread({}, form), {}, {
       price: Number(form.price),
+      cost: Number(form.cost) || 0,
       stock: Number(form.stock || 0),
       specs: (form.specs || []).filter(function (s) {
         return s.trim();
@@ -4271,7 +4281,7 @@ function ProductModal(_ref14) {
       brand: invIdx >= 0 ? inventory[invIdx].brand : "Propio",
       qty: Number(prod.stock),
       minQty: invIdx >= 0 ? inventory[invIdx].minQty : 2,
-      cost: invIdx >= 0 ? inventory[invIdx].cost : 0,
+      cost: prod.cost > 0 ? prod.cost : (invIdx >= 0 ? inventory[invIdx].cost : 0),
       price: Number(prod.price)
     };
     if (invIdx >= 0) inventory[invIdx] = invItem;else inventory = [].concat(_toConsumableArray(inventory), [invItem]);
@@ -4373,14 +4383,15 @@ function ProductModal(_ref14) {
       gap: 12
     }
   }, /*#__PURE__*/React.createElement(Field, {
-    label: "Categor\xEDa",
-    value: form.category,
+    label: "Precio de compra (COP)",
+    value: form.cost,
     onChange: function onChange(v) {
-      return set("category", v);
+      return set("cost", v);
     },
-    options: PROD_CATS
+    type: "number",
+    placeholder: "Lo que te costó"
   }), /*#__PURE__*/React.createElement(Field, {
-    label: "Precio (COP) *",
+    label: "Precio de venta (COP) *",
     value: form.price,
     onChange: function onChange(v) {
       return set("price", v);
@@ -4388,6 +4399,13 @@ function ProductModal(_ref14) {
     type: "number",
     placeholder: "35000",
     required: true
+  }), /*#__PURE__*/React.createElement(Field, {
+    label: "Categor\xEDa",
+    value: form.category,
+    onChange: function onChange(v) {
+      return set("category", v);
+    },
+    options: PROD_CATS
   }), /*#__PURE__*/React.createElement(Field, {
     label: "Stock disponible",
     value: form.stock,
@@ -4514,6 +4532,7 @@ function ProductModal(_ref14) {
 
 // ─── CELULARES ───────────────────────────────────────────
 function CelularesView(_refCel) {
+  var verCostos = _refCel.verCostos !== false;
   var data = _refCel.data,
     save = _refCel.save,
     notify = _refCel.notify;
@@ -4648,6 +4667,7 @@ function CelularesView(_refCel) {
         /*#__PURE__*/React.createElement("div", { style: { padding: 16 } },
           /*#__PURE__*/React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4, lineHeight: 1.3 } }, c.marca, " ", c.modelo),
           /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 800, color: T.green, marginBottom: 10 } }, fmt(Number(c.precio) || 0)),
+          verCostos && _ganCostoLinea(Number(c.costo) || 0, c.estado === "Vendido" && Number(c.precioVenta) > 0 ? Number(c.precioVenta) : Number(c.precio) || 0, { marginTop: -6, marginBottom: 10 }),
           /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 2, marginBottom: 14, fontSize: 13, color: T.muted } },
             c.capacidad && /*#__PURE__*/React.createElement("div", null, "• ", c.capacidad, c.ram ? " · " + c.ram + " RAM" : ""),
             c.color && /*#__PURE__*/React.createElement("div", null, "• Color: ", c.color),
@@ -4752,7 +4772,7 @@ function CelularModal(_refCM) {
       notify("Marca, modelo y precio son requeridos", "error");
       return;
     }
-    var cel = Object.assign({}, form, { precio: Number(form.precio) });
+    var cel = Object.assign({}, form, { precio: Number(form.precio), costo: Number(form.costo) || 0 });
     var celulares = data.celulares || [];
     var updated = isNew ? celulares.concat([cel]) : celulares.map(function (c) { return c.id === form.id ? cel : c; });
     save(Object.assign({}, data, { celulares: updated }));
@@ -4770,9 +4790,10 @@ function CelularModal(_refCM) {
         /*#__PURE__*/React.createElement(Field, { label: "Marca *", value: form.marca, onChange: function (v) { return set("marca", v); }, placeholder: "Samsung, iPhone, Xiaomi...", required: true }),
         /*#__PURE__*/React.createElement(Field, { label: "Modelo *", value: form.modelo, onChange: function (v) { return set("modelo", v); }, placeholder: "Galaxy S23, iPhone 13...", required: true })
       ),
+      /*#__PURE__*/React.createElement(Field, { label: "Condici\xF3n", value: form.condicion, onChange: function (v) { return set("condicion", v); }, options: ["Nuevo", "Usado"] }),
       /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
-        /*#__PURE__*/React.createElement(Field, { label: "Condici\xF3n", value: form.condicion, onChange: function (v) { return set("condicion", v); }, options: ["Nuevo", "Usado"] }),
-        /*#__PURE__*/React.createElement(Field, { label: "Precio (COP) *", value: form.precio, onChange: function (v) { return set("precio", v); }, type: "number", placeholder: "800000", required: true })
+        /*#__PURE__*/React.createElement(Field, { label: "Precio de compra (COP)", value: form.costo, onChange: function (v) { return set("costo", v); }, type: "number", placeholder: "Lo que te costó" }),
+        /*#__PURE__*/React.createElement(Field, { label: "Precio de venta (COP) *", value: form.precio, onChange: function (v) { return set("precio", v); }, type: "number", placeholder: "800000", required: true })
       ),
       /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 } },
         /*#__PURE__*/React.createElement(Field, { label: "Capacidad", value: form.capacidad, onChange: function (v) { return set("capacidad", v); }, placeholder: "128GB" }),
@@ -7222,6 +7243,7 @@ function shareFacturaWA(f, cfg, notify) {
 }
 
 function VentasView(_ref18) {
+  var verCostos = _ref18.verCostos !== false;
   var data = _ref18.data,
     save = _ref18.save,
     notify = _ref18.notify;
@@ -7266,11 +7288,14 @@ function VentasView(_ref18) {
 
     lista = lista.sort(function(a,b){ return a.date.localeCompare(b.date) || (a.id||"").localeCompare(b.id||""); });
     var total = lista.reduce(function(s,v){ return s+(v.total||0); }, 0);
+    var totCosto = 0, totGan = 0;
 
     var filas = lista.map(function(s, i){
       var itemsStr = (s.items||[]).map(function(it){ return _escHtml(it.name)+" x"+_escHtml(it.qty); }).join(", ");
       var bg = i%2===0 ? "#fff" : "#fafafa";
       var td = "padding:7px 10px;border-bottom:1px solid #eee;font-size:12px";
+      var gv = _ganVenta(data, s);
+      totCosto += gv.costo; totGan += gv.ganancia;
       return "<tr style='background:"+bg+"'>" +
         "<td style='"+td+"'>"+(i+1)+"</td>" +
         "<td style='"+td+"'>"+_escHtml(s.date)+"</td>" +
@@ -7278,8 +7303,11 @@ function VentasView(_ref18) {
         "<td style='"+td+";font-size:11px'>"+itemsStr+"</td>" +
         "<td style='"+td+"'>"+_escHtml(s.payment||"-")+"</td>" +
         "<td style='"+td+";font-weight:700;text-align:right'>"+fmtNum(s.total)+"</td>" +
+        (verCostos ? "<td style='"+td+";text-align:right'>"+fmtNum(gv.costo)+"</td>" +
+          "<td style='"+td+";font-weight:700;text-align:right;color:"+(gv.ganancia>=0?"#166534":"#991B1B")+"'>"+fmtNum(gv.ganancia)+"</td>" : "") +
         "</tr>";
     }).join("");
+    var nCols = verCostos ? 8 : 6;
 
         var html = [
       "<!DOCTYPE html><html><head>",
@@ -7306,10 +7334,13 @@ function VentasView(_ref18) {
       "<p class='sub'>"+subtitulo+" | "+lista.length+" venta(s)</p>",
       "<table><thead><tr>",
       "<th>#</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Pago</th><th style='text-align:right'>Total</th>",
+      (verCostos ? "<th style='text-align:right'>Costo compra</th><th style='text-align:right'>Ganancia</th>" : ""),
       "</tr></thead><tbody>",
-      (lista.length > 0 ? filas : "<tr><td colspan='6' class='empty'>No hay ventas registradas para este periodo</td></tr>"),
+      (lista.length > 0 ? filas : "<tr><td colspan='"+nCols+"' class='empty'>No hay ventas registradas para este periodo</td></tr>"),
       "</tbody></table>",
       (lista.length > 0 ? "<div class='total-box'><span class='total-label'>TOTAL "+titulo.toUpperCase()+"</span><span class='total-val'>"+fmtNum(total)+"</span></div>" : ""),
+      (lista.length > 0 && verCostos ? "<div class='total-box' style='margin-top:8px'><span class='total-label'>COSTO DE COMPRA</span><span class='total-val' style='color:#991B1B'>"+fmtNum(totCosto)+"</span></div>" +
+        "<div class='total-box' style='margin-top:8px'><span class='total-label'>GANANCIA NETA</span><span class='total-val' style='color:#166534'>"+fmtNum(totGan)+"</span></div>" : ""),
       "<div class='footer'>Generado el "+new Date().toLocaleString("es-CO")+"</div>",
       "<div class='no-print' style='text-align:center;margin-top:20px'>",
       "<button onclick='window.print()' style='padding:10px 28px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700'>Imprimir</button>",
@@ -7336,26 +7367,29 @@ function VentasView(_ref18) {
     }));
     notify("Venta eliminada");
   };
+  var ganSuma = function (lista) {
+    return lista.reduce(function (a, s) { return a + _ganVenta(data, s).ganancia; }, 0);
+  };
+  var ganHoy = verCostos ? ganSuma(sales.filter(function (s) { return s.date === today(); })) : 0;
+  var ganMes = verCostos ? ganSuma(sales.filter(function (s) { return s.date && s.date.slice(0, 7) === today().slice(0, 7); })) : 0;
+  var tarjetas = verCostos ? [
+    { l: "Ventas hoy", v: fmt(totalHoy), c: T.blue },
+    { l: "Ganancia neta hoy", v: fmt(ganHoy), c: ganHoy >= 0 ? T.green : T.red },
+    { l: "Ventas este mes", v: fmt(totalMes), c: T.blue },
+    { l: "Ganancia neta del mes", v: fmt(ganMes), c: ganMes >= 0 ? T.green : T.red }
+  ] : [
+    { l: "Ventas hoy", v: fmt(totalHoy), c: T.green },
+    { l: "Ventas este mes", v: fmt(totalMes), c: T.blue },
+    { l: "Total transacciones", v: sales.length, c: T.purple }
+  ];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "repeat(3,1fr)",
+      gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
       gap: 12,
       marginBottom: 20
     }
-  }, [{
-    l: "Ventas hoy",
-    v: fmt(totalHoy),
-    c: T.green
-  }, {
-    l: "Ventas este mes",
-    v: fmt(totalMes),
-    c: T.blue
-  }, {
-    l: "Total transacciones",
-    v: sales.length,
-    c: T.purple
-  }].map(function (s) {
+  }, tarjetas.map(function (s) {
     return /*#__PURE__*/React.createElement(Card, {
       key: s.l,
       style: {
@@ -7463,7 +7497,7 @@ function VentasView(_ref18) {
     style: {
       borderBottom: "1px solid ".concat(T.border)
     }
-  }, ["#", "Fecha", "Cliente", "Items", "Pago", "Total", "Acciones"].map(function (h) {
+  }, ["#", "Fecha", "Cliente", "Items", "Pago", "Total"].concat(verCostos ? ["Costo compra", "Ganancia"] : []).concat(["Acciones"]).map(function (h) {
     return /*#__PURE__*/React.createElement("th", {
       key: h,
       style: {
@@ -7478,6 +7512,7 @@ function VentasView(_ref18) {
       }
     }, h);
   }))), /*#__PURE__*/React.createElement("tbody", null, filtered.map(function (s, i) {
+    var gv = verCostos ? _ganVenta(data, s) : null;
     return /*#__PURE__*/React.createElement("tr", {
       key: s.id,
       style: {
@@ -7537,7 +7572,11 @@ function VentasView(_ref18) {
         color: T.green,
         fontSize: 15
       }
-    }, fmt(s.total)), /*#__PURE__*/React.createElement("td", {
+    }, fmt(s.total)), gv && /*#__PURE__*/React.createElement("td", {
+      style: { padding: "11px 14px", color: T.dim, whiteSpace: "nowrap" }
+    }, gv.sinCosto && gv.costo === 0 ? /*#__PURE__*/React.createElement("span", { style: { color: T.orange, fontSize: 12, fontWeight: 700 } }, "Sin precio de compra") : fmt(gv.costo)), gv && /*#__PURE__*/React.createElement("td", {
+      style: { padding: "11px 14px", fontWeight: 800, fontSize: 15, whiteSpace: "nowrap", color: gv.ganancia >= 0 ? T.green : T.red }
+    }, fmt(gv.ganancia)), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "11px 14px"
       }
@@ -7577,13 +7616,14 @@ function VentasView(_ref18) {
       size: 14
     })))));
   }), filtered.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
-    colSpan: 7,
+    colSpan: verCostos ? 9 : 7,
     style: {
       padding: 40,
       textAlign: "center",
       color: T.muted
     }
   }, "No hay ventas registradas")))))), modal && /*#__PURE__*/React.createElement(SaleModal, {
+    verCostos: verCostos,
     setModal: setModal,
     data: data,
     save: save,
@@ -7591,6 +7631,7 @@ function VentasView(_ref18) {
   }));
 }
 function SaleModal(_ref19) {
+  var verCostos = _ref19.verCostos !== false;
   var setModal = _ref19.setModal,
     data = _ref19.data,
     save = _ref19.save,
@@ -7652,6 +7693,7 @@ function SaleModal(_ref19) {
         qty: 1,
         maxQty: inv.qty,
         unitPrice: inv.price,
+        unitCost: Number(inv.cost) || 0,
         total: inv.price
       }]));
     }
@@ -7676,6 +7718,10 @@ function SaleModal(_ref19) {
   }, 0);
   var discountAmt = Math.min(Number(discount) || 0, subtotal);
   var total = subtotal - discountAmt;
+  var costoCompra = Math.round(items.reduce(function (a, it) {
+    return a + (Number(it.unitCost) || 0) * (Number(it.qty) || 0);
+  }, 0));
+  var gananciaNeta = total - costoCompra;
   var handleSave = function handleSave() {
     if (items.length === 0) {
       notify("Agrega al menos un producto", "error");
@@ -7733,7 +7779,7 @@ function SaleModal(_ref19) {
       products: products,
       sales: sales
     }));
-    notify("Venta registrada exitosamente");
+    notify(verCostos ? "Venta registrada · Ganancia neta " + fmt(gananciaNeta) : "Venta registrada exitosamente");
     setModal(null);
     showPrintModal(function(type, tw){ printReceipt(sale, (data.settings && data.settings.storeName) || "", type, tw); });
   };
@@ -7902,7 +7948,7 @@ function SaleModal(_ref19) {
         flex: 1,
         marginRight: 8
       }
-    }, it.name), /*#__PURE__*/React.createElement("button", {
+    }, it.name, verCostos && _ganCostoLinea(Number(it.unitCost) || 0, Number(it.unitPrice) || 0, { marginTop: 3, marginBottom: 0, fontWeight: 400 })), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
         return removeItem(it.invId);
       },
@@ -8047,7 +8093,13 @@ function SaleModal(_ref19) {
       paddingTop: 8,
       marginTop: 4
     }
-  }, /*#__PURE__*/React.createElement("span", null, "TOTAL"), /*#__PURE__*/React.createElement("span", null, fmt(total)))), /*#__PURE__*/React.createElement(Btn, {
+  }, /*#__PURE__*/React.createElement("span", null, "TOTAL"), /*#__PURE__*/React.createElement("span", null, fmt(total))), verCostos && items.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: { borderTop: "1px dashed ".concat(T.border), marginTop: 10, paddingTop: 8 }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 14, color: T.muted }
+  }, /*#__PURE__*/React.createElement("span", null, "Costo de compra"), /*#__PURE__*/React.createElement("span", null, "− ", fmt(costoCompra))), /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 800, color: gananciaNeta >= 0 ? T.green : T.red }
+  }, /*#__PURE__*/React.createElement("span", null, "Ganancia neta"), /*#__PURE__*/React.createElement("span", null, fmt(gananciaNeta))))), /*#__PURE__*/React.createElement(Btn, {
     onClick: handleSave,
     icon: /*#__PURE__*/React.createElement(Check, {
       size: 15
@@ -8443,7 +8495,7 @@ function FacturaModal(_refFM) {
             key: _keyLinea(it, idx), src: it.src || "manual", refId: it.refId || null,
             name: it.name || "", detalle: it.detalle || "",
             qty: Number(it.qty) || 1, maxQty: _stockDisponible(it.src || "manual", it.refId),
-            unitPrice: Number(it.unitPrice) || 0, discount: Number(it.discount) || 0, ivaPct: Number(it.ivaPct) || 0
+            unitPrice: Number(it.unitPrice) || 0, unitCost: Number(it.unitCost) || 0, discount: Number(it.discount) || 0, ivaPct: Number(it.ivaPct) || 0
           };
         })
       : []),
@@ -8480,11 +8532,11 @@ function FacturaModal(_refFM) {
   // En edición también aparecen los artículos que esta factura ya tomó.
   var catalogo = []
     .concat((data.inventory || []).map(function (i) {
-      return { key: "inv_" + i.id, src: "inventory", refId: i.id, name: i.name, price: Number(i.price) || 0,
+      return { key: "inv_" + i.id, src: "inventory", refId: i.id, name: i.name, price: Number(i.price) || 0, cost: Number(i.cost) || 0,
         stock: _stockDisponible("inventory", i.id), detalle: [i.brand, i.category].filter(Boolean).join(" · "), tipo: "Repuesto" };
     }).filter(function (c) { return c.stock > 0; }))
     .concat((data.products || []).map(function (p) {
-      return { key: "prod_" + p.id, src: "products", refId: p.id, name: p.name, price: Number(p.price) || 0,
+      return { key: "prod_" + p.id, src: "products", refId: p.id, name: p.name, price: Number(p.price) || 0, cost: _ganCostoActual(data, "products", p.id),
         stock: _stockDisponible("products", p.id), detalle: p.category || "", tipo: "Producto" };
     }).filter(function (c) { return c.stock > 0; }))
     .concat((data.celulares || []).filter(function (c) {
@@ -8492,7 +8544,7 @@ function FacturaModal(_refFM) {
     }).map(function (c) {
       return { key: "cel_" + c.id, src: "celulares", refId: c.id,
         name: [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" "),
-        price: Number(c.precio) || 0, stock: 1,
+        price: Number(c.precio) || 0, cost: Number(c.costo) || 0, stock: 1,
         detalle: [c.condicion, c.color, c.imei ? "IMEI " + c.imei : ""].filter(Boolean).join(" · "), tipo: "Celular" };
     }));
 
@@ -8520,7 +8572,7 @@ function FacturaModal(_refFM) {
     } else {
       setItems(items.concat([{
         key: c.key, src: c.src, refId: c.refId, name: c.name, detalle: c.detalle,
-        qty: 1, maxQty: c.stock, unitPrice: c.price, discount: 0, ivaPct: 0
+        qty: 1, maxQty: c.stock, unitPrice: c.price, unitCost: c.cost || 0, discount: 0, ivaPct: 0
       }]));
     }
     setBusqItem("");
@@ -8573,6 +8625,7 @@ function FacturaModal(_refFM) {
         detalle: String(it.detalle || "").trim(),
         qty: Number(it.qty) || 0,
         unitPrice: Number(it.unitPrice) || 0,
+        unitCost: Number(it.unitCost) || (it.src !== "manual" ? _ganCostoActual(data, it.src, it.refId) : 0),
         discount: Number(it.discount) || 0,
         ivaPct: Number(it.ivaPct) || 0,
         total: _facturaLineaNeto(it)
@@ -10704,13 +10757,16 @@ function _repCalc(data, desde, hasta) {
   // Valor de los equipos que ENTRARON a reparación en el período (no es dinero cobrado)
   var valorRecibido = repsNuevas.reduce(function (a, r) { return a + (Number(r.cost) || 0); }, 0);
 
-  // Costo estimado de las ventas, usando el costo actual del inventario.
+  // Costo de las ventas: el precio de compra guardado en cada venta
+  // (o el costo actual del inventario en ventas viejas que no lo tienen).
   var costMap = {};
   (data.inventory || []).forEach(function (i) { costMap[i.id] = Number(i.cost) || 0; });
   var costoVentas = 0;
   ventas.forEach(function (s) {
     (s.items || []).forEach(function (it) {
-      costoVentas += (costMap[it.invId] || 0) * (Number(it.qty) || 0);
+      var cu = Number(it.unitCost) || 0;
+      if (cu <= 0) cu = costMap[it.invId] || 0;
+      costoVentas += cu * (Number(it.qty) || 0);
     });
   });
 
@@ -11205,7 +11261,7 @@ function ReporteView(_props) {
               /*#__PURE__*/React.createElement("span", { style: { fontWeight: 800, color: row[2] } }, row[1]));
           }),
           /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: T.muted, marginTop: 4, lineHeight: 1.4 } },
-            "Calculado con el costo actual registrado en el inventario para cada producto vendido.")
+            "Calculado con el precio de compra de cada producto vendido. El detalle completo está en Ganancias.")
         )
       )
     ),
@@ -11438,6 +11494,308 @@ function ReporteView(_props) {
     tab === "resumen" && vistaResumen,
     tab === "calendario" && vistaCalendario,
     tab === "detalle" && vistaDetalle
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── GANANCIAS: lo que se gana en cada venta (precio de venta − precio de compra)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Precio de compra actual de un artículo según de dónde salió.
+function _ganCostoActual(data, src, refId) {
+  if (!refId) return 0;
+  var inv = data.inventory || [];
+  if (src === "inventory") {
+    var i = inv.find(function (x) { return x.id === refId; });
+    return Number(i && i.cost) || 0;
+  }
+  if (src === "products") {
+    var p = (data.products || []).find(function (x) { return x.id === refId; });
+    if (p && Number(p.cost) > 0) return Number(p.cost);
+    var li = inv.find(function (x) { return x.productId === refId; });
+    return Number(li && li.cost) || 0;
+  }
+  if (src === "celulares") {
+    var c = (data.celulares || []).find(function (x) { return x.id === refId; });
+    return Number(c && c.costo) || 0;
+  }
+  return 0;
+}
+
+// Una línea por cada artículo vendido en el rango: ventas, facturas y celulares.
+// "venta" es lo que pagó el cliente por esa línea, con descuentos y sin IVA.
+// El costo es el precio de compra guardado al vender; si la venta es vieja
+// (o se vendió sin costo), se usa el precio de compra registrado hoy.
+function _ganLineas(data, desde, hasta) {
+  var inR = function (d) { return !!d && d >= desde && d <= hasta; };
+  var out = [];
+  var add = function (o) {
+    o.qty = Number(o.qty) || 0;
+    o.costoUnit = Number(o.costoUnit) || 0;
+    o.venta = Math.round(Number(o.venta) || 0);
+    o.costo = Math.round(o.costoUnit * o.qty);
+    o.ganancia = o.venta - o.costo;
+    o.sinCosto = !o.manual && o.costoUnit <= 0;
+    out.push(o);
+  };
+
+  (data.sales || []).forEach(function (s) {
+    if (!inR(s.date)) return;
+    var items = s.items || [];
+    var brutos = items.map(function (it) {
+      var t = Number(it.total);
+      return it.total !== "" && it.total != null && isFinite(t) ? t : (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
+    });
+    var sub = brutos.reduce(function (a, b) { return a + b; }, 0);
+    var factor = sub > 0 ? (Number(s.total) || 0) / sub : 0;
+    items.forEach(function (it, idx) {
+      var cu = Number(it.unitCost) || 0;
+      if (cu <= 0) cu = _ganCostoActual(data, "inventory", it.invId);
+      add({ fecha: s.date, origen: "Venta", ref: "#" + String(s.id || "").slice(-6).toUpperCase(), cliente: s.customer || "",
+        nombre: it.name || "Producto", qty: it.qty, costoUnit: cu, venta: brutos[idx] * factor });
+    });
+  });
+
+  // Los celulares vendidos con factura se cuentan en la factura, no dos veces.
+  var celFacturados = {};
+  (data.facturas || []).forEach(function (f) {
+    (f.items || []).forEach(function (it) { if (it.src === "celulares" && it.refId) celFacturados[it.refId] = true; });
+    if (f.estado === "Anulada" || !inR(f.date)) return;
+    var items = f.items || [];
+    var netos = items.map(_facturaLineaNeto);
+    var baseL = netos.reduce(function (a, b) { return a + b; }, 0);
+    var dg = Math.min(Number(f.descGlobal) || 0, baseL);
+    var factor = baseL > 0 ? (baseL - dg) / baseL : 0;
+    items.forEach(function (it, idx) {
+      var manual = !it.src || it.src === "manual" || !it.refId;
+      var cu = Number(it.unitCost) || 0;
+      if (cu <= 0 && !manual) cu = _ganCostoActual(data, it.src, it.refId);
+      add({ fecha: f.date, origen: "Factura", ref: f.numero || "", cliente: (f.cliente && f.cliente.nombre) || "",
+        nombre: it.name || "Artículo", qty: it.qty, costoUnit: cu, venta: netos[idx] * factor, manual: manual });
+    });
+  });
+
+  (data.celulares || []).forEach(function (c) {
+    if (c.estado !== "Vendido" || !inR(c.fechaVenta) || celFacturados[c.id]) return;
+    add({ fecha: c.fechaVenta, origen: "Celular", ref: c.imei ? "IMEI " + c.imei : "", cliente: c.vendidoA || "",
+      nombre: [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" ") || "Celular", qty: 1, costoUnit: c.costo, venta: c.precioVenta });
+  });
+
+  out.sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)); });
+  return out;
+}
+
+// Precio de compra y ganancia neta de una venta de mostrador (Ventas).
+function _ganVenta(data, s) {
+  var costo = 0, sinCosto = false;
+  (s.items || []).forEach(function (it) {
+    var cu = Number(it.unitCost) || 0;
+    if (cu <= 0) cu = _ganCostoActual(data, "inventory", it.invId);
+    if (cu <= 0) sinCosto = true;
+    costo += cu * (Number(it.qty) || 0);
+  });
+  costo = Math.round(costo);
+  return { costo: costo, ganancia: (Number(s.total) || 0) - costo, sinCosto: sinCosto };
+}
+
+// Línea "Compra $X · Ganas $Y" para las tarjetas de Productos y Celulares.
+function _ganCostoLinea(costo, precio, extraStyle) {
+  var st = Object.assign({ fontSize: 12.5, color: T.muted, marginTop: -8, marginBottom: 12, lineHeight: 1.4 }, extraStyle || {});
+  if (!(costo > 0)) {
+    return React.createElement("div", { style: st }, React.createElement("span", { style: { color: T.orange, fontWeight: 700 } }, "Sin precio de compra"));
+  }
+  var g = (Number(precio) || 0) - costo;
+  return React.createElement("div", { style: st },
+    "Compra ", React.createElement("b", { style: { color: T.text } }, fmt(costo)),
+    " · Ganas ", React.createElement("b", { style: { color: g >= 0 ? T.green : T.red } }, fmt(g)));
+}
+
+// Totales del período y agrupación por producto (de mayor a menor ganancia).
+function _ganResumen(lineas) {
+  var r = { venta: 0, costo: 0, ganancia: 0, unidades: 0 };
+  var porProd = {};
+  lineas.forEach(function (l) {
+    r.venta += l.venta; r.costo += l.costo; r.ganancia += l.ganancia; r.unidades += l.qty;
+    var k = String(l.nombre).trim().toLowerCase();
+    var g = porProd[k] || (porProd[k] = { nombre: l.nombre, qty: 0, venta: 0, costo: 0, ganancia: 0, sinCosto: false });
+    g.qty += l.qty; g.venta += l.venta; g.costo += l.costo; g.ganancia += l.ganancia;
+    if (l.sinCosto) g.sinCosto = true;
+  });
+  r.productos = Object.keys(porProd).map(function (k) { return porProd[k]; })
+    .sort(function (a, b) { return b.ganancia - a.ganancia; });
+  r.sinCosto = r.productos.filter(function (p) { return p.sinCosto; });
+  r.margen = r.venta > 0 ? (r.ganancia / r.venta) * 100 : 0;
+  return r;
+}
+
+function GananciasView(_props) {
+  var data = _props.data;
+  var isMobile = !!_props.isMobile;
+  var h = React.createElement;
+  var hoy = getHoyColombia();
+
+  var _p = useState("mes"), periodo = _p[0], setPeriodo = _p[1];
+  var _cd = useState(hoy.slice(0, 7) + "-01"), cDesde = _cd[0], setCDesde = _cd[1];
+  var _ch = useState(hoy), cHasta = _ch[0], setCHasta = _ch[1];
+  var _t = useState("productos"), tab = _t[0], setTab = _t[1];
+
+  var rango = _repRango(periodo, hoy, cDesde, cHasta);
+  if (rango.desde > rango.hasta) rango = { desde: rango.hasta, hasta: rango.desde };
+  var dias = _isoDiff(rango.desde, rango.hasta) + 1;
+  var etiqueta = dias === 1
+    ? _fechaLarga(rango.desde)
+    : _fechaCorta(rango.desde) + " — " + _fechaCorta(rango.hasta) + " (" + dias + " días)";
+
+  var lineas = _ganLineas(data, rango.desde, rango.hasta);
+  var res = _ganResumen(lineas);
+  var colGan = res.ganancia >= 0 ? T.green : T.red;
+  var pct = function (n) { return n.toFixed(1).replace(".", ",") + "%"; };
+  var porUnidad = function (total, qty) { return fmt(qty > 0 ? Math.round(total / qty) : 0); };
+
+  // ── Imprimir informe ──
+  var imprimir = function () {
+    var store = (data.settings && data.settings.storeName) || "CLINICELL";
+    var esc = _escHtml;
+    var td = "padding:7px 10px;border-bottom:1px solid #eee;font-size:12px";
+    var tdr = td + ";text-align:right;white-space:nowrap";
+    var filas = res.productos.map(function (p, i) {
+      return "<tr style='background:" + (i % 2 ? "#fafafa" : "#fff") + "'>" +
+        "<td style='" + td + "'>" + esc(p.nombre) + (p.sinCosto ? " <span style='color:#b45309;font-size:10px'>(sin precio de compra)</span>" : "") + "</td>" +
+        "<td style='" + tdr + "'>" + p.qty + "</td>" +
+        "<td style='" + tdr + "'>" + fmt(p.costo) + "</td>" +
+        "<td style='" + tdr + "'>" + fmt(p.venta) + "</td>" +
+        "<td style='" + tdr + ";font-weight:800;color:" + (p.ganancia >= 0 ? "#166534" : "#991B1B") + "'>" + fmt(p.ganancia) + "</td></tr>";
+    }).join("");
+    var caja = function (l, v, c) {
+      return "<div style='flex:1;background:#fafafa;border:1px solid #e8e8e8;border-radius:10px;padding:12px 14px'>" +
+        "<div style='font-size:11px;font-weight:700;color:#727272;text-transform:uppercase'>" + l + "</div>" +
+        "<div style='font-size:19px;font-weight:800;color:" + c + ";margin-top:3px'>" + fmt(v) + "</div></div>";
+    };
+    var th = "padding:8px 10px;background:#1a1a1a;color:#fff;font-size:11px;font-weight:700;text-transform:uppercase";
+    var html = [
+      "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Ganancias - " + esc(store) + "</title>",
+      "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:24px;color:#1a1a1a}table{width:100%;border-collapse:collapse}@media print{.no-print{display:none}}</style>",
+      "</head><body>",
+      "<h1 style='font-size:20px;font-weight:800'>" + esc(store) + "</h1>",
+      "<h2 style='font-size:14px;color:#727272;font-weight:400;margin:2px 0 4px'>Informe de ganancias</h2>",
+      "<p style='font-size:12px;color:#a1a1a1;margin-bottom:16px'>" + esc(etiqueta) + " · " + res.unidades + " unidad(es) vendida(s)</p>",
+      "<div style='display:flex;gap:10px;margin-bottom:18px'>",
+      caja("Total vendido", res.venta, "#1A1A1A"), caja("Costo de compra", res.costo, "#991B1B"), caja("Ganancia neta", res.ganancia, res.ganancia >= 0 ? "#166534" : "#991B1B"),
+      "</div>",
+      "<table><thead><tr><th style='" + th + ";text-align:left'>Producto</th><th style='" + th + ";text-align:right'>Cant.</th><th style='" + th + ";text-align:right'>Costo de compra</th><th style='" + th + ";text-align:right'>Vendido</th><th style='" + th + ";text-align:right'>Ganancia</th></tr></thead><tbody>",
+      filas || "<tr><td colspan='5' style='text-align:center;padding:24px;color:#a1a1a1'>No hay ventas en este período</td></tr>",
+      res.productos.length ? "<tr><td style='" + td + ";font-weight:800'>TOTAL</td><td style='" + tdr + ";font-weight:800'>" + res.unidades + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.costo) + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.venta) + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.ganancia) + "</td></tr>" : "",
+      "</tbody></table>",
+      "<p style='font-size:11px;color:#a1a1a1;margin-top:14px'>Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA) y celulares vendidos.</p>",
+      "<p style='text-align:center;margin-top:16px;color:#a1a1a1;font-size:11px'>Generado el " + new Date().toLocaleString("es-CO") + "</p>",
+      "<div class='no-print' style='text-align:center;margin-top:18px'><button onclick='window.print()' style='padding:10px 28px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700'>Imprimir</button></div>",
+      "</body></html>"
+    ].join("");
+    _printHTML(html);
+  };
+
+  var chip = function (id, label) {
+    var on = periodo === id;
+    return h("button", {
+      key: id, onClick: function () { setPeriodo(id); },
+      style: {
+        padding: "7px 13px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
+        border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accent : T.card, color: on ? "#fff" : T.text
+      }
+    }, label);
+  };
+  var tabBtn = function (id, label) {
+    var on = tab === id;
+    return h("button", {
+      key: id, onClick: function () { setTab(id); },
+      style: {
+        flex: isMobile ? "1 1 0" : "0 0 auto", padding: "9px 16px", border: "none", borderRadius: 9, cursor: "pointer",
+        fontFamily: "inherit", fontWeight: 700, fontSize: 13.5, background: on ? T.card : "transparent", color: on ? T.text : T.muted,
+        boxShadow: on ? "0 1px 3px rgba(0,0,0,0.08)" : "none"
+      }
+    }, label);
+  };
+  var kpi = function (label, valor, color, sub, grande) {
+    return h(Card, { key: label, style: { padding: "16px 18px", position: "relative", overflow: "hidden" } },
+      h("div", { style: { fontSize: 13, color: T.muted, fontWeight: 600, marginBottom: 4 } }, label),
+      h("div", { style: { fontSize: grande ? 28 : 22, fontWeight: 800, color: color, letterSpacing: "-0.02em" } }, fmt(valor)),
+      sub ? h("div", { style: { fontSize: 12, color: T.muted, marginTop: 4 } }, sub) : null,
+      h("div", { style: { position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: color, opacity: 0.6 } }));
+  };
+  var fila = function (key, titulo, lineasSub, ganancia, alerta) {
+    return h("div", { key: key, style: { display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid " + T.border } },
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        h("div", { style: { fontWeight: 700, fontSize: 14, color: T.text, overflowWrap: "anywhere" } }, titulo,
+          alerta ? h("span", { style: { marginLeft: 8, fontSize: 11, fontWeight: 700, color: T.orange } }, "sin precio de compra") : null),
+        lineasSub.map(function (t, i) {
+          return h("div", { key: i, style: { fontSize: 12, color: T.muted, marginTop: 3, lineHeight: 1.45 } }, t);
+        })),
+      h("div", { style: { textAlign: "right", flexShrink: 0 } },
+        h("div", { style: { fontSize: 16, fontWeight: 800, color: ganancia >= 0 ? T.green : T.red } }, fmt(ganancia)),
+        h("div", { style: { fontSize: 11, color: T.muted } }, "ganancia")));
+  };
+  var vacio = h("div", { style: { padding: 40, textAlign: "center", color: T.muted, fontSize: 14 } }, "No hay ventas en este período.");
+
+  var listaProductos = res.productos.length === 0 ? vacio : res.productos.map(function (p, i) {
+    return fila("p" + i, p.nombre, [
+      p.qty + " und · Compra " + porUnidad(p.costo, p.qty) + " c/u · Venta " + porUnidad(p.venta, p.qty) + " c/u",
+      "Costó " + fmt(p.costo) + " · Vendido en " + fmt(p.venta)
+    ], p.ganancia, p.sinCosto);
+  });
+  var listaVentas = lineas.length === 0 ? vacio : lineas.map(function (l, i) {
+    return fila("l" + i, l.qty + "× " + l.nombre, [
+      [l.fecha, l.origen + (l.ref ? " " + l.ref : ""), l.cliente].filter(Boolean).join(" · "),
+      "Vendido en " + fmt(l.venta) + " · Costó " + fmt(l.costo)
+    ], l.ganancia, l.sinCosto);
+  });
+
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 18, width: "100%" } },
+    // Cabecera
+    h("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 } },
+      h("div", null,
+        h("h2", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: isMobile ? 19 : 22, fontWeight: 800, color: T.text, letterSpacing: "-0.03em", margin: 0 } },
+          _gIco("HandCoins", 20), "Ganancias"),
+        h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 5, textTransform: "capitalize" } }, etiqueta)),
+      h("button", {
+        onClick: imprimir,
+        style: { display: "flex", alignItems: "center", gap: 7, padding: "10px 17px", background: T.accent, border: "none", borderRadius: 10, cursor: "pointer", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 13 }
+      }, h(Printer, { size: 15 }), "Imprimir")),
+
+    // Período
+    h(Card, { style: { padding: 14 } },
+      h("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, REP_PERIODOS.map(function (p) { return chip(p.id, p.label); })),
+      periodo === "rango" && h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14 } },
+        [["Desde", cDesde, setCDesde], ["Hasta", cHasta, setCHasta]].map(function (f) {
+          return h("div", { key: f[0], style: { flex: "1 1 150px" } },
+            h("div", { style: { fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 } }, f[0]),
+            h("input", {
+              type: "date", value: f[1], max: hoy, onChange: function (e) { f[2](e.target.value); },
+              style: { background: T.surface, border: "1px solid " + T.border, borderRadius: 10, color: T.text, padding: "10px 12px", fontSize: 14, fontFamily: "inherit", width: "100%", outline: "none", fontWeight: 600 }
+            }));
+        }))),
+
+    // Totales
+    h("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 12 } },
+      kpi("Ganancia neta", res.ganancia, colGan, "Lo que te quedó · " + pct(res.margen) + " de lo vendido", true),
+      kpi("Costo de compra", res.costo, T.red, "Lo que te costaron los productos vendidos"),
+      kpi("Total vendido", res.venta, T.blue, res.unidades + " unidad(es) vendida(s)")),
+    h("div", { style: { fontSize: 13, color: T.muted, textAlign: "center" } },
+      "Vendiste ", h("b", { style: { color: T.text } }, fmt(res.venta)), " − te costó ", h("b", { style: { color: T.red } }, fmt(res.costo)),
+      " = ganaste ", h("b", { style: { color: colGan } }, fmt(res.ganancia))),
+
+    // Aviso de productos sin precio de compra
+    res.sinCosto.length > 0 && h("div", { style: { background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.45)", borderRadius: 10, padding: "12px 14px", fontSize: 13, color: T.text, lineHeight: 1.5 } },
+      h("b", null, res.sinCosto.length + " producto(s) sin precio de compra: "),
+      res.sinCosto.slice(0, 5).map(function (p) { return p.nombre; }).join(", ") + (res.sinCosto.length > 5 ? "…" : "") + ". ",
+      "Su ganancia aparece igual a lo vendido. Ponles el precio de compra en Inventario, Productos o Celulares y la ganancia se corrige sola."),
+
+    // Detalle
+    h("div", { style: { display: "flex", flexWrap: "wrap", background: T.surface, borderRadius: 12, padding: 4, gap: 4 } },
+      tabBtn("productos", "Por producto"), tabBtn("ventas", "Cada venta")),
+    h(Card, { style: { padding: 0, overflow: "hidden" } }, tab === "productos" ? listaProductos : listaVentas),
+    h("div", { style: { fontSize: 11.5, color: T.muted, lineHeight: 1.5 } },
+      "Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA) y celulares vendidos. No incluye reparaciones ni gastos del local.")
   );
 }
 
@@ -16469,6 +16827,10 @@ function App(_appProps) {
       size: 17
     })
   }, {
+    id: "ganancias",
+    label: "Ganancias",
+    icon: _gIco("HandCoins", 17)
+  }, {
     id: "facturas",
     label: "Facturas",
     icon: /*#__PURE__*/React.createElement(Receipt, {
@@ -16791,10 +17153,11 @@ function App(_appProps) {
     view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify, clientId: clientId }),
     view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
     view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
-    view === "products" && /*#__PURE__*/React.createElement(ProductsView, { data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
-    view === "celulares" && /*#__PURE__*/React.createElement(CelularesView, { data: data, save: save, notify: notify }),
+    view === "products" && /*#__PURE__*/React.createElement(ProductsView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
+    view === "celulares" && /*#__PURE__*/React.createElement(CelularesView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify }),
     view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
-    view === "sales" && /*#__PURE__*/React.createElement(VentasView, { data: data, save: save, notify: notify }),
+    view === "sales" && /*#__PURE__*/React.createElement(VentasView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify }),
+    view === "ganancias" && /*#__PURE__*/React.createElement(GananciasView, { data: data, isMobile: isMobile }),
     view === "facturas" && /*#__PURE__*/React.createElement(FacturasView, { data: data, save: save, notify: notify, settings: settings }),
     view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout, drivePending: gdPending }),
     view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
@@ -18043,7 +18406,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.3";
+var APP_VERSION = "1.5.4";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

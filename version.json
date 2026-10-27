@@ -1,5 +1,5 @@
 {
-  "version": "1.5.3",
-  "notes": "Inventario: se quitó el botón «Sync → Productos».",
+  "version": "1.5.4",
+  "notes": "Ganancias: precio de compra en Productos y Celulares; Ventas y Nueva Venta muestran el costo de compra y la ganancia neta; nueva sección Ganancias.",
   "url": "https://edier27.github.io/Acce7/"
 }
