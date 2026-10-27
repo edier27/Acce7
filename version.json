@@ -1,5 +1,5 @@
 {
-  "version": "1.5.9",
-  "notes": "Nuevos estilos de interfaz en Configuración → Apariencia: Moderno, Windows 10, Windows 11, macOS y Software clásico.",
+  "version": "1.6.0",
+  "notes": "Los estilos ahora cambian la distribución: Windows 10/11 con barra de tareas y menú Inicio, macOS con dock, Software clásico con barra de herramientas.",
   "url": "https://edier27.github.io/Acce7/"
 }

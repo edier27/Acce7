@@ -816,11 +816,11 @@ var applyTheme = function applyTheme(settings) {
 // ─── Estilos de interfaz (forma del programa: letra, esquinas y sombras) ───
 // Se aplican con CSS global según <html data-ui="...">; "moderno" es el diseño original.
 var UI_STYLES = {
-  moderno: { label: "Moderno", desc: "El diseño original de CLINICELL" },
-  win10:   { label: "Windows 10", desc: "Plano, esquinas rectas, letra Segoe UI" },
-  win11:   { label: "Windows 11", desc: "Esquinas suaves, letra Segoe UI" },
-  mac:     { label: "macOS", desc: "Redondeado y limpio, letra de Apple" },
-  clasico: { label: "Software clásico", desc: "Sobrio, sin sombras, letra Tahoma" }
+  moderno: { label: "Moderno", desc: "Barra lateral a la izquierda (el diseño original)" },
+  win10:   { label: "Windows 10", desc: "Barra de tareas abajo con botón Inicio, plano y recto" },
+  win11:   { label: "Windows 11", desc: "Barra de tareas centrada y menú Inicio flotante" },
+  mac:     { label: "macOS", desc: "Dock de íconos abajo, redondeado y limpio" },
+  clasico: { label: "Software clásico", desc: "Barra de herramientas arriba y barra de estado abajo" }
 };
 var _UI_FONTS = {
   win10: "'Segoe UI', Tahoma, Arial, sans-serif",
@@ -834,9 +834,19 @@ function _uiStyleCss() {
   var css = "";
   Object.keys(_UI_FONTS).forEach(function (k) {
     var s = 'html[data-ui="' + k + '"] ';
-    css += [s + "body", s + "input", s + "select", s + "textarea", s + "button"].join(",") +
+    css += [s + "body", s + "input", s + "select", s + "textarea", s + "button", s + '[style*="DM Sans"]'].join(",") +
       "{font-family:" + _UI_FONTS[k] + "!important;letter-spacing:0!important}";
   });
+  // Botones flotantes (catálogo PDF y asistente) por encima de la barra de tareas / de estado.
+  css += ".ui-sin-sombra:focus,.ui-sin-sombra{box-shadow:none!important}";
+  var sube = { win10: 46, win11: 54, clasico: 28 };
+  css += "@media (min-width:640px){";
+  Object.keys(sube).forEach(function (k) {
+    var s = 'html[data-ui="' + k + '"] ', d = sube[k];
+    css += s + "#acce-ai-btn{bottom:" + (24 + d) + "px!important}" + s + "#acce-pdf-btn{bottom:" + (90 + d) + "px!important}" +
+      s + "#acce-pdf-tooltip{bottom:" + (103 + d) + "px!important}" + s + "#acce-ai-panel{bottom:" + (92 + d) + "px!important}";
+  });
+  css += "}";
   Object.keys(_UI_FORMA).forEach(function (k) {
     var f = _UI_FORMA[k], s = 'html[data-ui="' + k + '"] ';
     css += s + '[style*="border-radius"]{border-radius:' + f[0] + "!important}";
@@ -9594,7 +9604,7 @@ function SettingsView(_ref20) {
   var rgb = parseInt(accent.slice(1, 3), 16) + "," + parseInt(accent.slice(3, 5), 16) + "," + parseInt(accent.slice(5, 7), 16);
   var subt = function (t) { return h("div", { style: { fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 10 } }, t); };
   var vistaApariencia = h("div", { style: { display: "flex", flexDirection: "column", gap: 18 } },
-    seccion("AppWindow", "Estilo de la interfaz", "Cambia la forma del programa: letra, esquinas y sombras. Se aplica al instante y combina con cualquier tema.",
+    seccion("AppWindow", "Estilo de la interfaz", "Cambia la forma del programa: menús, letra, esquinas y sombras. Se aplica al instante y combina con cualquier tema. En celular se mantiene la barra de abajo.",
       h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 } },
         Object.keys(UI_STYLES).map(function (key) {
           var st = UI_STYLES[key];
@@ -16939,6 +16949,10 @@ function App(_appProps) {
   }
   navItems = navItems.filter(function (n) { return _empCanView(empleado, n.id); });
   var _activeNavItem = navItems.find(function (n) { return n.id === view; });
+  // Distribución según el estilo de interfaz (solo en computador; en celular se deja la de siempre).
+  var _uiL = !isMobile && UI_LAYOUTS.indexOf(settings.uiStyle) >= 0 ? settings.uiStyle : null;
+  var _uiProps = { estilo: _uiL, navItems: navItems, view: view, setView: setView, storeName: settings.storeName,
+    onCatalog: function () { openCatalog(); }, onRating: function () { copyRatingLink(); }, onLogout: function () { handleLogoutFromMenu(); } };
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -16956,7 +16970,7 @@ function App(_appProps) {
     style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 190 }
   }),
 
-  /*#__PURE__*/React.createElement("aside", {
+  !_uiL && /*#__PURE__*/React.createElement("aside", {
     className: "trp-sidebar",
     style: {
       position: isMobile ? "fixed" : "relative",
@@ -17081,7 +17095,7 @@ function App(_appProps) {
   ),
 
   /*#__PURE__*/React.createElement("div", {
-    style: { display: "flex", flexDirection: "column", flex: 1, minWidth: 0, height: "100dvh" }
+    style: { display: "flex", flexDirection: "column", flex: 1, minWidth: 0, height: "100dvh", position: "relative" }
   },
     /*#__PURE__*/React.createElement("header", {
       style: {
@@ -17095,7 +17109,7 @@ function App(_appProps) {
         flexShrink: 0
       }
     },
-      (isMobile || !sidebarOpen) && /*#__PURE__*/React.createElement("button", {
+      !_uiL && (isMobile || !sidebarOpen) && /*#__PURE__*/React.createElement("button", {
         onClick: function () { return setSidebarOpen(function (o) { return !o; }); },
         style: { display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, border: "none", borderRadius: 8, background: "transparent", color: T.text, cursor: "pointer", flexShrink: 0 }
       }, /*#__PURE__*/React.createElement(Menu, { size: 19 })),
@@ -17194,9 +17208,11 @@ function App(_appProps) {
       )
     ),
 
+    _uiL === "clasico" && /*#__PURE__*/React.createElement(UiToolbar, _uiProps),
+
     /*#__PURE__*/React.createElement("main", {
       className: "trp-scroll",
-      style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24, paddingBottom: isMobile ? 78 : 24 }
+      style: { flex: 1, overflow: "auto", padding: isMobile ? 14 : 24, paddingBottom: isMobile ? 78 : (_uiL === "mac" ? 100 : 24) }
     },
     /*#__PURE__*/React.createElement(EmpleadoBar, { empleado: empleado, data: data, onSwitch: switchEmpleado, notify: notify }),
     /*#__PURE__*/React.createElement(SyncStatusBar, { sync: syncState, onRetry: function () { if (_syncRef.current) _syncRef.current.retry(); } }),
@@ -17248,7 +17264,10 @@ function App(_appProps) {
         }, item.badge),
         item.alert && /*#__PURE__*/React.createElement("span", { style: { position: "absolute", top: 4, right: "30%", width: 6, height: 6, background: T.yellow, borderRadius: "50%" } })
       );
-    }))
+    })),
+    (_uiL === "win10" || _uiL === "win11") && /*#__PURE__*/React.createElement(UiTaskbar, _uiProps),
+    _uiL === "mac" && /*#__PURE__*/React.createElement(UiDock, _uiProps),
+    _uiL === "clasico" && /*#__PURE__*/React.createElement(UiStatusBar, _uiProps)
   ),
 
   // ─── Aviso de inactividad ───────────────────────────────
@@ -17271,6 +17290,240 @@ function App(_appProps) {
   ))
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── DISTRIBUCIONES POR ESTILO (solo en computador) ────────────────────────
+// Windows 10/11: barra de tareas abajo con menú Inicio. macOS: dock abajo.
+// Software clásico: barra de herramientas arriba y barra de estado abajo.
+// En todos se quita la barra lateral.
+// ═══════════════════════════════════════════════════════════════════════════
+var UI_LAYOUTS = ["win10", "win11", "mac", "clasico"];
+
+function _useReloj() {
+  var _s = useState(Date.now()), t = _s[0], setT = _s[1];
+  useEffect(function () {
+    var id = setInterval(function () { setT(Date.now()); }, 20000);
+    return function () { clearInterval(id); };
+  }, []);
+  return new Date(t);
+}
+function _uiIco(name, size) {
+  var C = (typeof _LucideReact !== "undefined" && (_LucideReact[name] || _LucideReact.Circle)) || null;
+  if (!C) return null;
+  return React.createElement(C, { size: size || 17 });
+}
+function _uiIcono(item, size) {
+  return item && item.icon && React.isValidElement(item.icon) ? React.cloneElement(item.icon, { size: size }) : _uiIco("Circle", size);
+}
+// Secciones fijadas en la barra; la abierta se agrega si no está.
+function _uiFijados(items, view) {
+  var ids = ["dashboard", "repairs", "inventory", "products", "celulares", "customers", "sales", "facturas", "caja", "reporte"];
+  var out = ids.map(function (id) { return items.find(function (n) { return n.id === id; }); }).filter(Boolean);
+  var cur = items.find(function (n) { return n.id === view; });
+  if (cur && out.indexOf(cur) < 0) out.push(cur);
+  return out;
+}
+function _WinLogo(p) {
+  var s = p.size || 16, c = p.color || "#fff", g = s * 0.06, m = (s - g) / 2;
+  var r = p.w11 ? s * 0.08 : 0;
+  var cols = p.w11 ? ["#0078D4", "#0091F0", "#0091F0", "#00A2FF"] : [c, c, c, c];
+  return React.createElement("svg", { width: s, height: s, viewBox: "0 0 " + s + " " + s, style: { display: "block" } },
+    React.createElement("rect", { x: 0, y: 0, width: m, height: m, rx: r, fill: cols[0] }),
+    React.createElement("rect", { x: m + g, y: 0, width: m, height: m, rx: r, fill: cols[1] }),
+    React.createElement("rect", { x: 0, y: m + g, width: m, height: m, rx: r, fill: cols[2] }),
+    React.createElement("rect", { x: m + g, y: m + g, width: m, height: m, rx: r, fill: cols[3] }));
+}
+
+// ── Windows 10 / Windows 11: barra de tareas + menú Inicio ──
+function UiTaskbar(p) {
+  var h = React.createElement;
+  var w11 = p.estilo === "win11";
+  var _o = useState(false), abierto = _o[0], setAbierto = _o[1];
+  var _q = useState(""), q = _q[0], setQ = _q[1];
+  var ahora = _useReloj();
+  var items = p.navItems || [];
+  var cerrar = function () { setAbierto(false); setQ(""); };
+  var ir = function (id) { p.setView(id); cerrar(); };
+  var barH = w11 ? 48 : 40;
+  var fg = w11 ? T.text : "#f2f2f2";
+  var sel = w11 ? T.bg : "rgba(255,255,255,0.10)";
+  var hora = ahora.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" });
+  var fecha = ahora.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
+  var ql = q.trim().toLowerCase();
+  var lista = items.filter(function (n) { return !ql || n.label.toLowerCase().indexOf(ql) >= 0; });
+  var extras = [
+    { id: "__cat", label: "Catálogo Público", icon: h(ExternalLink, { size: 17 }), run: p.onCatalog },
+    { id: "__cal", label: "Link para Calificar", icon: h(Star, { size: 17 }), run: p.onRating }
+  ].filter(function (x) { return !ql || x.label.toLowerCase().indexOf(ql) >= 0; });
+  var abrirConBusqueda = function () { setAbierto(true); };
+
+  var appBtn = function (item) {
+    var on = p.view === item.id;
+    return h("button", {
+      key: item.id, title: item.label, onClick: function () { ir(item.id); },
+      style: { position: "relative", width: w11 ? 40 : 46, height: w11 ? 40 : barH, display: "flex", alignItems: "center", justifyContent: "center",
+        border: "none", cursor: "pointer", color: fg, background: on ? sel : "transparent", borderRadius: w11 ? 6 : 0, flexShrink: 0, padding: 0 }
+    },
+      _uiIcono(item, w11 ? 19 : 18),
+      on && h("span", { style: w11
+        ? { position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 16, height: 3, borderRadius: 2, background: T.accent }
+        : { position: "absolute", bottom: 0, left: 3, right: 3, height: 2, background: T.accent } }),
+      item.badge > 0 && h("span", { style: { position: "absolute", top: w11 ? 1 : 4, right: w11 ? 1 : 5, minWidth: 14, height: 14, padding: "0 3px", borderRadius: 7,
+        background: T.orange, color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" } }, item.badge > 9 ? "9+" : item.badge));
+  };
+  var inicio = h("button", {
+    key: "inicio", title: "Inicio", onClick: function () { abierto ? cerrar() : setAbierto(true); },
+    style: { width: w11 ? 40 : 46, height: w11 ? 40 : barH, display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer",
+      background: abierto ? sel : "transparent", borderRadius: w11 ? 6 : 0, flexShrink: 0, padding: 0 }
+  }, _WinLogo({ size: w11 ? 19 : 16, w11: w11, color: fg }));
+  var busquedaW10 = !w11 && h("div", {
+    key: "busq", onClick: abrirConBusqueda,
+    style: { width: 250, height: barH, display: "flex", alignItems: "center", gap: 10, padding: "0 12px", background: "#f2f2f2", color: "#555", fontSize: 13, cursor: "text", flexShrink: 0 }
+  }, _uiIco("Search", 16), "Escribe aquí para buscar");
+  var bandeja = h("div", { key: "reloj", style: { display: "flex", flexDirection: "column", alignItems: w11 ? "flex-end" : "center", justifyContent: "center", padding: "0 12px", color: fg, fontSize: 11.5, lineHeight: 1.35, flexShrink: 0 } },
+    h("span", null, hora), h("span", null, fecha));
+
+  // Menú Inicio
+  var buscador = h("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: w11 ? 999 : 0,
+      background: w11 ? T.bg : "#3a3a3a", border: "1px solid " + (w11 ? T.border : "#3a3a3a"), color: w11 ? T.muted : "#cfcfcf" } },
+    _uiIco("Search", 15),
+    h("input", { className: "ui-sin-sombra", autoFocus: true, value: q, onChange: function (e) { setQ(e.target.value); }, placeholder: "Buscar sección…",
+      onKeyDown: function (e) { if (e.key === "Escape") cerrar(); if (e.key === "Enter" && lista[0]) ir(lista[0].id); },
+      style: { flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", color: w11 ? T.text : "#fff", fontSize: 14, fontFamily: "inherit" } }));
+  var menu;
+  if (w11) {
+    menu = h("div", { style: { position: "fixed", zIndex: 301, bottom: barH + 10, left: "50%", transform: "translateX(-50%)", width: 600, maxWidth: "calc(100vw - 24px)",
+        maxHeight: "calc(100dvh - " + (barH + 30) + "px)", display: "flex", flexDirection: "column", background: T.surface, color: T.text,
+        border: "1px solid " + T.border, borderRadius: 8, boxShadow: "0 16px 48px rgba(0,0,0,0.28)", overflow: "hidden" } },
+      h("div", { style: { padding: "22px 26px 6px" } }, buscador),
+      h("div", { style: { padding: "14px 26px 4px", fontSize: 13.5, fontWeight: 600 } }, ql ? "Resultados" : "Anclado"),
+      h("div", { className: "trp-scroll", style: { flex: 1, overflow: "auto", padding: "6px 18px 18px", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 4 } },
+        lista.map(function (n) {
+          var on = p.view === n.id;
+          return h("button", { key: n.id, onClick: function () { ir(n.id); }, title: n.label,
+            style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 4px", border: "none", borderRadius: 6, cursor: "pointer",
+              background: on ? T.bg : "transparent", color: T.text, fontFamily: "inherit" } },
+            h("span", { style: { color: T.accent, display: "flex" } }, _uiIcono(n, 24)),
+            h("span", { style: { fontSize: 11.5, lineHeight: 1.25, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", width: "100%", whiteSpace: "nowrap" } }, n.label));
+        }),
+        extras.map(function (x) {
+          return h("button", { key: x.id, onClick: function () { cerrar(); x.run && x.run(); }, title: x.label,
+            style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 4px", border: "none", borderRadius: 6, cursor: "pointer", background: "transparent", color: T.text, fontFamily: "inherit" } },
+            h("span", { style: { color: T.accent, display: "flex" } }, React.cloneElement(x.icon, { size: 24 })),
+            h("span", { style: { fontSize: 11.5, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", width: "100%", whiteSpace: "nowrap" } }, x.label));
+        }),
+        lista.length + extras.length === 0 && h("div", { style: { gridColumn: "1 / -1", padding: 20, textAlign: "center", color: T.muted, fontSize: 13 } }, "No se encontró esa sección")),
+      h("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "12px 26px", borderTop: "1px solid " + T.border, background: T.bg } },
+        h("span", { style: { width: 30, height: 30, borderRadius: "50%", background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 } },
+          (p.storeName || "C").charAt(0).toUpperCase()),
+        h("span", { style: { flex: 1, fontSize: 13, fontWeight: 600 } }, p.storeName || "Mi taller"),
+        h("button", { title: "Configuración", onClick: function () { ir("settings"); }, style: { width: 34, height: 34, border: "none", borderRadius: 6, background: "transparent", color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" } }, _uiIco("Settings", 17)),
+        h("button", { title: "Cerrar sesión", onClick: function () { cerrar(); p.onLogout && p.onLogout(); }, style: { width: 34, height: 34, border: "none", borderRadius: 6, background: "transparent", color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" } }, _uiIco("Power", 17))));
+  } else {
+    var railBtn = function (key, icon, title, fn) {
+      return h("button", { key: key, title: title, onClick: fn, style: { width: 48, height: 46, border: "none", background: "transparent", color: "#f2f2f2", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 } }, icon);
+    };
+    var fila = function (key, icon, label, fn, on) {
+      return h("button", { key: key, onClick: fn, title: label,
+        style: { display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "5px 12px", border: "none", cursor: "pointer", textAlign: "left",
+          background: on ? "rgba(255,255,255,0.10)" : "transparent", color: "#f2f2f2", fontFamily: "inherit", fontSize: 13.5 } },
+        h("span", { style: { width: 32, height: 32, background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, icon),
+        h("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, label));
+    };
+    menu = h("div", { style: { position: "fixed", zIndex: 301, bottom: barH, left: 0, width: 360, height: "min(600px, calc(100dvh - " + (barH + 10) + "px))",
+        display: "flex", background: "#262626", color: "#f2f2f2", boxShadow: "0 0 24px rgba(0,0,0,0.4)" } },
+      h("div", { style: { width: 48, display: "flex", flexDirection: "column", justifyContent: "flex-end", background: "#1f1f1f", paddingBottom: 4 } },
+        railBtn("u", h("span", { style: { width: 26, height: 26, borderRadius: "50%", background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12 } }, (p.storeName || "C").charAt(0).toUpperCase()), p.storeName || "Mi taller", function () {}),
+        railBtn("s", _uiIco("Settings", 18), "Configuración", function () { ir("settings"); }),
+        railBtn("x", _uiIco("Power", 18), "Cerrar sesión", function () { cerrar(); p.onLogout && p.onLogout(); })),
+      h("div", { style: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column" } },
+        h("div", { style: { padding: "12px 12px 8px" } }, buscador),
+        h("div", { style: { padding: "4px 14px 6px", fontSize: 12, color: "#bdbdbd" } }, ql ? "Resultados" : "Todas las secciones"),
+        h("div", { className: "trp-scroll", style: { flex: 1, overflow: "auto", paddingBottom: 8 } },
+          lista.map(function (n) { return fila(n.id, _uiIcono(n, 17), n.label, function () { ir(n.id); }, p.view === n.id); }),
+          extras.map(function (x) { return fila(x.id, x.icon, x.label, function () { cerrar(); x.run && x.run(); }, false); }),
+          lista.length + extras.length === 0 && h("div", { style: { padding: 20, color: "#bdbdbd", fontSize: 13 } }, "No se encontró esa sección"))));
+  }
+
+  var fijados = _uiFijados(items, p.view);
+  return h(React.Fragment, null,
+    abierto && h("div", { onClick: cerrar, style: { position: "fixed", inset: 0, zIndex: 300 } }),
+    abierto && menu,
+    h("div", { style: { height: barH, flexShrink: 0, display: "flex", alignItems: "center", gap: w11 ? 4 : 0, padding: w11 ? "0 8px" : 0,
+        background: w11 ? T.surface : "#1c1c1c", borderTop: w11 ? "1px solid " + T.border : "none", position: "relative", zIndex: 100 } },
+      w11
+        ? h(React.Fragment, null,
+            h("div", { style: { flex: 1 } }),
+            h("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, inicio,
+              h("button", { title: "Buscar", onClick: abrirConBusqueda, style: { width: 40, height: 40, border: "none", borderRadius: 6, background: "transparent", color: fg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 } }, _uiIco("Search", 18)),
+              fijados.map(appBtn)),
+            h("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" } }, bandeja))
+        : h(React.Fragment, null, inicio, busquedaW10,
+            h("div", { style: { display: "flex", alignItems: "stretch", height: "100%", overflow: "hidden" } }, fijados.map(appBtn)),
+            h("div", { style: { flex: 1 } }), bandeja)));
+}
+
+// ── macOS: dock flotante ──
+function UiDock(p) {
+  var h = React.createElement;
+  var _hv = useState(null), hover = _hv[0], setHover = _hv[1];
+  var items = p.navItems || [];
+  var n = items.length + 2;
+  // Los íconos se achican solos si la ventana es angosta.
+  var sz = "min(46px, calc((100vw - " + (60 + n * 6) + "px) / " + n + "))";
+  var tile = function (key, icon, label, fn, on, badge) {
+    var hv = hover === key;
+    return h("div", { key: key, style: { position: "relative", display: "flex", flexDirection: "column", alignItems: "center" },
+        onMouseEnter: function () { setHover(key); }, onMouseLeave: function () { setHover(null); } },
+      hv && h("div", { style: { position: "absolute", bottom: "calc(100% + 14px)", padding: "4px 10px", borderRadius: 6, background: "rgba(30,30,30,0.92)", color: "#fff",
+        fontSize: 12, whiteSpace: "nowrap", pointerEvents: "none" } }, label),
+      h("button", { "aria-label": label, onClick: fn,
+        style: { width: sz, height: sz, borderRadius: 12, border: "1px solid " + T.border, cursor: "pointer", padding: 0, color: on ? T.accent : T.text,
+          background: "linear-gradient(180deg, " + T.card + ", " + T.surface + ")", display: "flex", alignItems: "center", justifyContent: "center",
+          transform: hv ? "translateY(-8px) scale(1.18)" : "none", transition: "transform 0.15s ease", boxShadow: "0 2px 6px rgba(0,0,0,0.12)" } }, icon),
+      badge > 0 && h("span", { style: { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8, background: "#FF3B30", color: "#fff", fontSize: 10, fontWeight: 700,
+        display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" } }, badge > 9 ? "9+" : badge),
+      h("span", { style: { width: 4, height: 4, borderRadius: "50%", marginTop: 3, background: on ? T.text : "transparent" } }));
+  };
+  return h("div", { style: { position: "absolute", left: "50%", bottom: 8, transform: "translateX(-50%)", zIndex: 95, maxWidth: "calc(100% - 24px)" } },
+    h("div", { style: { display: "flex", alignItems: "flex-end", gap: 6, padding: "7px 9px 3px", borderRadius: 18, border: "1px solid " + T.border,
+        background: T.surface + "E0", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", boxShadow: "0 10px 30px rgba(0,0,0,0.18)" } },
+      items.map(function (n) { return tile(n.id, _uiIcono(n, 22), n.label, function () { p.setView(n.id); }, p.view === n.id, n.badge); }),
+      h("div", { style: { width: 1, alignSelf: "stretch", margin: "4px 3px 10px", background: T.border } }),
+      tile("__cat", h(ExternalLink, { size: 20 }), "Catálogo Público", p.onCatalog, false, 0),
+      tile("__out", _uiIco("LogOut", 20), "Cerrar sesión", p.onLogout, false, 0)));
+}
+
+// ── Software clásico: barra de herramientas + barra de estado ──
+function UiToolbar(p) {
+  var h = React.createElement;
+  var items = p.navItems || [];
+  return h("div", { className: "trp-scroll", style: { display: "flex", alignItems: "stretch", gap: 2, padding: "4px 6px", overflowX: "auto", flexShrink: 0,
+      background: T.surface, borderBottom: "1px solid " + T.border } },
+    items.map(function (n) {
+      var on = p.view === n.id;
+      return h("button", { key: n.id, onClick: function () { p.setView(n.id); }, title: n.label,
+        style: { position: "relative", minWidth: 74, maxWidth: 96, padding: "6px 6px 5px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer",
+          border: "1px solid " + (on ? T.border : "transparent"), borderRadius: 2, background: on ? T.bg : "transparent", color: on ? T.accent : T.text, fontFamily: "inherit", flexShrink: 0 } },
+        _uiIcono(n, 20),
+        h("span", { style: { fontSize: 11, lineHeight: 1.2, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%", color: T.text, fontWeight: on ? 700 : 400 } }, n.label),
+        n.badge > 0 && h("span", { style: { position: "absolute", top: 2, right: 6, minWidth: 14, height: 14, padding: "0 3px", borderRadius: 2, background: T.orange, color: "#fff", fontSize: 9, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center" } }, n.badge > 9 ? "9+" : n.badge));
+    }));
+}
+function UiStatusBar(p) {
+  var h = React.createElement;
+  var ahora = _useReloj();
+  var seg = function (txt, flex) {
+    return h("span", { style: { padding: "0 10px", borderRight: "1px solid " + T.border, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: flex ? 1 : "none" } }, txt);
+  };
+  var actual = (p.navItems || []).find(function (n) { return n.id === p.view; });
+  return h("div", { style: { height: 24, flexShrink: 0, display: "flex", alignItems: "center", background: T.surface, borderTop: "1px solid " + T.border, color: T.muted, fontSize: 11.5 } },
+    seg("Listo"), seg(p.storeName || "Mi taller"), seg(actual ? actual.label : "", true),
+    seg(ahora.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }) + "  " + ahora.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })),
+    seg("CLINICELL " + (typeof APP_VERSION !== "undefined" ? "v" + APP_VERSION : "")));
+}
+
 
 // ─── SISTEMA DE LICENCIAS ──────────────────────────────────
 var WHATSAPP = "573214016292";
@@ -18459,7 +18712,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.9";
+var APP_VERSION = "1.6.0";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
