@@ -11487,11 +11487,13 @@ function ReporteView(_props) {
     // Pestañas
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexWrap: "wrap", background: T.surface, borderRadius: 12, padding: 4, gap: 4 } },
       tabBtn("resumen", "Resumen", BarChart3, tab, setTab),
+      tabBtn("ganancias", "Ganancias", (typeof _LucideReact !== "undefined" && _LucideReact.HandCoins) || Scale, tab, setTab),
       tabBtn("calendario", "Calendario", CalendarDays, tab, setTab),
       tabBtn("detalle", "Detalle", ClipboardList, tab, setTab)
     ),
 
     tab === "resumen" && vistaResumen,
+    tab === "ganancias" && /*#__PURE__*/React.createElement(GananciasView, { data: data, isMobile: isMobile, rango: rango }),
     tab === "calendario" && vistaCalendario,
     tab === "detalle" && vistaDetalle
   );
@@ -11640,7 +11642,9 @@ function GananciasView(_props) {
   var _ch = useState(hoy), cHasta = _ch[0], setCHasta = _ch[1];
   var _t = useState("productos"), tab = _t[0], setTab = _t[1];
 
-  var rango = _repRango(periodo, hoy, cDesde, cHasta);
+  // Dentro de Reportes recibe el período ya elegido allí (rango) y no muestra cabecera propia.
+  var embebido = !!_props.rango;
+  var rango = embebido ? _props.rango : _repRango(periodo, hoy, cDesde, cHasta);
   if (rango.desde > rango.hasta) rango = { desde: rango.hasta, hasta: rango.desde };
   var dias = _isoDiff(rango.desde, rango.hasta) + 1;
   var etiqueta = dias === 1
@@ -11751,8 +11755,14 @@ function GananciasView(_props) {
   });
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: 18, width: "100%" } },
+    embebido && h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 } },
+      h("div", { style: { fontSize: 13, color: T.muted } }, "Lo que ganaste en ventas, facturas y celulares: precio de venta menos precio de compra."),
+      h("button", {
+        onClick: imprimir,
+        style: { display: "flex", alignItems: "center", gap: 7, padding: "9px 15px", background: T.card, border: "1px solid " + T.border, borderRadius: 10, cursor: "pointer", color: T.text, fontFamily: "inherit", fontWeight: 700, fontSize: 13 }
+      }, h(Printer, { size: 15 }), "Imprimir ganancias")),
     // Cabecera
-    h("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 } },
+    !embebido && h("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 } },
       h("div", null,
         h("h2", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: isMobile ? 19 : 22, fontWeight: 800, color: T.text, letterSpacing: "-0.03em", margin: 0 } },
           _gIco("HandCoins", 20), "Ganancias"),
@@ -11763,7 +11773,7 @@ function GananciasView(_props) {
       }, h(Printer, { size: 15 }), "Imprimir")),
 
     // Período
-    h(Card, { style: { padding: 14 } },
+    !embebido && h(Card, { style: { padding: 14 } },
       h("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, REP_PERIODOS.map(function (p) { return chip(p.id, p.label); })),
       periodo === "rango" && h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14 } },
         [["Desde", cDesde, setCDesde], ["Hasta", cHasta, setCHasta]].map(function (f) {
@@ -16827,10 +16837,6 @@ function App(_appProps) {
       size: 17
     })
   }, {
-    id: "ganancias",
-    label: "Ganancias",
-    icon: _gIco("HandCoins", 17)
-  }, {
     id: "facturas",
     label: "Facturas",
     icon: /*#__PURE__*/React.createElement(Receipt, {
@@ -17156,9 +17162,7 @@ function App(_appProps) {
     view === "products" && /*#__PURE__*/React.createElement(ProductsView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
     view === "celulares" && /*#__PURE__*/React.createElement(CelularesView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify }),
     view === "customers" && /*#__PURE__*/React.createElement(CustomersView, { data: data, save: save, notify: notify }),
-    view === "sales" && /*#__PURE__*/React.createElement(VentasView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify }),
-    view === "ganancias" && /*#__PURE__*/React.createElement(GananciasView, { data: data, isMobile: isMobile }),
-    view === "facturas" && /*#__PURE__*/React.createElement(FacturasView, { data: data, save: save, notify: notify, settings: settings }),
+    view === "sales" && /*#__PURE__*/React.createElement(VentasView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify }),    view === "facturas" && /*#__PURE__*/React.createElement(FacturasView, { data: data, save: save, notify: notify, settings: settings }),
     view === "settings" && /*#__PURE__*/React.createElement(SettingsView, { settings: settings, saveSettings: saveSettings, notify: notify, clientId: clientId, onLogout: onLogout, drivePending: gdPending }),
     view === "caja" && /*#__PURE__*/React.createElement(CashflowView, { data: data, save: save, notify: notify }),
     view === "reporte" && /*#__PURE__*/React.createElement(ReporteView, { data: data, isMobile: isMobile, notify: notify }),
@@ -18406,7 +18410,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.4";
+var APP_VERSION = "1.5.5";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
