@@ -9213,6 +9213,128 @@ function FacturaModal(_refFM) {
     )
   );
 }
+// Estado de la licencia guardada en este equipo (para la cabecera y la sección Cuenta).
+function _cfgLicStatus() {
+  var savedLic = null;
+  try { savedLic = JSON.parse(localStorage.getItem("trp_lic_v1") || "null"); } catch(e) {}
+  if (!savedLic) {
+    try {
+      var _cu = localStorage.getItem("trp_current_user");
+      if (_cu) {
+        var _ud = JSON.parse(localStorage.getItem("trp_user_" + _cu) || "null");
+        if (_ud && _ud.licenseCode) savedLic = { code: _ud.licenseCode };
+      }
+    } catch(e) {}
+  }
+  return savedLic ? verificarCodigo(savedLic.code || "") : null;
+}
+
+// Activar / renovar licencia (misma lógica de siempre, ahora como componente propio).
+function LicenciaPanel() {
+  var _lics = useState(""), _licsa = _slicedToArray(_lics, 2), newLic = _licsa[0], setNewLic = _licsa[1];
+  var _lice = useState(""), _licea = _slicedToArray(_lice, 2), licErr = _licea[0], setLicErr = _licea[1];
+  var _licok = useState(""), _licoka = _slicedToArray(_licok, 2), licOk = _licoka[0], setLicOk = _licoka[1];
+  var curStatus = _cfgLicStatus();
+  var handleActivar = function() {
+    setLicErr(""); setLicOk("");
+    // El admin no usa licencia: bloquear para no desviar su clientId/datos.
+    if (_isAdminUid(_currentUid())) { setLicErr("Eres administrador: tu cuenta no necesita licencia."); return; }
+    var result = verificarCodigo(newLic);
+    if (!result.valid) { setLicErr(result.error || "Código inválido"); return; }
+    var uid = _currentUid();
+    // Candado server-side: el código debe estar emitido por el admin y no quemado
+    _validarCodigoServidor(newLic, uid).then(function(chk) {
+    if (!chk.ok) { setLicErr(chk.error); return; }
+    var lastUser = localStorage.getItem("trp_current_user");
+    var userData = lastUser ? _loadUserLocal(lastUser) : null;
+    if (!userData && uid) { try { userData = JSON.parse(localStorage.getItem("trp_profile_" + uid) || "null"); } catch(e) {} }
+    if (userData) {
+      // clientId PERMANENTE — nunca cambia al renovar licencia.
+      var permId = localStorage.getItem("trp_permanent_clientId_" + (userData.username||"")) || userData.clientId;
+      // SEGURIDAD ANTI-PÉRDIDA: si no hay un clientId existente, NO renovar a uno
+      // vacío (eso borraría la vista de datos). Abortar y avisar.
+      if (!permId) { setLicErr("No pudimos identificar tu taller en este equipo. Cierra sesión y vuelve a entrar; si persiste, contacta a soporte."); return; }
+      try { localStorage.setItem("trp_permanent_clientId_" + (userData.username||""), permId); } catch(e) {}
+      var updated = Object.assign({}, userData, {
+        uid: uid || userData.uid,
+        licenseCode: newLic.trim().toUpperCase(),
+        licenseType: result.type,
+        clientId: permId
+      });
+      _saveProfile(updated);
+      // Guardar también en trp_lic_v1 para que el panel lo muestre correctamente
+      try {
+        localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newLic.trim().toUpperCase(), type: result.type, activatedAt: Date.now(), totalDays: result.daysLeft || 8 }));
+      } catch(e) {}
+      // Registrar uso del código en Firebase (panel admin lo verá en rojo)
+      try {
+        var fbDbS = window.__firebaseDB;
+        if (fbDbS && uid) {
+          var codeKeyS = "code_LIC_" + newLic.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+          fbDbS.collection("trp_users").doc(codeKeyS).set({
+            used: true, usedBy: uid, usedByUser: userData.username || "",
+            usedAt: new Date().toISOString(), codeType: result.type,
+            code: newLic.trim().toUpperCase()
+          }, { merge: true });
+        }
+      } catch(e){}
+      setLicOk(result.type === "pro" ? "Licencia Pro activada. Aplicando..." : "Licencia activada — " + result.daysLeft + " días. Aplicando...");
+      setTimeout(function(){ window.location.reload(); }, 1500);
+    } else {
+      setLicErr("Error: no se encontró tu cuenta. Vuelve a iniciar sesión.");
+    }
+    setNewLic("");
+    });
+  };
+  var activa = curStatus && curStatus.valid;
+  var esPro = activa && curStatus.type === "pro";
+  return React.createElement("div", null,
+    React.createElement("div", {
+      style: { display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, marginBottom: 16,
+        background: activa ? "rgba(22,163,74,0.08)" : "rgba(220,38,38,0.07)", border: "1px solid " + (activa ? "rgba(22,163,74,0.25)" : "rgba(220,38,38,0.22)") }
+    },
+      React.createElement("div", { style: { width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        background: activa ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.12)", color: activa ? T.green : T.red } },
+        React.createElement(esPro ? CheckCircle : activa ? Clock : AlertTriangle, { size: 18 })),
+      React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: T.text } },
+          !activa ? "Sin licencia activa" : esPro ? "Licencia Pro" : "Demo activo"),
+        React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 2 } },
+          !activa ? "Ingresa un código para activar el software."
+            : esPro ? "Acceso permanente."
+            : "Te quedan " + curStatus.daysLeft + " día" + (curStatus.daysLeft !== 1 ? "s" : "") + "."))),
+    React.createElement("div", { style: { fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 6 } }, "Activar o renovar con un código"),
+    React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+      React.createElement("input", {
+        type: "text",
+        placeholder: "Ej: PRO-ABC123-XYZ456",
+        value: newLic,
+        onChange: function(e) { setNewLic(e.target.value.toUpperCase()); setLicErr(""); setLicOk(""); },
+        onKeyDown: function(e) { if (e.key === "Enter") handleActivar(); },
+        style: Object.assign({}, _cfgInput(), { flex: 1, minWidth: 200, width: "auto", fontFamily: "monospace", letterSpacing: "0.04em" })
+      }),
+      React.createElement(Btn, { onClick: handleActivar }, "Activar")
+    ),
+    licErr && React.createElement("div", {
+      style: { marginTop: 10, color: T.red, fontSize: 13.5, padding: "9px 12px", background: "rgba(220,38,38,0.07)", borderRadius: 10 }
+    }, licErr),
+    licOk && React.createElement("div", {
+      style: { marginTop: 10, color: T.green, fontSize: 13.5, padding: "9px 12px", background: "rgba(22,163,74,0.08)", borderRadius: 10, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }
+    }, React.createElement(CheckCircle, { size: 14 }), licOk,
+      React.createElement("button", {
+        onClick: function() { window.location.reload(); },
+        style: { marginLeft: 12, background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontSize: 13, fontFamily: "inherit", fontWeight: 600 }
+      }, "Recargar ahora")
+    )
+  );
+}
+
+// Estilo de campo de Configuración (se calcula al pintar para seguir el tema actual).
+function _cfgInput() {
+  return { background: T.surface, border: "1px solid " + T.border, borderRadius: 10, color: T.text, padding: "10px 13px",
+    fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit" };
+}
+
 function SettingsView(_ref20) {
   var settings = _ref20.settings,
     saveSettings = _ref20.saveSettings,
@@ -9226,6 +9348,13 @@ function SettingsView(_ref20) {
   var _spwd1 = useState(""), _spwda1 = _slicedToArray(_spwd1, 2), newPwd = _spwda1[0], setNewPwd = _spwda1[1];
   var _spwd2 = useState(""), _spwda2 = _slicedToArray(_spwd2, 2), newPwd2 = _spwda2[0], setNewPwd2 = _spwda2[1];
   var _spwd3 = useState(""), _spwda3 = _slicedToArray(_spwd3, 2), curPwd = _spwda3[0], setCurPwd = _spwda3[1];
+  var _stab = useState(function () { try { return localStorage.getItem("acce_cfg_tab") || "negocio"; } catch (e) { return "negocio"; } }),
+    _staba = _slicedToArray(_stab, 2), tab = _staba[0], setTabRaw = _staba[1];
+  var setTab = function (t) { setTabRaw(t); try { localStorage.setItem("acce_cfg_tab", t); } catch (e) {} };
+  var win = useWindowSize();
+  var isMobile = win.w < 900;
+  var h = React.createElement;
+
   var set = function set(k, v) {
     return setForm(function (f) {
       return _objectSpread(_objectSpread({}, f), {}, _defineProperty({}, k, v));
@@ -9295,540 +9424,217 @@ function SettingsView(_ref20) {
       });
     } catch(e) { doUpdate(); }
   };
-  var labelStyle = {
-    fontSize: 15,
-    fontWeight: 600,
-    color: T.muted,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: 5,
-    display: "block"
+
+  // ¿Hay cambios sin guardar?
+  var _norm = function (v) { return v === undefined || v === null || v === false ? "" : String(v); };
+  var CAMPOS = ["storeName", "storeSubtitle", "logo", "loginBrand", "nit", "address", "email", "whatsapp", "theme", "accentColor", "themePreset"];
+  var dirty = CAMPOS.some(function (k) { return _norm(form[k]) !== _norm(settings[k]); });
+
+  // ── Piezas de interfaz ──
+  var inp = _cfgInput();
+  var Ico = function (name, size) {
+    var C = (typeof _LucideReact !== "undefined" && _LucideReact[name]) || Store;
+    return h(C, { size: size || 16 });
   };
-  var sectionTitle = {
-    fontSize: 15,
-    fontWeight: 700,
-    color: T.text,
-    marginBottom: 16,
-    paddingBottom: 10,
-    borderBottom: "1px solid ".concat(T.border),
-    display: "flex",
-    alignItems: "center",
-    gap: 8
+  var campo = function (label, key, opts) {
+    opts = opts || {};
+    return h("div", { key: key, style: { display: "flex", flexDirection: "column", gap: 6, gridColumn: opts.full ? "1 / -1" : "auto", minWidth: 0 } },
+      h("label", { style: { fontSize: 13, fontWeight: 600, color: T.text } }, label),
+      h("input", { type: opts.type || "text", value: form[key] || "", placeholder: opts.placeholder || "",
+        onChange: function (e) { set(key, e.target.value); }, style: inp }),
+      opts.hint ? h("div", { style: { fontSize: 12, color: T.muted, lineHeight: 1.45 } }, opts.hint) : null);
   };
-  var rowItemStyle = { flex: "1 1 380px", minWidth: 0 };
-  var rowWrapStyle = { display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" };
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 1240,
-      display: "flex",
-      flexDirection: "column",
-      gap: 24
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: rowWrapStyle
-  }, /*#__PURE__*/React.createElement(Card, { style: rowItemStyle }, /*#__PURE__*/React.createElement("div", {
-    style: sectionTitle
-  }, /*#__PURE__*/React.createElement(Store, { size: 15 }), "Identidad del Negocio"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "160px 1fr",
-      gap: 20
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-    style: labelStyle
-  }, "Logo / Imagen"), /*#__PURE__*/React.createElement("div", {
-    onClick: function onClick() {
-      return fileRef.current.click();
-    },
-    style: {
-      width: 140,
-      height: 140,
-      background: form.logo ? "transparent" : T.bg,
-      border: "2px dashed ".concat(T.border),
-      borderRadius: 12,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      cursor: "pointer",
-      overflow: "hidden",
-      position: "relative"
-    }
-  }, form.logo ? /*#__PURE__*/React.createElement("img", {
-    src: form.logo,
-    alt: "logo",
-    style: {
-      width: "100%",
-      height: "100%",
-      objectFit: "cover"
-    }
-  }) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      color: T.muted
-    }
-  }, /*#__PURE__*/React.createElement(Camera, { size: 32 }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 15,
-      marginTop: 6
-    }
-  }, "Click para subir"))), /*#__PURE__*/React.createElement("input", {
-    ref: fileRef,
-    type: "file",
-    accept: "image/*",
-    style: {
-      display: "none"
-    },
-    onChange: handleLogoUpload
-  }), form.logo && /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      return set("logo", "");
-    },
-    style: {
-      marginTop: 6,
-      fontSize: 15,
-      color: T.red,
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      fontFamily: "inherit"
-    }
-  }, "\u2715 Quitar logo")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 14
-    }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Nombre del negocio",
-    value: form.storeName,
-    onChange: function onChange(v) {
-      return set("storeName", v);
-    },
-    placeholder: "CLINICELL"
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Subt\xEDtulo / Slogan",
-    value: form.storeSubtitle,
-    onChange: function onChange(v) {
-      return set("storeSubtitle", v);
-    },
-    placeholder: "GESTI\xD3N TALLER"
-  }), /*#__PURE__*/React.createElement("label", {
-    style: { display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", background: T.bg, border: "1px solid ".concat(form.loginBrand ? T.accent : T.border), borderRadius: 10, cursor: "pointer" }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "checkbox",
-    checked: form.loginBrand === true,
-    onChange: function onChange(e) { return set("loginBrand", e.target.checked); },
-    style: { width: 18, height: 18, marginTop: 2, flexShrink: 0, accentColor: T.accent, cursor: "pointer" }
-  }), /*#__PURE__*/React.createElement("div", null,
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: T.text } }, "Usar mi logo y nombre al abrir el programa"),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 3, lineHeight: 1.45 } },
-      form.loginBrand
-        ? "El inicio de sesi\xF3n, la pantalla de carga y el t\xEDtulo de la ventana muestran " + ((form.storeName || "").trim() || "tu negocio") + (form.logo ? " con tu logo." : ". Sube un logo para que se vea mejor.")
-        : "Desactivado: se muestra el logo de CLINICELL. Act\xEDvalo para que tus empleados vean tu marca al entrar."))
-  ), /*#__PURE__*/React.createElement(Field, {
-    label: "NIT / C\xE9dula (aparece en las facturas)",
-    value: form.nit || "",
-    onChange: function onChange(v) {
-      return set("nit", v);
-    },
-    placeholder: "901.234.567-8"
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Direcci\xF3n",
-    value: form.address,
-    onChange: function onChange(v) {
-      return set("address", v);
-    },
-    placeholder: "Calle 10 #5-23, Neiva, Huila"
-  })))), /*#__PURE__*/React.createElement(Card, { style: rowItemStyle }, /*#__PURE__*/React.createElement("div", {
-    style: sectionTitle
-  }, /*#__PURE__*/React.createElement(Phone, { size: 15 }), "Informaci\xF3n de Contacto"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: 14
-    }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Correo electr\xF3nico",
-    value: form.email,
-    onChange: function onChange(v) {
-      return set("email", v);
-    },
-    placeholder: "taller@correo.com",
-    type: "email"
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "WhatsApp (con c\xF3digo de pa\xEDs)",
-    value: form.whatsapp,
-    onChange: function onChange(v) {
-      return set("whatsapp", v);
-    },
-    placeholder: "573001234567"
-  })), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 14,
-      color: T.muted,
-      marginTop: 10
-    }
-  }, "El n\xFAmero de WhatsApp se usa para recibir pedidos del cat\xE1logo p\xFAblico. Incluye el c\xF3digo del pa\xEDs sin el + (ej: 573001234567)."))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
-    style: sectionTitle
-  }, /*#__PURE__*/React.createElement(Palette, { size: 15 }), "Apariencia"),
-  /*#__PURE__*/React.createElement("label", {
-    style: labelStyle
-  }, "Temas predefinidos \u2014 haz clic para aplicar al instante"),
-  /*#__PURE__*/React.createElement("div", {
-    style: { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }
-  }, Object.keys(THEME_PRESETS).map(function (key) {
-    var preset = THEME_PRESETS[key];
-    var active = form.themePreset === key;
-    return /*#__PURE__*/React.createElement("div", {
-      key: key,
-      onClick: function () { return handleThemePreset(key); },
-      style: {
-        flex: "1 1 150px",
-        minWidth: 150,
-        padding: 14,
-        borderRadius: 14,
-        border: "2px solid ".concat(active ? preset.accent : T.border),
-        background: T.bg,
-        cursor: "pointer",
-        transition: "all 0.15s"
-      }
-    },
-      /*#__PURE__*/React.createElement("div", {
-        style: {
-          height: 46, borderRadius: 10, marginBottom: 10, overflow: "hidden",
-          display: "flex", border: "1px solid ".concat(preset.base.border),
-          background: preset.base.surface
-        }
-      },
-        /*#__PURE__*/React.createElement("div", { style: { flex: 1, background: preset.base.card } }),
-        /*#__PURE__*/React.createElement("div", { style: { width: 18, background: preset.accent } })
-      ),
-      /*#__PURE__*/React.createElement("div", {
-        style: { fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 2 }
-      }, preset.label),
-      active
-        ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: preset.accent, fontWeight: 700 } }, "\u2713 Activo")
-        : /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: T.muted } }, "Clic para aplicar")
-    );
-  })),
-  /*#__PURE__*/React.createElement("label", {
-    style: labelStyle
-  }, "Modo de color"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 12,
-      marginBottom: 20
-    }
-  }, [{
-    id: "dark",
-    label: "Oscuro",
-    icon: Moon,
-    desc: "Fondo negro, texto claro"
-  }, {
-    id: "light",
-    label: "Claro",
-    icon: Sun,
-    desc: "Fondo blanco, texto oscuro"
-  }].map(function (opt) {
-    return /*#__PURE__*/React.createElement("div", {
-      key: opt.id,
-      onClick: function onClick() {
-        return set("theme", opt.id);
-      },
-      style: {
-        flex: 1,
-        padding: "14px 18px",
-        borderRadius: 12,
-        border: "2px solid ".concat(form.theme === opt.id ? T.accent : T.border),
-        background: form.theme === opt.id ? T.accentDim : T.bg,
-        cursor: "pointer",
-        transition: "all 0.2s"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex", alignItems: "center", gap: 6,
-        fontSize: 16,
-        marginBottom: 4
-      }
-    }, /*#__PURE__*/React.createElement(opt.icon, { size: 15 }), opt.label), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 14,
-        color: T.muted
-      }
-    }, opt.desc), form.theme === opt.id && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 6,
-        fontSize: 15,
-        color: T.accent,
-        fontWeight: 700
-      }
-    }, "\u2713 Activo"));
-  })), /*#__PURE__*/React.createElement("label", {
-    style: labelStyle
-  }, "Color de acento"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      flexWrap: "wrap",
-      marginBottom: 12
-    }
-  }, ACCENT_PRESETS.map(function (color) {
-    return /*#__PURE__*/React.createElement("div", {
-      key: color,
-      onClick: function onClick() {
-        return set("accentColor", color);
-      },
-      style: {
-        width: 36,
-        height: 36,
-        borderRadius: "50%",
-        background: color,
-        cursor: "pointer",
-        border: form.accentColor === color ? "3px solid ".concat(T.text) : "3px solid transparent",
-        boxShadow: form.accentColor === color ? "0 0 0 2px ".concat(color) : "none",
-        transition: "all 0.15s"
-      },
-      title: color
-    });
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("label", {
-    style: _objectSpread(_objectSpread({}, labelStyle), {}, {
-      margin: 0
-    })
-  }, "Color personalizado:"), /*#__PURE__*/React.createElement("input", {
-    type: "color",
-    value: form.accentColor,
-    onChange: function onChange(e) {
-      return set("accentColor", e.target.value);
-    },
-    style: {
-      width: 44,
-      height: 36,
-      border: "1px solid ".concat(T.border),
-      borderRadius: 8,
-      cursor: "pointer",
-      background: T.surface,
-      padding: 2
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 15,
-      color: T.muted,
-      fontFamily: "monospace"
-    }
-  }, form.accentColor)),
+  var seccion = function (icon, titulo, desc, contenido, extra) {
+    return h(Card, { key: titulo, style: { padding: isMobile ? 18 : 24, borderRadius: 14 } },
+      h("div", { style: { display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 20 } },
+        h("div", { style: { width: 38, height: 38, borderRadius: 10, background: T.accentDim, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, Ico(icon, 18)),
+        h("div", { style: { flex: 1, minWidth: 0 } },
+          h("div", { style: { fontSize: 16, fontWeight: 700, color: T.text, letterSpacing: "-0.01em" } }, titulo),
+          desc ? h("div", { style: { fontSize: 13, color: T.muted, marginTop: 3, lineHeight: 1.45 } }, desc) : null),
+        extra || null),
+      contenido);
+  };
+  var interruptor = function (on, onChange) {
+    return h("button", {
+      type: "button", role: "switch", "aria-checked": on, onClick: function () { onChange(!on); },
+      style: { width: 44, height: 26, borderRadius: 999, border: "none", padding: 3, cursor: "pointer", flexShrink: 0,
+        background: on ? T.accent : T.border, transition: "background 0.15s", display: "flex", justifyContent: on ? "flex-end" : "flex-start" }
+    }, h("span", { style: { width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" } }));
+  };
 
-  /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 16,
-      padding: "14px 18px",
-      background: T.bg,
-      borderRadius: 10,
-      border: "1px solid ".concat(T.border)
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 15,
-      color: T.muted,
-      marginBottom: 8,
-      textTransform: "uppercase",
-      letterSpacing: "0.06em"
-    }
-  }, "Vista previa del color"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "8px 16px",
-      background: form.accentColor,
-      color: "#000",
-      borderRadius: 8,
-      fontWeight: 700,
-      fontSize: 13
-    }
-  }, "Bot\xF3n primario"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "8px 16px",
-      background: "rgba(".concat(parseInt(form.accentColor.slice(1, 3), 16), ",").concat(parseInt(form.accentColor.slice(3, 5), 16), ",").concat(parseInt(form.accentColor.slice(5, 7), 16), ",0.15)"),
-      color: form.accentColor,
-      border: "1px solid ".concat(form.accentColor, "40"),
-      borderRadius: 8,
-      fontWeight: 700,
-      fontSize: 13
-    }
-  }, "Badge"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 15,
-      color: form.accentColor,
-      fontWeight: 700,
-      display: "flex",
-      alignItems: "center"
-    }
-  }, "\u2190 Texto acento")))), /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleSave,
-    icon: /*#__PURE__*/React.createElement(Check, {
-      size: 15
-    }),
-    style: {
-      alignSelf: "flex-start"
-    }
-  }, "Guardar Configuraci\xF3n"),
+  // ── Secciones ──
+  var logoBox = h("div", { style: { display: "flex", flexDirection: isMobile ? "row" : "column", alignItems: "center", gap: 12 } },
+    h("div", {
+      onClick: function () { fileRef.current.click(); },
+      title: "Cambiar logo",
+      style: { width: 120, height: 120, borderRadius: 16, overflow: "hidden", cursor: "pointer", flexShrink: 0, position: "relative",
+        background: form.logo ? "transparent" : T.bg, border: form.logo ? "1px solid " + T.border : "2px dashed " + T.border,
+        display: "flex", alignItems: "center", justifyContent: "center" }
+    }, form.logo
+      ? h("img", { src: form.logo, alt: "logo", style: { width: "100%", height: "100%", objectFit: "cover" } })
+      : h("div", { style: { textAlign: "center", color: T.muted } }, h(Camera, { size: 28 }))),
+    h("input", { ref: fileRef, type: "file", accept: "image/*", style: { display: "none" }, onChange: handleLogoUpload }),
+    h("div", { style: { display: "flex", flexDirection: "column", gap: 6, alignItems: isMobile ? "flex-start" : "center" } },
+      h(Btn, { variant: "ghost", small: true, onClick: function () { fileRef.current.click(); } }, form.logo ? "Cambiar logo" : "Subir logo"),
+      form.logo && h("button", { onClick: function () { set("logo", ""); },
+        style: { fontSize: 12.5, color: T.red, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 2 } }, "Quitar logo")));
 
-  /*#__PURE__*/React.createElement("div", {
-    style: rowWrapStyle
-  },
-  /*#__PURE__*/React.createElement(Card, { style: rowItemStyle },
-    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, /*#__PURE__*/React.createElement(KeyRound, { size: 15 }), "Licencia"),
-    (function() {
-      var _lics = useState(""), _licsa = _slicedToArray(_lics, 2), newLic = _licsa[0], setNewLic = _licsa[1];
-      var _lice = useState(""), _licea = _slicedToArray(_lice, 2), licErr = _lice[0], setLicErr = _lice[1];
-      var _licok = useState(""), _licoka = _slicedToArray(_licok, 2), licOk = _licok[0], setLicOk = _licok[1];
-      // Mostrar estado actual
-      // Leer licencia del usuario actual (clave correcta: trp_lic_v1 o licenseCode del usuario)
-      var savedLic = null;
-      try { savedLic = JSON.parse(localStorage.getItem("trp_lic_v1") || "null"); } catch(e) {}
-      // Si no está en trp_lic_v1, buscar en el objeto del usuario
-      if (!savedLic) {
-        try {
-          var _cu = localStorage.getItem("trp_current_user");
-          if (_cu) {
-            var _ud = JSON.parse(localStorage.getItem("trp_user_" + _cu) || "null");
-            if (_ud && _ud.licenseCode) savedLic = { code: _ud.licenseCode };
-          }
-        } catch(e) {}
-      }
-      var curStatus = savedLic ? verificarCodigo(savedLic.code || "") : null;
-      var handleActivar = function() {
-        setLicErr(""); setLicOk("");
-        // El admin no usa licencia: bloquear para no desviar su clientId/datos.
-        if (_isAdminUid(_currentUid())) { setLicErr("Eres administrador: tu cuenta no necesita licencia."); return; }
-        var result = verificarCodigo(newLic);
-        if (!result.valid) { setLicErr(result.error || "Código inválido"); return; }
-        var uid = _currentUid();
-        // Candado server-side: el código debe estar emitido por el admin y no quemado
-        _validarCodigoServidor(newLic, uid).then(function(chk) {
-        if (!chk.ok) { setLicErr(chk.error); return; }
-        var lastUser = localStorage.getItem("trp_current_user");
-        var userData = lastUser ? _loadUserLocal(lastUser) : null;
-        if (!userData && uid) { try { userData = JSON.parse(localStorage.getItem("trp_profile_" + uid) || "null"); } catch(e) {} }
-        if (userData) {
-          // clientId PERMANENTE — nunca cambia al renovar licencia.
-          var permId = localStorage.getItem("trp_permanent_clientId_" + (userData.username||"")) || userData.clientId;
-          // SEGURIDAD ANTI-PÉRDIDA: si no hay un clientId existente, NO renovar a uno
-          // vacío (eso borraría la vista de datos). Abortar y avisar.
-          if (!permId) { setLicErr("No pudimos identificar tu taller en este equipo. Cierra sesión y vuelve a entrar; si persiste, contacta a soporte."); return; }
-          try { localStorage.setItem("trp_permanent_clientId_" + (userData.username||""), permId); } catch(e) {}
-          var updated = Object.assign({}, userData, {
-            uid: uid || userData.uid,
-            licenseCode: newLic.trim().toUpperCase(),
-            licenseType: result.type,
-            clientId: permId
-          });
-          _saveProfile(updated);
-          // Guardar también en trp_lic_v1 para que el panel lo muestre correctamente
-          try {
-            localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newLic.trim().toUpperCase(), type: result.type, activatedAt: Date.now(), totalDays: result.daysLeft || 8 }));
-          } catch(e) {}
-          // Registrar uso del código en Firebase (panel admin lo verá en rojo)
-          try {
-            var fbDbS = window.__firebaseDB;
-            if (fbDbS && uid) {
-              var codeKeyS = "code_LIC_" + newLic.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
-              fbDbS.collection("trp_users").doc(codeKeyS).set({
-                used: true, usedBy: uid, usedByUser: userData.username || "",
-                usedAt: new Date().toISOString(), codeType: result.type,
-                code: newLic.trim().toUpperCase()
-              }, { merge: true });
-            }
-          } catch(e){}
-          setLicOk(result.type === "pro" ? "Licencia Pro activada. Aplicando..." : "Licencia activada — " + result.daysLeft + " días. Aplicando...");
-          setTimeout(function(){ window.location.reload(); }, 1500);
-        } else {
-          setLicErr("Error: no se encontró tu cuenta. Vuelve a iniciar sesión.");
-        }
-        setNewLic("");
-        });
-      };
-      return /*#__PURE__*/React.createElement("div", null,
-        // Estado actual
-        /*#__PURE__*/React.createElement("div", {
-          style: { background: T.accentDim, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13 }
-        },
-          /*#__PURE__*/React.createElement("div", { style: { fontWeight: 600, color: T.text, marginBottom: 2 } }, "Estado actual"),
-          /*#__PURE__*/React.createElement("div", { style: { color: T.muted, display: "flex", alignItems: "center", gap: 6 } },
-            !curStatus || !curStatus.valid
-              ? "Sin licencia activa"
-              : curStatus.type === "pro"
-                ? [/*#__PURE__*/React.createElement(CheckCircle, { size: 13, key: "i" }), "Licencia Pro — Acceso permanente"]
-                : [/*#__PURE__*/React.createElement(Clock, { size: 13, key: "i" }), "Demo activo — " + curStatus.daysLeft + " día" + (curStatus.daysLeft !== 1 ? "s" : "") + " restante" + (curStatus.daysLeft !== 1 ? "s" : "")]
-          )
-        ),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, color: T.muted, marginBottom: 10 } },
-          "¿Tienes un código nuevo? Ingrésalo aquí para activar o renovar tu licencia:"
-        ),
-        /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
-          /*#__PURE__*/React.createElement("input", {
-            type: "text",
-            placeholder: "Ej: PRO-ABC123-XYZ456",
-            value: newLic,
-            onChange: function(e) { setNewLic(e.target.value.toUpperCase()); setLicErr(""); setLicOk(""); },
-            onKeyDown: function(e) { if (e.key === "Enter") handleActivar(); },
-            style: { flex: 1, padding: "10px 14px", border: "1px solid ".concat(T.border), borderRadius: 12, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface, minWidth: 200 }
-          }),
-          /*#__PURE__*/React.createElement(Btn, { onClick: handleActivar, small: true }, "Activar")
-        ),
-        licErr && /*#__PURE__*/React.createElement("div", {
-          style: { marginTop: 8, color: T.red, fontSize: 15, padding: "8px 12px", background: "rgba(119,119,119,0.08)", borderRadius: 8 }
-        }, licErr),
-        licOk && /*#__PURE__*/React.createElement("div", {
-          style: { marginTop: 8, color: T.green, fontSize: 15, padding: "8px 12px", background: T.accentDim, borderRadius: 8, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }
-        }, /*#__PURE__*/React.createElement(CheckCircle, { size: 14 }), licOk,
-          /*#__PURE__*/React.createElement("button", {
-            onClick: function() { window.location.reload(); },
-            style: { marginLeft: 12, background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "4px 12px", cursor: "pointer", fontSize: 14, fontFamily: "inherit", fontWeight: 600 }
-          }, "Recargar ahora")
-        )
-      );
-    })()
-  ),
+  var vistaNegocio = h("div", { style: { display: "flex", flexDirection: "column", gap: 18 } },
+    seccion("Store", "Identidad del negocio", "Así aparece tu negocio en facturas, recibos y el catálogo público.",
+      h("div", { style: { display: "flex", flexDirection: isMobile ? "column" : "row", gap: 24, alignItems: "flex-start" } },
+        logoBox,
+        h("div", { style: { flex: 1, width: "100%", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 } },
+          campo("Nombre del negocio", "storeName", { placeholder: "CLINICELL" }),
+          campo("Eslogan", "storeSubtitle", { placeholder: "Gestión taller" }),
+          campo("NIT o cédula", "nit", { placeholder: "901.234.567-8", hint: "Aparece en las facturas." }),
+          campo("Dirección", "address", { placeholder: "Calle 10 #5-23, Neiva, Huila" }),
+          h("div", { style: { gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 12, background: T.bg, border: "1px solid " + T.border } },
+            h("div", { style: { flex: 1, minWidth: 0 } },
+              h("div", { style: { fontSize: 14, fontWeight: 600, color: T.text } }, "Mostrar mi marca al abrir el programa"),
+              h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 3, lineHeight: 1.45 } },
+                form.loginBrand
+                  ? "El inicio de sesión, la pantalla de carga y la ventana muestran " + ((form.storeName || "").trim() || "tu negocio") + (form.logo ? " con tu logo." : ". Sube un logo para que se vea mejor.")
+                  : "Ahora se muestra el logo de CLINICELL. Actívalo para que tus empleados vean tu marca al entrar.")),
+            interruptor(form.loginBrand === true, function (v) { set("loginBrand", v); }))))),
+    seccion("Phone", "Contacto", "Datos para que tus clientes te encuentren.",
+      h("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 } },
+        campo("Correo electrónico", "email", { type: "email", placeholder: "taller@correo.com" }),
+        campo("WhatsApp", "whatsapp", { placeholder: "573001234567", hint: "Con el código del país y sin el + (ej: 573001234567). Aquí llegan los pedidos del catálogo público." }))));
 
-  /*#__PURE__*/React.createElement(Card, { style: rowItemStyle },
-    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 15, marginBottom: 16, color: T.text } }, /*#__PURE__*/React.createElement(ShieldCheck, { size: 15 }), "Seguridad"),
-    isBypass && /*#__PURE__*/React.createElement("div", {
-      style: { display: "flex", alignItems: "center", gap: 8, background: "rgba(102,102,102,0.1)", border: "1px solid rgba(102,102,102,0.3)", borderRadius: 6, padding: "12px 16px", marginBottom: 16, fontSize: 15, color: T.yellow, fontWeight: 600 }
-    }, /*#__PURE__*/React.createElement(AlertTriangle, { size: 15 }), "Estás en modo recuperación. Establece una nueva contraseña para asegurar tu cuenta."),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 15, color: T.muted, marginBottom: 16 } }, isBypass ? "Establece tu nueva contraseña de acceso" : "Cambiar contraseña de acceso al software"),
-    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, maxWidth: 340 } },
-      !isBypass && /*#__PURE__*/React.createElement("input", {
-        type: "password", placeholder: "Contraseña actual",
-        value: curPwd, onChange: function(e){ setCurPwd(e.target.value); },
-        style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
-      }),
-      /*#__PURE__*/React.createElement("input", {
-        type: "password", placeholder: "Nueva contraseña",
-        value: newPwd, onChange: function(e){ setNewPwd(e.target.value); },
-        style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
-      }),
-      /*#__PURE__*/React.createElement("input", {
-        type: "password", placeholder: "Confirmar nueva contraseña",
-        value: newPwd2, onChange: function(e){ setNewPwd2(e.target.value); },
-        style: { padding: "9px 12px", border: "1px solid ".concat(T.border), borderRadius: 4, fontSize: 14, fontFamily: "inherit", outline: "none", color: T.text, background: T.surface }
-      }),
-      /*#__PURE__*/React.createElement(Btn, { onClick: handleChangePwd, small: true }, isBypass ? "Establecer nueva contraseña" : "Cambiar contraseña")
-    )
-  )),
-  /*#__PURE__*/React.createElement("div", { style: rowWrapStyle },
-    /*#__PURE__*/React.createElement(AIKeySettingsCard, { style: rowItemStyle, notify: notify }),
-    /*#__PURE__*/React.createElement(DriveSettingsCard, { style: rowItemStyle, clientId: clientId, notify: notify, pending: _ref20.drivePending })
-  ));
+  var accent = /^#[0-9a-fA-F]{6}$/.test(form.accentColor || "") ? form.accentColor : T.accent;
+  var rgb = parseInt(accent.slice(1, 3), 16) + "," + parseInt(accent.slice(3, 5), 16) + "," + parseInt(accent.slice(5, 7), 16);
+  var subt = function (t) { return h("div", { style: { fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 10 } }, t); };
+  var vistaApariencia = h("div", { style: { display: "flex", flexDirection: "column", gap: 18 } },
+    seccion("Palette", "Tema", "Haz clic en un tema y se aplica al instante.",
+      h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 } },
+        Object.keys(THEME_PRESETS).map(function (key) {
+          var preset = THEME_PRESETS[key];
+          var active = form.themePreset === key;
+          return h("button", {
+            key: key, type: "button", onClick: function () { return handleThemePreset(key); },
+            style: { textAlign: "left", padding: 10, borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+              border: "2px solid " + (active ? preset.accent : T.border), background: T.card, transition: "border-color 0.15s" }
+          },
+            h("div", { style: { height: 58, borderRadius: 8, marginBottom: 10, overflow: "hidden", display: "flex", border: "1px solid " + preset.base.border, background: preset.base.bg } },
+              h("div", { style: { width: 22, background: preset.base.surface, borderRight: "1px solid " + preset.base.border } }),
+              h("div", { style: { flex: 1, padding: 7, display: "flex", flexDirection: "column", gap: 5 } },
+                h("div", { style: { height: 7, width: "60%", borderRadius: 4, background: preset.base.muted, opacity: 0.6 } }),
+                h("div", { style: { flex: 1, borderRadius: 5, background: preset.base.card, border: "1px solid " + preset.base.border } }),
+                h("div", { style: { height: 8, width: 34, borderRadius: 4, background: preset.accent } }))),
+            h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 } },
+              h("span", { style: { fontSize: 13.5, fontWeight: 700, color: T.text } }, preset.label),
+              active && h("span", { style: { width: 18, height: 18, borderRadius: "50%", background: preset.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" } }, h(Check, { size: 12 }))));
+        }))),
+    seccion("SwatchBook", "Modo y color", "Ajusta el modo y el color principal. Guarda para aplicar.",
+      h("div", { style: { display: "flex", flexDirection: "column", gap: 22 } },
+        h("div", null, subt("Modo"),
+          h("div", { style: { display: "inline-flex", padding: 4, borderRadius: 12, background: T.bg, border: "1px solid " + T.border, gap: 4 } },
+            [{ id: "light", label: "Claro", icon: Sun }, { id: "dark", label: "Oscuro", icon: Moon }].map(function (opt) {
+              var on = form.theme === opt.id;
+              return h("button", { key: opt.id, type: "button", onClick: function () { set("theme", opt.id); },
+                style: { display: "flex", alignItems: "center", gap: 7, padding: "8px 18px", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 13.5, fontWeight: 600, background: on ? T.card : "transparent", color: on ? T.text : T.muted, boxShadow: on ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }
+              }, h(opt.icon, { size: 15 }), opt.label);
+            }))),
+        h("div", null, subt("Color principal"),
+          h("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" } },
+            ACCENT_PRESETS.map(function (color) {
+              var on = (form.accentColor || "").toLowerCase() === color.toLowerCase();
+              return h("button", { key: color, type: "button", title: color, onClick: function () { set("accentColor", color); },
+                style: { width: 32, height: 32, borderRadius: "50%", background: color, cursor: "pointer", padding: 0,
+                  border: "2px solid " + (on ? T.card : "transparent"), boxShadow: on ? "0 0 0 2px " + color : "inset 0 0 0 1px rgba(0,0,0,0.08)",
+                  display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" } }, on ? h(Check, { size: 14 }) : null);
+            }),
+            h("label", { title: "Color personalizado", style: { display: "flex", alignItems: "center", gap: 8, marginLeft: 6, padding: "4px 10px 4px 4px", borderRadius: 999, border: "1px solid " + T.border, cursor: "pointer" } },
+              h("input", { type: "color", value: accent, onChange: function (e) { set("accentColor", e.target.value); },
+                style: { width: 26, height: 26, border: "none", borderRadius: "50%", padding: 0, background: "transparent", cursor: "pointer" } }),
+              h("span", { style: { fontSize: 12.5, color: T.muted, fontFamily: "monospace" } }, accent.toUpperCase())))),
+        h("div", null, subt("Vista previa"),
+          h("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: 16, borderRadius: 12, background: T.bg, border: "1px solid " + T.border } },
+            h("span", { style: { padding: "9px 18px", background: accent, color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 13 } }, "Botón principal"),
+            h("span", { style: { padding: "6px 12px", background: "rgba(" + rgb + ",0.14)", color: accent, borderRadius: 999, fontWeight: 700, fontSize: 12.5 } }, "Etiqueta"),
+            h("span", { style: { fontSize: 13.5, color: accent, fontWeight: 700 } }, "Enlace de ejemplo"))))));
+
+  var vistaCuenta = h("div", { style: { display: "flex", flexDirection: "column", gap: 18 } },
+    seccion("KeyRound", "Licencia", "Estado de tu licencia y activación con código.", h(LicenciaPanel, null)),
+    seccion("ShieldCheck", "Contraseña", isBypass ? "Estás en modo recuperación: establece una nueva contraseña." : "Cambia la contraseña con la que entras al software.",
+      h("div", { style: { display: "flex", flexDirection: "column", gap: 12, maxWidth: 420 } },
+        isBypass && h("div", { style: { display: "flex", alignItems: "center", gap: 8, background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.3)", borderRadius: 10, padding: "10px 14px", fontSize: 13.5, color: T.text } },
+          h(AlertTriangle, { size: 15, color: T.orange }), "Establece una nueva contraseña para asegurar tu cuenta."),
+        !isBypass && h("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+          h("label", { style: { fontSize: 13, fontWeight: 600, color: T.text } }, "Contraseña actual"),
+          h("input", { type: "password", value: curPwd, onChange: function (e) { setCurPwd(e.target.value); }, style: inp })),
+        h("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+          h("label", { style: { fontSize: 13, fontWeight: 600, color: T.text } }, "Nueva contraseña"),
+          h("input", { type: "password", value: newPwd, placeholder: "Mínimo 6 caracteres", onChange: function (e) { setNewPwd(e.target.value); }, style: inp })),
+        h("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+          h("label", { style: { fontSize: 13, fontWeight: 600, color: T.text } }, "Confirmar nueva contraseña"),
+          h("input", { type: "password", value: newPwd2, onChange: function (e) { setNewPwd2(e.target.value); }, style: inp })),
+        h("div", null, h(Btn, { onClick: handleChangePwd }, isBypass ? "Establecer contraseña" : "Cambiar contraseña")))));
+
+  var vistaIntegraciones = h("div", { style: { display: "flex", flexDirection: "column", gap: 18 } },
+    h(AIKeySettingsCard, { style: { padding: isMobile ? 18 : 24, borderRadius: 14 }, notify: notify }),
+    h(DriveSettingsCard, { style: { padding: isMobile ? 18 : 24, borderRadius: 14 }, clientId: clientId, notify: notify, pending: _ref20.drivePending }));
+
+  var TABS = [
+    { id: "negocio", label: "Negocio", desc: "Nombre, logo y contacto", icon: "Store" },
+    { id: "apariencia", label: "Apariencia", desc: "Tema y colores", icon: "Palette" },
+    { id: "cuenta", label: "Cuenta y seguridad", desc: "Licencia y contraseña", icon: "ShieldCheck" },
+    { id: "integraciones", label: "Integraciones", desc: "Asistente IA y Google Drive", icon: "Plug" }
+  ];
+  if (!TABS.some(function (t) { return t.id === tab; })) tab = "negocio";
+
+  var nav = isMobile
+    ? h("div", { style: { display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" } },
+        TABS.map(function (t) {
+          var on = tab === t.id;
+          return h("button", { key: t.id, onClick: function () { setTab(t.id); },
+            style: { display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 999, whiteSpace: "nowrap", cursor: "pointer", fontFamily: "inherit",
+              fontSize: 13.5, fontWeight: 600, border: "1px solid " + (on ? T.accent : T.border), background: on ? T.accent : T.card, color: on ? "#fff" : T.text } },
+            Ico(t.icon, 15), t.label);
+        }))
+    : h(Card, { style: { padding: 8, borderRadius: 14, position: "sticky", top: 12 } },
+        TABS.map(function (t) {
+          var on = tab === t.id;
+          return h("button", { key: t.id, onClick: function () { setTab(t.id); },
+            style: { width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 10, border: "none", cursor: "pointer",
+              fontFamily: "inherit", textAlign: "left", background: on ? T.accentDim : "transparent", color: on ? T.accent : T.text, marginBottom: 2 } },
+            h("span", { style: { display: "flex", color: on ? T.accent : T.muted } }, Ico(t.icon, 17)),
+            h("span", { style: { minWidth: 0 } },
+              h("span", { style: { display: "block", fontSize: 14, fontWeight: 600 } }, t.label),
+              h("span", { style: { display: "block", fontSize: 11.5, color: T.muted, marginTop: 1 } }, t.desc)));
+        }));
+
+  // Cabecera con la identidad del negocio
+  var lic = _cfgLicStatus();
+  var licTxt = !(lic && lic.valid) ? "Sin licencia" : lic.type === "pro" ? "Licencia Pro" : "Demo · " + lic.daysLeft + " día" + (lic.daysLeft !== 1 ? "s" : "");
+  var licColor = !(lic && lic.valid) ? T.red : lic.type === "pro" ? T.green : T.orange;
+  var cabecera = h(Card, { style: { padding: isMobile ? 16 : 20, borderRadius: 14, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" } },
+    h("div", { style: { width: 56, height: 56, borderRadius: 14, overflow: "hidden", flexShrink: 0, background: T.bg, border: "1px solid " + T.border, display: "flex", alignItems: "center", justifyContent: "center", color: T.muted } },
+      settings.logo ? h("img", { src: settings.logo, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } }) : h(Store, { size: 24 })),
+    h("div", { style: { flex: 1, minWidth: 160 } },
+      h("div", { style: { fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: "-0.02em" } }, (settings.storeName || "").trim() || "Tu negocio"),
+      h("div", { style: { fontSize: 13, color: T.muted, marginTop: 2 } }, [settings.storeSubtitle, settings.address].filter(function (x) { return x && String(x).trim(); }).join(" · ") || "Completa los datos de tu negocio")),
+    h("span", { style: { display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, color: licColor, border: "1px solid " + T.border, background: T.bg } },
+      h("span", { style: { width: 7, height: 7, borderRadius: "50%", background: licColor } }), licTxt));
+
+  var contenido = tab === "apariencia" ? vistaApariencia : tab === "cuenta" ? vistaCuenta : tab === "integraciones" ? vistaIntegraciones : vistaNegocio;
+
+  return h("div", { style: { maxWidth: 1100, display: "flex", flexDirection: "column", gap: 18, paddingBottom: dirty ? 8 : 0 } },
+    cabecera,
+    h("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "240px minmax(0,1fr)", gap: isMobile ? 14 : 20, alignItems: "start" } },
+      nav,
+      h("div", { style: { minWidth: 0 } }, contenido)),
+    dirty && h("div", {
+      style: { position: "sticky", bottom: 12, zIndex: 20, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        padding: "12px 16px", borderRadius: 14, background: T.card, border: "1px solid " + T.border, boxShadow: "0 8px 28px rgba(0,0,0,0.16)" }
+    },
+      h("span", { style: { width: 8, height: 8, borderRadius: "50%", background: T.orange, flexShrink: 0 } }),
+      h("div", { style: { flex: 1, minWidth: 150, fontSize: 14, fontWeight: 600, color: T.text } }, "Tienes cambios sin guardar"),
+      h(Btn, { variant: "ghost", onClick: function () { setForm(_objectSpread({}, settings)); } }, "Descartar"),
+      h(Btn, { onClick: handleSave, icon: h(Check, { size: 15 }) }, "Guardar cambios")));
 }
+
 
 // ─── Responsive Hook ──────────────────────────────────────
 function useWindowSize() {
@@ -18541,7 +18347,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.7";
+var APP_VERSION = "1.5.8";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
