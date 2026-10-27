@@ -3412,37 +3412,6 @@ function InventoryView(_ref11) {
     _useState10 = _slicedToArray(_useState1, 2),
     filterCat = _useState10[0],
     setFilterCat = _useState10[1];
-  // ── Sincronizar inventario completo → Productos ──────────────────────────
-  var sincronizarInventarioProductos = function() {
-    var inventory = data.inventory || [];
-    if (inventory.length === 0) { notify("No hay repuestos en inventario"); return; }
-    var products = _toConsumableArray(data.products || []);
-    var synced = 0, updated = 0;
-    inventory.forEach(function(item) {
-      var idx = products.findIndex(function(p) {
-        return p.id === item.productId || p.id === item.id ||
-               p.name.toLowerCase().trim() === (item.name||"").toLowerCase().trim();
-      });
-      var prod = {
-        id:          idx >= 0 ? products[idx].id : (item.productId || item.id || uid()),
-        name:        item.name || "",
-        category:    item.category || "General",
-        brand:       item.brand || "",
-        price:       Number(item.price) || 0,
-        stock:       Number(item.qty) || 0,
-        specs:       idx >= 0 ? (products[idx].specs || []) : [],
-        description: idx >= 0 ? (products[idx].description || "") : "",
-        public:      idx >= 0 ? (products[idx].public !== false) : false
-      };
-      if (idx >= 0) { products[idx] = prod; updated++; }
-      else { products.push(prod); synced++; }
-    });
-    if (window.confirm("Sincronizar " + inventory.length + " repuestos del inventario a Productos? (" + synced + " nuevos + " + updated + " por actualizar)")) {
-      save(_objectSpread(_objectSpread({}, data), {}, { products: products }));
-      notify(synced + " productos nuevos + " + updated + " actualizados desde inventario");
-    }
-  };
-
   var _useState11 = useState(null),
     _useState12 = _slicedToArray(_useState11, 2),
     modal = _useState12[0],
@@ -3599,12 +3568,7 @@ function InventoryView(_ref11) {
         item: _objectSpread({}, EMPTY)
       });
     }
-  }, "Agregar Repuesto"),
-  /*#__PURE__*/React.createElement(Btn, {
-    style: { background: "transparent", border: "1px solid "+T.accent, color: T.accent },
-    icon: /*#__PURE__*/React.createElement(Repeat, { size: 14 }),
-    onClick: function onClick() { sincronizarInventarioProductos(); }
-  }, "Sync → Productos")), /*#__PURE__*/React.createElement(Card, {
+  }, "Agregar Repuesto")), /*#__PURE__*/React.createElement(Card, {
     style: {
       padding: 0,
       overflow: "hidden"
@@ -18079,7 +18043,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.2";
+var APP_VERSION = "1.5.3";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
