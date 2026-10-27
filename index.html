@@ -2248,6 +2248,7 @@ function DashboardView(_ref8) {
 // ─── REPAIRS ─────────────────────────────────────────────
 
 function RepairsView(_ref9) {
+  var verCostos = _ref9.verCostos !== false;
   var data = _ref9.data,
     save = _ref9.save,
     notify = _ref9.notify,
@@ -2647,6 +2648,7 @@ function RepairsView(_ref9) {
       color: T.muted
     }
   }, "No hay \xF3rdenes que mostrar")))))), modal && /*#__PURE__*/React.createElement(RepairModal, {
+    verCostos: verCostos,
     modal: modal,
     setModal: setModal,
     data: data,
@@ -2723,6 +2725,7 @@ function PatternLock(_ref) {
 }
 
 function RepairModal(_ref0) {
+  var verCostos = _ref0.verCostos !== false;
   var modal = _ref0.modal,
     setModal = _ref0.setModal,
     data = _ref0.data,
@@ -3258,9 +3261,9 @@ function RepairModal(_ref0) {
             var existing = usedParts.find(function(p){ return p.id===item.id; });
             var newParts;
             if(existing){
-              newParts = usedParts.map(function(p){ return p.id===item.id ? _objectSpread(_objectSpread({},p),{qty:p.qty+qty}) : p; });
+              newParts = usedParts.map(function(p){ return p.id===item.id ? _objectSpread(_objectSpread({},p),{qty:p.qty+qty, cost: Number(p.cost) || Number(item.cost) || 0}) : p; });
             } else {
-              newParts = usedParts.concat([{ id:item.id, name:item.name, qty:qty, price:item.price }]);
+              newParts = usedParts.concat([{ id:item.id, name:item.name, qty:qty, price:item.price, cost: Number(item.cost) || 0 }]);
             }
             // Descontar stock del inventario Y productos Y catálogo
             var newInv = (data.inventory||[]).map(function(i){
@@ -3335,6 +3338,28 @@ function RepairModal(_ref0) {
         ))
       )
     ),
+
+    // ─── Costo y ganancia de la reparación ─────────────────
+    (function () {
+      var gr = _ganReparacion(data, form);
+      var fila = function (l, v, c, b) {
+        return /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: b ? 15 : 13, fontWeight: b ? 800 : 500, color: c || T.muted, marginTop: 5 } },
+          /*#__PURE__*/React.createElement("span", null, l), /*#__PURE__*/React.createElement("span", null, v));
+      };
+      return /*#__PURE__*/React.createElement("div", { style: { background: T.surface, border: "1px solid ".concat(T.border), borderRadius: 14, padding: 14 } },
+        /*#__PURE__*/React.createElement(Field, {
+          label: "Repuestos comprados aparte (lo que te costaron)", value: form.costoExtra || "", type: "number", placeholder: "Ej: pantalla comprada para este equipo",
+          onChange: function (v) { return set("costoExtra", v === "" ? "" : Math.max(0, Number(v) || 0)); }
+        }),
+        verCostos && /*#__PURE__*/React.createElement("div", { style: { marginTop: 8 } },
+          fila("Cobrado al cliente", fmt(gr.cobrado)),
+          gr.costoRepuestos > 0 && fila("Repuestos del inventario (precio de compra)", "− " + fmt(gr.costoRepuestos)),
+          gr.costoExtra > 0 && fila("Repuestos comprados aparte", "− " + fmt(gr.costoExtra)),
+          fila("Ganancia neta de la reparación", fmt(gr.ganancia), gr.ganancia >= 0 ? T.green : T.red, true),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: T.muted, marginTop: 6 } },
+            "Se suma a Reportes → Ganancias cuando la reparación queda pagada."))
+      );
+    })(),
 
     /*#__PURE__*/React.createElement(ChecklistRecepcion, { form: form, set: set }),
 
@@ -11584,8 +11609,35 @@ function _ganLineas(data, desde, hasta) {
       nombre: [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" ") || "Celular", qty: 1, costoUnit: c.costo, venta: c.precioVenta });
   });
 
+  // Reparaciones: cuentan cuando quedan pagadas, en la fecha de pago/entrega.
+  (data.repairs || []).forEach(function (r) {
+    if (!r || !r.paid || r.status === "Cancelado") return;
+    var f = r.deliveryDate || r.date;
+    if (!inR(f)) return;
+    var gr = _ganReparacion(data, r);
+    add({ fecha: f, origen: "Reparación", ref: "", cliente: r.customer || "",
+      nombre: [r.device, r.problem].filter(Boolean).join(" — ") || "Reparación",
+      grupo: "Reparaciones · " + (r.category || "Otras"),
+      qty: 1, costoUnit: gr.costo, venta: gr.cobrado, manual: true });
+  });
+
   out.sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)); });
   return out;
+}
+
+// Costo y ganancia de una reparación: lo cobrado menos el precio de compra de
+// los repuestos del inventario usados y lo pagado por repuestos comprados aparte.
+function _ganReparacion(data, r) {
+  var costoRep = 0;
+  (r.parts || []).forEach(function (p) {
+    var cu = Number(p.cost) || 0;
+    if (cu <= 0) cu = _ganCostoActual(data, "inventory", p.id);
+    costoRep += cu * (Number(p.qty) || 0);
+  });
+  costoRep = Math.round(costoRep);
+  var extra = Math.round(Number(r.costoExtra) || 0);
+  var cobrado = Math.round(Number(r.cost) || 0);
+  return { cobrado: cobrado, costoRepuestos: costoRep, costoExtra: extra, costo: costoRep + extra, ganancia: cobrado - costoRep - extra };
 }
 
 // Precio de compra y ganancia neta de una venta de mostrador (Ventas).
@@ -11615,12 +11667,15 @@ function _ganCostoLinea(costo, precio, extraStyle) {
 
 // Totales del período y agrupación por producto (de mayor a menor ganancia).
 function _ganResumen(lineas) {
-  var r = { venta: 0, costo: 0, ganancia: 0, unidades: 0 };
+  var r = { venta: 0, costo: 0, ganancia: 0, unidades: 0, ganVentas: 0, ganReparaciones: 0, nReparaciones: 0 };
   var porProd = {};
   lineas.forEach(function (l) {
-    r.venta += l.venta; r.costo += l.costo; r.ganancia += l.ganancia; r.unidades += l.qty;
-    var k = String(l.nombre).trim().toLowerCase();
-    var g = porProd[k] || (porProd[k] = { nombre: l.nombre, qty: 0, venta: 0, costo: 0, ganancia: 0, sinCosto: false });
+    r.venta += l.venta; r.costo += l.costo; r.ganancia += l.ganancia;
+    if (l.origen === "Reparación") { r.ganReparaciones += l.ganancia; r.nReparaciones += 1; }
+    else { r.ganVentas += l.ganancia; r.unidades += l.qty; }
+    var nombreG = l.grupo || l.nombre;
+    var k = String(nombreG).trim().toLowerCase();
+    var g = porProd[k] || (porProd[k] = { nombre: nombreG, qty: 0, venta: 0, costo: 0, ganancia: 0, sinCosto: false });
     g.qty += l.qty; g.venta += l.venta; g.costo += l.costo; g.ganancia += l.ganancia;
     if (l.sinCosto) g.sinCosto = true;
   });
@@ -11691,7 +11746,7 @@ function GananciasView(_props) {
       filas || "<tr><td colspan='5' style='text-align:center;padding:24px;color:#a1a1a1'>No hay ventas en este período</td></tr>",
       res.productos.length ? "<tr><td style='" + td + ";font-weight:800'>TOTAL</td><td style='" + tdr + ";font-weight:800'>" + res.unidades + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.costo) + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.venta) + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.ganancia) + "</td></tr>" : "",
       "</tbody></table>",
-      "<p style='font-size:11px;color:#a1a1a1;margin-top:14px'>Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA) y celulares vendidos.</p>",
+      "<p style='font-size:11px;color:#a1a1a1;margin-top:14px'>Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA), celulares vendidos y reparaciones pagadas (cobrado − repuestos).</p>",
       "<p style='text-align:center;margin-top:16px;color:#a1a1a1;font-size:11px'>Generado el " + new Date().toLocaleString("es-CO") + "</p>",
       "<div class='no-print' style='text-align:center;margin-top:18px'><button onclick='window.print()' style='padding:10px 28px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700'>Imprimir</button></div>",
       "</body></html>"
@@ -11742,21 +11797,28 @@ function GananciasView(_props) {
   var vacio = h("div", { style: { padding: 40, textAlign: "center", color: T.muted, fontSize: 14 } }, "No hay ventas en este período.");
 
   var listaProductos = res.productos.length === 0 ? vacio : res.productos.map(function (p, i) {
+    if (String(p.nombre).indexOf("Reparaciones · ") === 0) {
+      return fila("p" + i, p.nombre, [
+        p.qty + " reparación(es) pagada(s)",
+        "Repuestos " + fmt(p.costo) + " · Cobrado " + fmt(p.venta)
+      ], p.ganancia, false);
+    }
     return fila("p" + i, p.nombre, [
       p.qty + " und · Compra " + porUnidad(p.costo, p.qty) + " c/u · Venta " + porUnidad(p.venta, p.qty) + " c/u",
       "Costó " + fmt(p.costo) + " · Vendido en " + fmt(p.venta)
     ], p.ganancia, p.sinCosto);
   });
   var listaVentas = lineas.length === 0 ? vacio : lineas.map(function (l, i) {
-    return fila("l" + i, l.qty + "× " + l.nombre, [
+    var esRep = l.origen === "Reparación";
+    return fila("l" + i, esRep ? "Reparación: " + l.nombre : l.qty + "× " + l.nombre, [
       [l.fecha, l.origen + (l.ref ? " " + l.ref : ""), l.cliente].filter(Boolean).join(" · "),
-      "Vendido en " + fmt(l.venta) + " · Costó " + fmt(l.costo)
+      esRep ? "Cobrado " + fmt(l.venta) + " · Repuestos " + fmt(l.costo) : "Vendido en " + fmt(l.venta) + " · Costó " + fmt(l.costo)
     ], l.ganancia, l.sinCosto);
   });
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: 18, width: "100%" } },
     embebido && h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 } },
-      h("div", { style: { fontSize: 13, color: T.muted } }, "Lo que ganaste en ventas, facturas y celulares: precio de venta menos precio de compra."),
+      h("div", { style: { fontSize: 13, color: T.muted } }, "Lo que ganaste en ventas y reparaciones: lo vendido o cobrado menos el precio de compra."),
       h("button", {
         onClick: imprimir,
         style: { display: "flex", alignItems: "center", gap: 7, padding: "9px 15px", background: T.card, border: "1px solid " + T.border, borderRadius: 10, cursor: "pointer", color: T.text, fontFamily: "inherit", fontWeight: 700, fontSize: 13 }
@@ -11788,11 +11850,19 @@ function GananciasView(_props) {
     // Totales
     h("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 12 } },
       kpi("Ganancia neta", res.ganancia, colGan, "Lo que te quedó · " + pct(res.margen) + " de lo vendido", true),
-      kpi("Costo de compra", res.costo, T.red, "Lo que te costaron los productos vendidos"),
-      kpi("Total vendido", res.venta, T.blue, res.unidades + " unidad(es) vendida(s)")),
+      kpi("Costo de compra", res.costo, T.red, "Productos vendidos y repuestos usados"),
+      kpi("Total vendido y cobrado", res.venta, T.blue, res.unidades + " unidad(es) · " + res.nReparaciones + " reparación(es)")),
     h("div", { style: { fontSize: 13, color: T.muted, textAlign: "center" } },
       "Vendiste ", h("b", { style: { color: T.text } }, fmt(res.venta)), " − te costó ", h("b", { style: { color: T.red } }, fmt(res.costo)),
       " = ganaste ", h("b", { style: { color: colGan } }, fmt(res.ganancia))),
+    h("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 } },
+      [["Ganancia en ventas", res.ganVentas, "Ventas, facturas y celulares"], ["Ganancia en reparaciones", res.ganReparaciones, res.nReparaciones + " reparación(es) pagada(s)"]].map(function (x) {
+        return h(Card, { key: x[0], style: { padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 } },
+          h("div", null,
+            h("div", { style: { fontSize: 13, fontWeight: 700, color: T.text } }, x[0]),
+            h("div", { style: { fontSize: 12, color: T.muted, marginTop: 2 } }, x[2])),
+          h("div", { style: { fontSize: 18, fontWeight: 800, color: x[1] >= 0 ? T.green : T.red } }, fmt(x[1])));
+      })),
 
     // Aviso de productos sin precio de compra
     res.sinCosto.length > 0 && h("div", { style: { background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.45)", borderRadius: 10, padding: "12px 14px", fontSize: 13, color: T.text, lineHeight: 1.5 } },
@@ -11805,7 +11875,7 @@ function GananciasView(_props) {
       tabBtn("productos", "Por producto"), tabBtn("ventas", "Cada venta")),
     h(Card, { style: { padding: 0, overflow: "hidden" } }, tab === "productos" ? listaProductos : listaVentas),
     h("div", { style: { fontSize: 11.5, color: T.muted, lineHeight: 1.5 } },
-      "Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA) y celulares vendidos. No incluye reparaciones ni gastos del local.")
+      "Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA), celulares vendidos y reparaciones pagadas (lo cobrado menos los repuestos). No incluye gastos del local.")
   );
 }
 
@@ -17157,7 +17227,7 @@ function App(_appProps) {
     view === "empenos" && _empHabilitado() && !empleado && /*#__PURE__*/React.createElement(EmpenosView, { data: data, save: save, notify: notify, settings: settings, clientId: clientId }),
     view === "gestion" && /*#__PURE__*/React.createElement(GestionView, { data: data, save: save, notify: notify, storeName: settings.storeName, empleado: empleado, onSwitch: switchEmpleado }),
     view === "dashboard" && /*#__PURE__*/React.createElement(DashboardView, { data: data, setView: setView, isMobile: isMobile, ratings: ratings, settings: settings, notify: notify, clientId: clientId }),
-    view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { data: data, save: save, notify: notify, clientId: clientId }),
+    view === "repairs" && /*#__PURE__*/React.createElement(RepairsView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify, clientId: clientId }),
     view === "inventory" && /*#__PURE__*/React.createElement(InventoryView, { data: data, save: save, notify: notify }),
     view === "products" && /*#__PURE__*/React.createElement(ProductsView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify, setPublicMode: setPublicMode, openCatalog: openCatalog }),
     view === "celulares" && /*#__PURE__*/React.createElement(CelularesView, { verCostos: !empleado || empleado.rol === "admin", data: data, save: save, notify: notify }),
@@ -18410,7 +18480,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.5";
+var APP_VERSION = "1.5.6";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

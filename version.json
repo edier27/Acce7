@@ -1,5 +1,5 @@
 {
-  "version": "1.5.5",
-  "notes": "Ganancias ahora está dentro de Reportes, como una pestaña junto a Resumen.",
+  "version": "1.5.6",
+  "notes": "Las reparaciones ahora suman a Ganancias: lo cobrado menos el costo de los repuestos.",
   "url": "https://edier27.github.io/Acce7/"
 }
