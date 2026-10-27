@@ -17115,12 +17115,29 @@ function _saveProfile(profile) {
     window.__uid = uid;
   } catch(e) {}
 }
-// Cargar perfil por uid (localStorage → Firebase)
+// Cargar perfil por uid: Firebase primero (fuente de verdad) y la copia del equipo
+// solo si no hay conexión. Antes se usaba la copia local sin preguntar a Firebase:
+// si esa copia quedaba incompleta (sin licencia ni taller) la cuenta caía para
+// siempre en "Licencia vencida" en ese equipo, aunque en Firebase estuviera bien.
 function _loadProfile(uid) {
-  try { var p = localStorage.getItem("trp_profile_" + uid); if (p) return Promise.resolve(JSON.parse(p)); } catch(e) {}
+  var local = null;
+  try { local = JSON.parse(localStorage.getItem("trp_profile_" + uid) || "null"); } catch(e) {}
+  var completo = function (p) { return !!(p && (p.licenseCode || p.clientId)); };
   var ref = _profileRef(uid);
-  if (ref) return ref.get().then(function(doc){ return doc.exists ? doc.data() : null; }).catch(function(){ return null; });
-  return Promise.resolve(null);
+  if (!ref) return Promise.resolve(local);
+  var remoto = ref.get().then(function(doc){ return doc.exists ? doc.data() : null; });
+  var espera = new Promise(function(res){ setTimeout(function(){ res("__sin_respuesta"); }, 8000); });
+  return Promise.race([remoto, espera]).then(function(r) {
+    if (r === "__sin_respuesta") return local;
+    if (!r) {
+      // Firebase no tiene el perfil pero el equipo sí (la subida falló antes): se vuelve a subir
+      if (completo(local)) { _saveProfile(Object.assign({}, local)); return local; }
+      return null;
+    }
+    var p = Object.assign({}, local || {}, r);
+    delete p.aiKey; delete p.aiKeyAt; // la clave de IA se maneja aparte (_aiKeySync)
+    return p;
+  }).catch(function(){ return local; });
 }
 // Mensajes de error de Firebase Auth en español
 function _authErrMsg(code) {
@@ -17336,10 +17353,13 @@ function LoginScreen(_ref) {
       var uid = cred.user.uid;
       window.__uid = uid;
       _loadProfile(uid).then(function(prof) {
+        // Sin perfil = cuenta creada pero nunca activada: NO se guarda esta copia
+        // provisional en el equipo (taparía el perfil real cuando exista).
+        var provisional = !prof;
         if (!prof) { prof = { uid: uid, email: em, username: em.split("@")[0] }; }
         prof.uid = uid; prof.email = em;
-        try { localStorage.setItem("trp_profile_" + uid, JSON.stringify(prof)); } catch(e) {}
-        if (prof.username) { try { localStorage.setItem("trp_user_" + prof.username, JSON.stringify(prof)); localStorage.setItem("trp_current_user", prof.username); } catch(e){} }
+        if (!provisional) try { localStorage.setItem("trp_profile_" + uid, JSON.stringify(prof)); } catch(e) {}
+        if (!provisional && prof.username) { try { localStorage.setItem("trp_user_" + prof.username, JSON.stringify(prof)); localStorage.setItem("trp_current_user", prof.username); } catch(e){} }
         setLoading(false);
         onLogin(prof);
       });
@@ -17478,6 +17498,18 @@ function CreateAccountScreen(_ref) {
     var norm = user.trim().toLowerCase();
     var em = email.trim().toLowerCase();
     var codeKey = "code_LIC_" + code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
+    // Root no debe reaccionar al inicio de sesión de la cuenta recién creada hasta
+    // que esta pantalla termine (ver onAuthStateChanged en Root).
+    window.__creandoCuenta = true;
+    var listo = function() { window.__creandoCuenta = false; };
+    // Si el código no sirve se borra la cuenta recién creada y se muestra el error
+    // aquí mismo (el aviso de "sesión cerrada" se ignora hasta que termine el borrado).
+    var fallar = function(cred, msg) {
+      setErr(msg);
+      setLoading(false);
+      var fin = function() { setTimeout(listo, 300); };
+      try { cred.user.delete().then(fin, function() { try { auth.signOut(); } catch(e){} fin(); }); } catch(e) { fin(); }
+    };
 
     // 1) Crear la identidad en Firebase Auth (gestiona la contraseña de forma segura)
     auth.createUserWithEmailAndPassword(em, pwd).then(function(cred) {
@@ -17500,6 +17532,7 @@ function CreateAccountScreen(_ref) {
         _saveProfile(profile);
         try { localStorage.setItem("trp_session_" + norm, "active"); } catch(e){}
         setLoading(false);
+        listo();
         onCreated(profile);
       };
       // 2) Validar contra Firestore: el código debe EXISTIR, ser emitido por el
@@ -17510,16 +17543,12 @@ function CreateAccountScreen(_ref) {
           var cd = cdoc.exists ? cdoc.data() : null;
           // a) No emitido por GlobalAcce → forjado / inexistente
           if (!cd || cd.createdByAdmin !== true) {
-            setErr("Este código no fue emitido por GlobalAcce. Solicita uno válido.");
-            setLoading(false);
-            try { cred.user.delete(); } catch(e){}
+            fallar(cred, "Este código no existe o no fue emitido por CLINICELL. Revísalo o pide uno nuevo.");
             return;
           }
           // b) Ya quemado por OTRA cuenta → un solo uso
           if (cd.used === true && cd.usedBy && cd.usedBy !== uid) {
-            setErr("Este código ya fue activado por otra cuenta. Pide un código nuevo a GlobalAcce.");
-            setLoading(false);
-            try { cred.user.delete(); } catch(e){}
+            fallar(cred, "Este código ya fue usado por otra cuenta" + (cd.usedByUser ? " (" + cd.usedByUser + ")" : "") + ". Pide un código nuevo.");
             return;
           }
           // c) Quemar y registrar (log de auditoría: quién, cuándo, qué taller)
@@ -17528,21 +17557,23 @@ function CreateAccountScreen(_ref) {
             usedClientId: permanentClientId, codeType: licResult.type, code: code.trim().toUpperCase()
           }, { merge: true }).catch(function(){});
           finish();
-        }).catch(function() {
+        }).catch(function(e) {
           // Fail-closed: si no se puede verificar el código, NO activar a ciegas
-          setErr("No se pudo verificar el código. Revisa tu conexión e intenta de nuevo.");
-          setLoading(false);
-          try { cred.user.delete(); } catch(e){}
+          console.warn("[registro] no se pudo leer el código:", e);
+          fallar(cred, "No se pudo verificar el código. Revisa tu conexión e intenta de nuevo.");
         });
       } else {
         // Sin Firestore no hay forma de validar el código de forma segura
-        setErr("Servicio no disponible. Verifica tu internet e intenta de nuevo.");
-        setLoading(false);
-        try { cred.user.delete(); } catch(e){}
+        fallar(cred, "Servicio no disponible. Verifica tu internet e intenta de nuevo.");
       }
     }).catch(function(e) {
+      listo();
       setLoading(false);
-      setErr(_authErrMsg(e && e.code));
+      var c = e && e.code;
+      setErr(c === "auth/email-already-in-use"
+        ? "Ya existe una cuenta con ese correo. Vuelve al inicio e inicia sesión con él: si la cuenta no quedó activada, ahí mismo te pedirá el código."
+        : c === "auth/operation-not-allowed" ? "El registro con correo está desactivado en Firebase. Actívalo en Authentication → Sign-in method."
+        : _authErrMsg(c));
     });
   };
 
@@ -17576,6 +17607,10 @@ function ExpiredScreen(_ref) {
   var _e1 = useState(""), _ea1 = _slicedToArray(_e1, 2), newCode = _ea1[0], setNewCode = _ea1[1];
   var _e2 = useState(""), _ea2 = _slicedToArray(_e2, 2), err = _ea2[0], setErr = _ea2[1];
   var _e3 = useState(false), _ea3 = _slicedToArray(_e3, 2), loading = _ea3[0], setLoading = _ea3[1];
+  // Cuenta que nunca se activó (se creó el usuario pero no alcanzó a guardar su
+  // perfil/código): no tiene taller todavía, así que el código le asigna uno nuevo.
+  var sinActivar = !currentUser.licenseCode && !currentUser.clientId &&
+    !localStorage.getItem("trp_permanent_clientId_" + (currentUser.username||""));
 
   var renovar = function() {
     var result = verificarCodigo(newCode.trim());
@@ -17592,7 +17627,8 @@ function ExpiredScreen(_ref) {
           var codeKeyR = "code_LIC_" + newCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"_");
           fbDbR.collection("trp_users").doc(codeKeyR).set({
             used: true, usedBy: uid, usedByUser: currentUser.username || "", usedAt: new Date().toISOString(), codeType: result.type,
-            code: newCode.trim().toUpperCase()
+            code: newCode.trim().toUpperCase(),
+            usedClientId: localStorage.getItem("trp_permanent_clientId_" + (currentUser.username||"")) || currentUser.clientId || result.clientId
           }, { merge: true }).catch(function(){});
         }
       } catch(e){}
@@ -17601,6 +17637,8 @@ function ExpiredScreen(_ref) {
   };
   var _finalizarRenovacion = function(result) {
     var permanentClientId = localStorage.getItem("trp_permanent_clientId_" + (currentUser.username||"")) || currentUser.clientId;
+    // Cuenta nueva sin activar: no tiene datos que perder → taller nuevo según el código.
+    if (!permanentClientId && sinActivar) permanentClientId = result.clientId;
     // SEGURIDAD ANTI-PÉRDIDA: la renovación NUNCA debe cambiar el taller. Si no
     // hay un clientId existente, abortar (no renovar a un taller vacío).
     if (!permanentClientId) {
@@ -17615,6 +17653,10 @@ function ExpiredScreen(_ref) {
       licenseType: result.type,
       clientId: permanentClientId
     });
+    if (sinActivar) {
+      updated.ownerUid = updated.uid;
+      if (!updated.createdAt) updated.createdAt = new Date().toISOString();
+    }
     _saveProfile(updated);
     try { localStorage.setItem("trp_lic_v1", JSON.stringify({ code: newCode.trim().toUpperCase(), type: result.type, activatedAt: Date.now(), totalDays: result.daysLeft || 30 })); } catch(e) {}
     setLoading(false);
@@ -17627,15 +17669,15 @@ function ExpiredScreen(_ref) {
     /*#__PURE__*/React.createElement("div", { style: Object.assign({}, _AS.card, { maxWidth:480 }) },
       _authLogo(200),
       /*#__PURE__*/React.createElement("div", { style:{ textAlign:"center", marginBottom:20 } },
-        /*#__PURE__*/React.createElement("div", { style: _AS.title }, "Licencia vencida"),
+        /*#__PURE__*/React.createElement("div", { style: _AS.title }, sinActivar ? "Activa tu cuenta" : "Licencia vencida"),
         /*#__PURE__*/React.createElement("div", { style:{ fontSize:14, color:"#8b8b8b", marginTop:6 } },
           "Hola ", /*#__PURE__*/React.createElement("strong", { style:{color:"#fff"} }, currentUser.username),
-          ". Tu licencia ha expirado."
+          sinActivar ? ". Tu cuenta está creada; falta el código de activación." : ". Tu licencia ha expirado."
         )
       ),
       /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"flex-start", gap:8, background:"rgba(152,152,152,0.06)", border:"1px solid rgba(152,152,152,0.2)", borderRadius:12, padding:"12px 16px", marginBottom:20, fontSize:13, color:"#8b8b8b" } },
         /*#__PURE__*/React.createElement(CheckCircle, { size: 15, style:{ flexShrink:0, marginTop:1 } }),
-        "Tus datos están seguros y completos. Al ingresar el nuevo código todo vuelve a funcionar exactamente igual."
+        sinActivar ? "Escribe el código que te dieron (puede ser el mismo con que intentaste registrarte)." : "Tus datos están seguros y completos. Al ingresar el nuevo código todo vuelve a funcionar exactamente igual."
       ),
       err && /*#__PURE__*/React.createElement("div", { style: _AS.err }, err),
       _authBgStyleTag(),
@@ -18037,7 +18079,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.5.1";
+var APP_VERSION = "1.5.2";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
@@ -18186,12 +18228,18 @@ function Root() {
     var auth = _authInst();
     if (!auth) { setChecking(false); setScreen("login"); return; }
     var unsub = auth.onAuthStateChanged(function(fbUser) {
+      // Mientras se crea una cuenta, la pantalla de registro manda: valida el
+      // código, guarda el perfil y entra sola (o borra la cuenta y muestra el
+      // error). Si aquí se reaccionara, se cargaría un perfil que aún no existe
+      // → "Licencia vencida" sin taller, y el error del registro nunca se vería.
+      if (window.__creandoCuenta) return;
       if (fbUser) {
         window.__uid = fbUser.uid;
         _loadProfile(fbUser.uid).then(function(prof) {
+          var provisional = !prof;
           if (!prof) { prof = { uid: fbUser.uid, email: fbUser.email || "", username: (fbUser.email || "").split("@")[0] }; }
           prof.uid = fbUser.uid;
-          try { localStorage.setItem("trp_profile_" + fbUser.uid, JSON.stringify(prof)); } catch(e) {}
+          if (!provisional) try { localStorage.setItem("trp_profile_" + fbUser.uid, JSON.stringify(prof)); } catch(e) {}
           _startSession(prof);
           _checkLicenseAndEnter(prof);
         });
