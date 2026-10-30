@@ -12450,9 +12450,11 @@ var _IA_KEY_STORE = "acce_ai_key";
 // Si uno está saturado (mucha demanda) o sin cupo, se prueba el siguiente.
 var _GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
 var _geminiOk = null; // modelo que funcionó la última vez (se prueba primero)
-function _geminiGenerate(apiKey, body) {
-  var list = _GEMINI_MODELS.slice();
-  if (_geminiOk) list = [_geminiOk].concat(list.filter(function (m) { return m !== _geminiOk; }));
+// models (opcional): lista propia de modelos a probar en orden (p. ej. los que tienen búsqueda web gratis).
+function _geminiGenerate(apiKey, body, models) {
+  var list = (models || _GEMINI_MODELS).slice();
+  if (_geminiOk && !models) list = [_geminiOk].concat(list.filter(function (m) { return m !== _geminiOk; }));
+  var detalles = [];
   var i = 0, lastBusy = null, round = 0, tried = [];
   var tryNext = function () {
     var model = list[i];
@@ -12467,6 +12469,7 @@ function _geminiGenerate(apiKey, body) {
         var gone = res.status === 404 || (res.status === 400 && /not found|not supported|is not available/i.test(msg));
         var busy = res.status === 429 || res.status === 500 || res.status === 503 || /overloaded|high demand|unavailable/i.test(msg);
         tried.push(model + ":" + res.status);
+        if (msg) detalles.push(model + ": " + msg.slice(0, 300));
         if (busy) lastBusy = res.status;
         if ((gone || busy) && i < list.length - 1) { i++; return tryNext(); }
         // Todos ocupados: esperar un momento y dar una segunda vuelta antes de rendirse
@@ -12476,7 +12479,7 @@ function _geminiGenerate(apiKey, body) {
         }
         if (tried.length) console.warn("[IA] modelos probados:", tried.join(", "), msg);
         if ((res.status === 400 || res.status === 403) && /api key|permission|unauthori[sz]ed/i.test(msg)) throw { error: { message: "Google no aceptó la API key. Revísala o crea una nueva en aistudio.google.com/apikey" } };
-        if (lastBusy === 429) throw { error: { message: "Se alcanzó el límite gratuito de consultas por ahora. Espera un minuto y vuelve a intentar." } };
+        if (lastBusy === 429) throw { error: { message: "Se alcanzó el límite gratuito de consultas por ahora. Espera un minuto y vuelve a intentar.", detalle: detalles.join(" | ") } };
         if (lastBusy) throw { error: { message: "Los servidores de Google están saturados en este momento (código " + lastBusy + "). Tu clave sí funciona: espera unos segundos y vuelve a intentar." } };
         throw (e && e.error) ? e : { error: { message: "Google respondió " + res.status } };
       });
@@ -15712,7 +15715,8 @@ function _iaBuscarWeb(prompt, opts) {
     generationConfig: { maxOutputTokens: opts.max || 3000, temperature: 0 }
   };
   if (opts.system) body.system_instruction = { parts: [{ text: opts.system }] };
-  return _geminiGenerate(key, body).then(function (json) {
+  // Primero los modelos que traen búsqueda en Google dentro del cupo gratis.
+  return _geminiGenerate(key, body, ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-flash-lite-latest"]).then(function (json) {
     var cand = (json && json.candidates && json.candidates[0]) || {};
     var meta = cand.groundingMetadata || {};
     var vistas = {};
@@ -15726,7 +15730,11 @@ function _iaBuscarWeb(prompt, opts) {
     var data;
     try { data = JSON.parse(t.slice(a, b + 1)); } catch (e) { throw new Error("No se pudo interpretar la respuesta de la IA. Intenta de nuevo."); }
     return { data: data, fuentes: fuentes, consultas: consultas };
-  }, function (e) { throw new Error((e && e.error && e.error.message) || (e && e.message) || "Error al conectar con la IA."); });
+  }, function (e) {
+    var err = new Error((e && e.error && e.error.message) || (e && e.message) || "Error al conectar con la IA.");
+    err.detalle = (e && e.error && e.error.detalle) || "";
+    throw err;
+  });
 }
 function _iaErrMsg(e) {
   return e && e.message === "SIN_CLAVE" ? "Primero configura la clave de la IA (Gemini) en Configuración → Integraciones." : ((e && e.message) || "Error con la IA");
@@ -17041,6 +17049,7 @@ function CompatibilidadesView(p) {
   var _e = useState(null), editando = _e[0], setEditando = _e[1];
   var _ia = useState(null), ia = _ia[0], setIa = _ia[1];
   var _ib = useState(false), iaCargando = _ib[0], setIaCargando = _ib[1];
+  var _ie = useState(null), iaError = _ie[0], setIaError = _ie[1];
   var buscando = q.trim().length > 0;
 
   var coinciden = buscando
@@ -17057,7 +17066,7 @@ function CompatibilidadesView(p) {
   var preguntarIA = function () {
     var modelo = q.trim();
     if (!modelo) return;
-    setIaCargando(true); setIa(null);
+    setIaCargando(true); setIa(null); setIaError(null);
     // Búsqueda REAL en Google: solo se aceptan modelos que aparezcan confirmados en páginas.
     _iaBuscarWeb("Modelo de celular: " + modelo + "\n\n" +
       "Busca en internet (tiendas de repuestos, vendedores de vidrios templados, fichas técnicas, foros de técnicos) y responde:\n" +
@@ -17069,7 +17078,7 @@ function CompatibilidadesView(p) {
       "\"vidrio\":{\"compatibles\":[\"modelo\"],\"medida\":\"pulgadas\",\"confianza\":\"alta|media|baja\",\"nota\":\"frase corta\"}," +
       "\"pantalla\":{\"compatibles\":[\"modelo\"],\"codigo_parte\":\"si aparece\",\"tipos\":[\"Original\",\"OLED\",\"Incell\"],\"confianza\":\"alta|media|baja\",\"nota\":\"frase corta (ej. variantes que NO sirven)\"}}", {
       system: "Eres un técnico experto en repuestos de celulares. Verificas cada compatibilidad en la búsqueda web antes de afirmarla. Un error en pantallas le hace perder dinero al taller, así que ante la duda excluyes el modelo."
-    }).then(function (r) { setIa(r); }).catch(function (e) { p.notify(_iaErrMsg(e), "error"); }).then(function () { setIaCargando(false); });
+    }).then(function (r) { setIa(r); }).catch(function (e) { setIaError({ msg: _iaErrMsg(e), detalle: (e && e.detalle) || "" }); p.notify(_iaErrMsg(e), "error"); }).then(function () { setIaCargando(false); });
   };
 
   var chip = function (t) {
@@ -17133,7 +17142,7 @@ function CompatibilidadesView(p) {
     h("div", { style: { position: "relative" } },
       h("span", { style: { position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.muted, display: "flex" } }, h(Search, { size: 17 })),
       h("input", { value: q, autoFocus: true, placeholder: "Escribe el modelo del celular (ej: A12, Redmi Note 11, Moto G60)",
-        onChange: function (e) { setQ(e.target.value); setIa(null); },
+        onChange: function (e) { setQ(e.target.value); setIa(null); setIaError(null); },
         style: Object.assign({}, IS, { paddingLeft: 42, fontSize: 15, height: 48 }) })),
     !buscando && h("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, ["Todos"].concat(COMPAT_TIPOS).map(chip)),
 
@@ -17155,7 +17164,18 @@ function CompatibilidadesView(p) {
       h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" } },
         h("div", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: T.text } }, _gIco("Globe", 16), "Buscar en internet con IA"),
         h(Btn, { small: true, onClick: preguntarIA, disabled: iaCargando }, iaCargando ? "Buscando en internet…" : "Buscar «" + q.trim() + "»")),
-      !ia && !iaCargando && h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 8, lineHeight: 1.45 } },
+      // Búsqueda directa en Google (no usa la IA ni su cupo)
+      h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 } },
+        [["vidrio templado compatible", "Ver en Google: vidrio"], ["pantalla display compatible", "Ver en Google: pantalla"]].map(function (x) {
+          return h("a", { key: x[1], href: "https://www.google.com/search?q=" + encodeURIComponent(q.trim() + " " + x[0]), target: "_blank", rel: "noopener noreferrer", style: { textDecoration: "none" } },
+            h(Btn, { small: true, variant: "ghost", icon: h(ExternalLink, { size: 13 }) }, x[1]));
+        })),
+      iaError && h("div", { style: { marginTop: 10, padding: "10px 12px", borderRadius: 10, background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.25)", fontSize: 13, color: T.text, lineHeight: 1.5 } },
+        h("b", { style: { color: T.red } }, iaError.msg),
+        h("div", { style: { color: T.muted, marginTop: 4 } }, "Mientras tanto usa los botones “Ver en Google”: no gastan el cupo de la IA."),
+        iaError.detalle && h("details", { style: { marginTop: 6 } }, h("summary", { style: { cursor: "pointer", fontSize: 12, color: T.muted } }, "Detalle técnico de Google"),
+          h("div", { style: { fontSize: 11.5, color: T.muted, marginTop: 4, overflowWrap: "anywhere", fontFamily: "monospace" } }, iaError.detalle))),
+      !ia && !iaCargando && !iaError && h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 8, lineHeight: 1.45 } },
         "La IA busca en Google (tiendas de repuestos, vendedores de vidrios y fichas técnicas) y solo muestra modelos que encuentre confirmados, con sus fuentes."),
       ia && h("div", { style: { display: "flex", flexDirection: "column", gap: 14, marginTop: 12 } },
         h("div", { style: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.green, fontWeight: 700 } },
@@ -19467,7 +19487,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.9";
+var APP_VERSION = "1.7.0";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

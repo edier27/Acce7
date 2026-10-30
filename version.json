@@ -1,5 +1,5 @@
 {
-  "version": "1.6.9",
-  "notes": "Compatibilidades: la IA ahora busca en Google y solo muestra modelos confirmados, con nivel de confianza y fuentes.",
+  "version": "1.7.0",
+  "notes": "Compatibilidades: botones para ver en Google, aviso con detalle cuando se acaba el cupo de la IA y modelos con búsqueda gratis primero.",
   "url": "https://edier27.github.io/Acce7/"
 }
