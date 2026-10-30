@@ -1,5 +1,5 @@
 // CLINICELL — Service Worker
-const CACHE_NAME = 'clinicell-v28';
+const CACHE_NAME = 'clinicell-v29';
 // Rutas relativas al sitio (sirve en GitHub Pages /Acce7/ y en pruebas locales)
 const ASSETS = [
   './',

@@ -1,5 +1,5 @@
 {
-  "version": "1.7.1",
-  "notes": "Compatibilidades: importar tu lista desde Excel y búsqueda exacta por modelo (A05 no se confunde con A05s).",
+  "version": "1.7.2",
+  "notes": "Importar compatibilidades: respeta la marca cuando el modelo ya la trae (ej. Oppo dentro de un grupo de Realme).",
   "url": "https://edier27.github.io/Acce7/"
 }

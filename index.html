@@ -17039,6 +17039,8 @@ function _cmpConMarca(marca, modelo) {
   var m = String(modelo || "").trim(); if (!m) return "";
   var mk = String(marca || "").trim();
   var low = m.toLowerCase();
+  // Si el modelo ya trae una marca conocida (p. ej. "Oppo A15" en un grupo de Realme), se deja igual.
+  if (/^(samsung|galaxy|motorola|moto|iphone|apple|oppo|realme|honor|huawei|tecno|infinix|xiaomi|redmi|poco|vivo|nokia|zte|alcatel|lg)\b/i.test(m)) return m;
   if (/xiaomi|redmi|poco/i.test(mk)) return /^(xiaomi|redmi|poco)\b/i.test(m) ? m : "Xiaomi " + m;
   var key = Object.keys(_CMP_MARCAS).find(function (k) { return mk.toLowerCase().indexOf(k) >= 0; });
   var nombre = key ? _CMP_MARCAS[key] : mk.split(/[\/,]/)[0].trim();
@@ -19652,7 +19654,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.7.1";
+var APP_VERSION = "1.7.2";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
