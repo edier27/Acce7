@@ -16995,19 +16995,178 @@ function _cmpNorm(s) {
     .replace(/([a-z])(\d)/g, "$1 $2").replace(/(\d)([a-z])/g, "$1 $2") // "a12" y "a 12" se comparan igual
     .replace(/[^a-z0-9]+/g, " ").trim();
 }
-// ¿El modelo coincide con lo buscado? Todas las palabras deben estar; la última puede ir a medias.
+// Palabras de un modelo: "Samsung A05s" → ["samsung","a05s"]; "A 12" se une como "a12".
+function _cmpPalabras(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ").replace(/\b([a-z]) (\d)/g, "$1$2").trim().split(" ").filter(Boolean);
+}
+// ¿El modelo coincide con lo buscado? Todas las palabras deben estar.
+// Las que llevan números van EXACTAS (A05 no es A05s, A12 no es A125); las de solo letras se pueden
+// abreviar ("moto" → Motorola, "sam" → Samsung).
 function _cmpCoincide(texto, q) {
-  var t = _cmpNorm(texto).split(" ").filter(Boolean);
-  var qs = _cmpNorm(q).split(" ").filter(Boolean);
+  var t = _cmpPalabras(texto), qs = _cmpPalabras(q);
   if (!qs.length) return false;
-  return qs.every(function (w, i) {
-    var ultima = i === qs.length - 1;
-    return t.some(function (x) { return ultima ? x.indexOf(w) === 0 : x === w; });
+  return qs.every(function (w) {
+    var soloLetras = /^[a-z]+$/.test(w);
+    return t.some(function (x) { return soloLetras ? x.indexOf(w) === 0 : x === w; });
   });
 }
 function _cmpModelos(txt) {
   return String(txt || "").split(/[\n,;]+/).map(function (s) { return s.trim(); }).filter(Boolean)
     .filter(function (m, i, arr) { return arr.findIndex(function (x) { return x.toLowerCase() === m.toLowerCase(); }) === i; });
+}
+
+// ─── Importar compatibilidades desde Excel / CSV ────────────────────────────
+// Lee hojas con columnas tipo: Ref. | Marca | Modelos | Qué tan seguro | Nota (| Tipo).
+// La librería de Excel (SheetJS) se carga solo al importar.
+var _cmpXlsxPromesa = null;
+function _cmpCargarXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (_cmpXlsxPromesa) return _cmpXlsxPromesa;
+  _cmpXlsxPromesa = new Promise(function (ok, mal) {
+    var s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.onload = function () { window.XLSX ? ok(window.XLSX) : mal(new Error("No se pudo cargar el lector de Excel")); };
+    s.onerror = function () { _cmpXlsxPromesa = null; mal(new Error("No se pudo cargar el lector de Excel. Revisa tu conexión a internet.")); };
+    document.head.appendChild(s);
+  });
+  return _cmpXlsxPromesa;
+}
+// Antepone la marca al modelo ("A02" → "Samsung A02") salvo que ya la traiga.
+var _CMP_MARCAS = { "samsung": "Samsung", "motorola": "Motorola", "iphone": "iPhone", "apple": "iPhone", "oppo": "Oppo", "realme": "Realme",
+  "honor": "Honor", "huawei": "Huawei", "tecno": "Tecno", "infinix": "Infinix", "vivo": "Vivo", "nokia": "Nokia", "zte": "ZTE", "alcatel": "Alcatel", "lg": "LG" };
+function _cmpConMarca(marca, modelo) {
+  var m = String(modelo || "").trim(); if (!m) return "";
+  var mk = String(marca || "").trim();
+  var low = m.toLowerCase();
+  if (/xiaomi|redmi|poco/i.test(mk)) return /^(xiaomi|redmi|poco)\b/i.test(m) ? m : "Xiaomi " + m;
+  var key = Object.keys(_CMP_MARCAS).find(function (k) { return mk.toLowerCase().indexOf(k) >= 0; });
+  var nombre = key ? _CMP_MARCAS[key] : mk.split(/[\/,]/)[0].trim();
+  if (!nombre) return m;
+  if (low.indexOf(nombre.toLowerCase()) === 0 || (nombre === "Motorola" && /^moto\b/i.test(m))) return m;
+  return nombre + " " + m;
+}
+// Convierte las hojas (arreglos de filas) en compatibilidades.
+function _cmpDesdeHojas(hojas, tipoPorDefecto) {
+  var mejor = null;
+  hojas.forEach(function (hj) {
+    var filas = hj.filas || [];
+    for (var i = 0; i < Math.min(filas.length, 15); i++) {
+      var cab = (filas[i] || []).map(function (x) { return _cmpNorm(x); });
+      var col = function (re) { return cab.findIndex(function (c) { return re.test(c); }); };
+      var cModelos = col(/modelos|compatibles|le sirve/);
+      var cRef = col(/^ref|referencia|codigo/);
+      if (cModelos < 0) continue;
+      var puntaje = (cRef >= 0 ? 2 : 0) + (/vidrio/.test(_cmpNorm(hj.nombre)) ? 1 : 0) + (cab[cModelos].indexOf("comparten") >= 0 ? 2 : 0);
+      if (!mejor || puntaje > mejor.puntaje) {
+        mejor = { hoja: hj, fila: i, puntaje: puntaje, cRef: cRef, cModelos: cModelos, cMarca: col(/^marca/), cSeguro: col(/seguro|confian/),
+          cNota: col(/^nota/), cTipo: col(/^tipo/), cModelo: col(/^modelo$/) };
+      }
+      break;
+    }
+  });
+  if (!mejor) return [];
+  var out = [];
+  mejor.hoja.filas.slice(mejor.fila + 1).forEach(function (r) {
+    r = r || [];
+    var bruto = String(r[mejor.cModelos] == null ? "" : r[mejor.cModelos]);
+    var marca = mejor.cMarca >= 0 ? String(r[mejor.cMarca] || "") : "";
+    var lista = bruto.split(/\s+\/\s+|[\n,;]+/).map(function (x) { return x.trim(); }).filter(function (x) { return x && !/^solo este modelo$/i.test(x); });
+    if (mejor.cModelo >= 0 && r[mejor.cModelo]) lista.unshift(String(r[mejor.cModelo]).trim());
+    var modelos = _cmpModelos(lista.map(function (m) { return _cmpConMarca(marca, m); }).join("\n"));
+    if (!modelos.length) return;
+    var codigo = mejor.cRef >= 0 ? String(r[mejor.cRef] || "").trim() : "";
+    var seguro = mejor.cSeguro >= 0 ? String(r[mejor.cSeguro] || "").trim() : "";
+    var nota = mejor.cNota >= 0 ? String(r[mejor.cNota] || "").trim() : "";
+    var tipoFila = mejor.cTipo >= 0 ? String(r[mejor.cTipo] || "").trim() : "";
+    var tipo = COMPAT_TIPOS.find(function (t) { return _cmpNorm(t) === _cmpNorm(tipoFila); }) || tipoPorDefecto;
+    out.push({ codigo: codigo, tipo: tipo, marca: marca, ref: (codigo ? codigo + " · " : "") + modelos[0] + (modelos.length > 1 ? " (" + modelos.length + " modelos)" : ""),
+      modelos: modelos, seguridad: seguro, notas: nota });
+  });
+  return out;
+}
+
+function CompatImportModal(p) {
+  var h = React.createElement;
+  var _e = useState("elegir"), etapa = _e[0], setEtapa = _e[1];
+  var _i = useState([]), items = _i[0], setItems = _i[1];
+  var _n = useState(""), nombre = _n[0], setNombre = _n[1];
+  var _t = useState("Vidrio templado"), tipo = _t[0], setTipo = _t[1];
+  var _er = useState(""), error = _er[0], setError = _er[1];
+  var _hs = useState(null), hojas = _hs[0], setHojas = _hs[1];
+  var archivoRef = React.useRef();
+  var procesar = function (hs, t) { var r = _cmpDesdeHojas(hs, t); setItems(r); setEtapa(r.length ? "revisar" : "elegir"); if (!r.length) setError("No encontré una tabla con una columna de modelos compatibles en ese archivo."); };
+  var leer = function (file) {
+    if (!file) return;
+    setError(""); setNombre(file.name); setEtapa("leyendo");
+    var esCsv = /\.csv$/i.test(file.name);
+    var lector = new FileReader();
+    lector.onerror = function () { setError("No se pudo leer el archivo."); setEtapa("elegir"); };
+    lector.onload = function (ev) {
+      if (esCsv) {
+        var texto = String(ev.target.result || "");
+        var sep = (texto.split("\n")[0].match(/;/g) || []).length > (texto.split("\n")[0].match(/,/g) || []).length ? ";" : ",";
+        var filas = texto.split(/\r?\n/).map(function (l) { return l.split(sep).map(function (c) { return c.replace(/^"|"$/g, ""); }); });
+        var hs = [{ nombre: file.name, filas: filas }];
+        setHojas(hs); procesar(hs, tipo);
+        return;
+      }
+      _cmpCargarXLSX().then(function (X) {
+        var wb = X.read(new Uint8Array(ev.target.result), { type: "array" });
+        var hs = wb.SheetNames.map(function (n) { return { nombre: n, filas: X.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "", raw: false }) }; });
+        setHojas(hs); procesar(hs, tipo);
+      }).catch(function (e) { setError(e.message || "No se pudo leer el Excel."); setEtapa("elegir"); });
+    };
+    if (esCsv) lector.readAsText(file); else lector.readAsArrayBuffer(file);
+  };
+  var existentes = p.data.compatibilidades || [];
+  var porCodigo = {};
+  existentes.forEach(function (c) { if (c.codigo) porCodigo[c.codigo.toLowerCase() + "|" + c.tipo] = c; });
+  var actualizar = items.filter(function (it) { return it.codigo && porCodigo[it.codigo.toLowerCase() + "|" + it.tipo]; }).length;
+  var marcas = {};
+  items.forEach(function (it) { var m = it.marca || "Otras"; marcas[m] = (marcas[m] || 0) + 1; });
+  var totalModelos = items.reduce(function (a, it) { return a + it.modelos.length; }, 0);
+  var importar = function () {
+    var hoy = getHoyColombia();
+    var nuevos = existentes.slice();
+    items.forEach(function (it) {
+      var k = it.codigo ? it.codigo.toLowerCase() + "|" + it.tipo : null;
+      var previo = k && porCodigo[k];
+      var item = Object.assign({}, it, { id: previo ? previo.id : uid(), creado: previo ? previo.creado : hoy, actualizado: hoy, origen: nombre });
+      if (previo) nuevos = nuevos.map(function (x) { return x.id === previo.id ? item : x; });
+      else nuevos.push(item);
+    });
+    p.save(Object.assign({}, p.data, { compatibilidades: nuevos }));
+    p.notify(items.length + " referencias importadas" + (actualizar ? " (" + actualizar + " actualizadas)" : ""));
+    p.onClose();
+  };
+  return h(ModalWrap, { title: "Importar compatibilidades", onClose: p.onClose, wide: true },
+    h("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+      h("div", { style: { fontSize: 13.5, color: T.muted, lineHeight: 1.5 } },
+        "Elige tu archivo de Excel (.xlsx) o CSV. Debe tener una columna con los modelos compatibles (separados por “/” o comas) y, si quieres, columnas de referencia, marca, qué tan seguro y nota."),
+      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "end" } },
+        h(Field, { label: "Tipo de repuesto", value: tipo, onChange: function (v) { setTipo(v); if (hojas) procesar(hojas, v); }, options: COMPAT_TIPOS }),
+        h("div", null,
+          h("input", { ref: archivoRef, type: "file", accept: ".xlsx,.xls,.csv", style: { display: "none" }, onChange: function (e) { leer(e.target.files[0]); e.target.value = ""; } }),
+          h(Btn, { onClick: function () { archivoRef.current.click(); }, icon: _gIco("FileSpreadsheet", 15), style: { width: "100%", justifyContent: "center" } },
+            etapa === "leyendo" ? "Leyendo…" : nombre ? "Elegir otro archivo" : "Elegir archivo"))),
+      error && h("div", { style: { padding: "10px 12px", borderRadius: 10, background: "rgba(220,38,38,0.07)", color: T.red, fontSize: 13 } }, error),
+      etapa === "revisar" && h("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+        h("div", { style: { padding: "12px 14px", borderRadius: 10, background: T.bg, border: "1px solid " + T.border, fontSize: 13.5, color: T.text, lineHeight: 1.6 } },
+          h("b", null, nombre), h("br"),
+          items.length + " referencias · " + totalModelos + " modelos" + (actualizar ? " · " + actualizar + " ya estaban y se actualizan" : ""), h("br"),
+          h("span", { style: { color: T.muted } }, Object.keys(marcas).map(function (m) { return m + " (" + marcas[m] + ")"; }).join(" · "))),
+        h("div", { className: "trp-scroll", style: { maxHeight: 240, overflow: "auto", border: "1px solid " + T.border, borderRadius: 10 } },
+          items.slice(0, 40).map(function (it, i) {
+            return h("div", { key: i, style: { padding: "8px 12px", borderBottom: "1px solid " + T.border, fontSize: 12.5 } },
+              h("b", { style: { color: T.text } }, it.ref),
+              it.seguridad && /probar/i.test(it.seguridad) ? h("span", { style: { marginLeft: 6, color: T.orange, fontWeight: 700 } }, "· Probar primero") : null,
+              h("div", { style: { color: T.muted, marginTop: 2 } }, it.modelos.join(", ")));
+          }),
+          items.length > 40 && h("div", { style: { padding: "8px 12px", fontSize: 12.5, color: T.muted } }, "…y " + (items.length - 40) + " más")),
+        h("div", { style: { display: "flex", gap: 8 } },
+          h(Btn, { onClick: importar, icon: h(Check, { size: 15 }) }, "Importar " + items.length + " referencias"),
+          h(Btn, { variant: "ghost", onClick: p.onClose }, "Cancelar")))));
 }
 
 function CompatModal(p) {
@@ -17048,6 +17207,7 @@ function CompatibilidadesView(p) {
   var _f = useState("Todos"), filtro = _f[0], setFiltro = _f[1];
   var _e = useState(null), editando = _e[0], setEditando = _e[1];
   var _ia = useState(null), ia = _ia[0], setIa = _ia[1];
+  var _im = useState(false), importando = _im[0], setImportando = _im[1];
   var _ib = useState(false), iaCargando = _ib[0], setIaCargando = _ib[1];
   var _ie = useState(null), iaError = _ie[0], setIaError = _ie[1];
   var buscando = q.trim().length > 0;
@@ -17096,7 +17256,9 @@ function CompatibilidadesView(p) {
         h("div", { style: { flex: 1, minWidth: 0 } },
           h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
             h("span", { style: { fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 999, color: colorTipo(c.tipo), background: colorTipo(c.tipo) + "18", textTransform: "uppercase", letterSpacing: "0.04em" } }, c.tipo),
-            h("span", { style: { fontSize: 15, fontWeight: 700, color: T.text } }, c.ref)),
+            h("span", { style: { fontSize: 15, fontWeight: 700, color: T.text } }, c.ref),
+            c.seguridad && h("span", { style: { fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+              color: /probar/i.test(c.seguridad) ? T.orange : T.green, border: "1px solid " + (/probar/i.test(c.seguridad) ? T.orange : T.green) } }, /probar/i.test(c.seguridad) ? "Probar primero" : c.seguridad)),
           h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 } },
             (c.modelos || []).map(function (m, i) {
               var hit = buscando && _cmpCoincide(m, q);
@@ -17138,7 +17300,9 @@ function CompatibilidadesView(p) {
       h("div", null,
         h("h2", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: 21, fontWeight: 800, color: T.text, margin: 0, letterSpacing: "-0.02em" } }, _gIco("Layers", 20), "Compatibilidades"),
         h("div", { style: { fontSize: 13, color: T.muted, marginTop: 4 } }, "Busca un modelo y mira qué vidrio templado, pantalla y repuestos le sirven.")),
-      h(Btn, { icon: h(Plus, { size: 15 }), onClick: function () { setEditando({}); } }, "Nueva compatibilidad")),
+      h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+        h(Btn, { variant: "ghost", icon: _gIco("FileSpreadsheet", 15), onClick: function () { setImportando(true); } }, "Importar Excel"),
+        h(Btn, { icon: h(Plus, { size: 15 }), onClick: function () { setEditando({}); } }, "Nueva compatibilidad"))),
     h("div", { style: { position: "relative" } },
       h("span", { style: { position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.muted, display: "flex" } }, h(Search, { size: 17 })),
       h("input", { value: q, autoFocus: true, placeholder: "Escribe el modelo del celular (ej: A12, Redmi Note 11, Moto G60)",
@@ -17192,6 +17356,7 @@ function CompatibilidadesView(p) {
         h("div", { style: { fontSize: 12, color: T.orange, lineHeight: 1.45 } },
           "Aun así, antes de cambiar una pantalla compara el conector y las medidas con la original. Guarda en tu lista solo lo que confirmes."))),
 
+    importando && h(CompatImportModal, { data: data, save: p.save, notify: p.notify, onClose: function () { setImportando(false); } }),
     editando && h(CompatModal, { item: editando.item, tipoInicial: editando.tipoInicial, modelosIniciales: editando.modelosIniciales,
       data: data, save: p.save, notify: p.notify, onClose: function () { setEditando(null); } }));
 }
@@ -19487,7 +19652,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.7.0";
+var APP_VERSION = "1.7.1";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

@@ -1,5 +1,5 @@
 {
-  "version": "1.7.0",
-  "notes": "Compatibilidades: botones para ver en Google, aviso con detalle cuando se acaba el cupo de la IA y modelos con búsqueda gratis primero.",
+  "version": "1.7.1",
+  "notes": "Compatibilidades: importar tu lista desde Excel y búsqueda exacta por modelo (A05 no se confunde con A05s).",
   "url": "https://edier27.github.io/Acce7/"
 }
