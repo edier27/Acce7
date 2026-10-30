@@ -1,5 +1,5 @@
 {
-  "version": "1.6.4",
-  "notes": "Novedades para el cliente: las observaciones que escribas en la orden aparecen con fecha en su página de seguimiento y se pueden avisar por WhatsApp.",
+  "version": "1.6.5",
+  "notes": "Opción para ocultar la barra lateral: aparece al pasar el mouse por el borde izquierdo (Configuración → Apariencia).",
   "url": "https://edier27.github.io/Acce7/"
 }

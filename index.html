@@ -839,6 +839,11 @@ function _uiStyleCss() {
   });
   // Botones flotantes (catálogo PDF y asistente) por encima de la barra de tareas / de estado.
   css += ".ui-sin-sombra:focus,.ui-sin-sombra{box-shadow:none!important}";
+  // Barra lateral oculta: aparece al pasar el mouse por el borde izquierdo y se esconde al salir.
+  css += ".sb-hot{position:fixed;left:0;top:0;bottom:0;width:10px;z-index:199}" +
+    ".sb-hot::after{content:'';position:absolute;left:2px;top:50%;width:4px;height:56px;margin-top:-28px;border-radius:4px;background:rgba(128,128,128,0.35)}" +
+    ".trp-sidebar.sb-auto{transform:translateX(-100%);transition:transform .2s ease .3s;box-shadow:0 0 28px rgba(0,0,0,0.22)}" +
+    ".sb-hot:hover+.trp-sidebar.sb-auto,.trp-sidebar.sb-auto:hover{transform:translateX(0);transition-delay:.05s}";
   var sube = { win10: 46, win11: 54, clasico: 28 };
   css += "@media (min-width:640px){";
   Object.keys(sube).forEach(function (k) {
@@ -9573,7 +9578,7 @@ function SettingsView(_ref20) {
 
   // ¿Hay cambios sin guardar?
   var _norm = function (v) { return v === undefined || v === null || v === false ? "" : String(v); };
-  var CAMPOS = ["storeName", "storeSubtitle", "logo", "loginBrand", "nit", "address", "email", "whatsapp", "theme", "accentColor", "themePreset", "uiStyle"];
+  var CAMPOS = ["storeName", "storeSubtitle", "logo", "loginBrand", "nit", "address", "email", "whatsapp", "theme", "accentColor", "themePreset", "uiStyle", "sidebarAuto"];
   var handleUiStyle = function (key) {
     var updated = Object.assign({}, form, { uiStyle: key });
     setForm(updated);
@@ -9707,6 +9712,23 @@ function SettingsView(_ref20) {
               h("span", { style: { fontSize: 13.5, fontWeight: 700, color: T.text } }, st.label),
               active && h("span", { style: { width: 18, height: 18, borderRadius: "50%", background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, h(Check, { size: 12 }))),
             h("span", { style: { fontSize: 12, color: T.muted, lineHeight: 1.4, marginTop: -4 } }, st.desc));
+        }))),
+    seccion("PanelLeftClose", "Barra lateral", "Gana espacio en la pantalla escondiendo el menú de la izquierda.",
+      h("div", { style: { display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 12, background: T.bg, border: "1px solid " + T.border,
+          opacity: estiloActual === "moderno" ? 1 : 0.6 } },
+        h("div", { style: { flex: 1, minWidth: 0 } },
+          h("div", { style: { fontSize: 14, fontWeight: 600, color: T.text } }, "Ocultar la barra lateral"),
+          h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 3, lineHeight: 1.45 } },
+            estiloActual === "moderno"
+              ? (form.sidebarAuto
+                  ? "Activado: la barra está escondida. Pasa el mouse por el borde izquierdo de la pantalla y aparece; al salir se vuelve a esconder."
+                  : "Desactivado: la barra lateral siempre está visible.")
+              : "Solo funciona con el estilo Moderno (los demás estilos no tienen barra lateral).")),
+        interruptor(form.sidebarAuto === true, function (v) {
+          var updated = Object.assign({}, form, { sidebarAuto: v });
+          setForm(updated);
+          saveSettings(updated);
+          notify(v ? "Barra lateral oculta: pasa el mouse por el borde izquierdo" : "Barra lateral visible");
         }))),
     seccion("Palette", "Tema", "Haz clic en un tema y se aplica al instante.",
       h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 } },
@@ -17048,6 +17070,8 @@ function App(_appProps) {
     waFor: function (r) { return r.phone ? ("https://wa.me/57" + r.phone.replace(/\D/g, "") + "?text=" + encodeURIComponent(buildAbandonoWAMessage(r.customer, r.device, r._daysUnclaimed, settings && settings.storeName))) : null; } };
   // En los estilos Windows los avisos de arriba pasan al centro de notificaciones de la barra.
   var _uiWin = _uiL === "win10" || _uiL === "win11";
+  // Barra lateral que se esconde sola (estilo Moderno, en computador)
+  var _sbAuto = !isMobile && !_uiL && settings.sidebarAuto === true;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -17065,15 +17089,18 @@ function App(_appProps) {
     style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 190 }
   }),
 
+  // Barra lateral oculta: una franja en el borde izquierdo la hace aparecer al pasar el mouse.
+  _sbAuto && /*#__PURE__*/React.createElement("div", { className: "sb-hot", title: "Pasa el mouse para ver el menú" }),
+
   !_uiL && /*#__PURE__*/React.createElement("aside", {
-    className: "trp-sidebar",
+    className: "trp-sidebar" + (_sbAuto ? " sb-auto" : ""),
     style: {
-      position: isMobile ? "fixed" : "relative",
+      position: (isMobile || _sbAuto) ? "fixed" : "relative",
       top: 0, left: 0, bottom: 0,
       height: "100dvh",
       width: 236,
-      transform: (isMobile && !sidebarOpen) ? "translateX(-100%)" : "translateX(0)",
-      transition: "transform 0.25s ease",
+      transform: _sbAuto ? undefined : ((isMobile && !sidebarOpen) ? "translateX(-100%)" : "translateX(0)"),
+      transition: _sbAuto ? undefined : "transform 0.25s ease",
       background: T.surface,
       borderRight: "1px solid ".concat(T.border),
       display: "flex",
@@ -17204,7 +17231,7 @@ function App(_appProps) {
         flexShrink: 0
       }
     },
-      !_uiL && (isMobile || !sidebarOpen) && /*#__PURE__*/React.createElement("button", {
+      !_uiL && !_sbAuto && (isMobile || !sidebarOpen) && /*#__PURE__*/React.createElement("button", {
         onClick: function () { return setSidebarOpen(function (o) { return !o; }); },
         style: { display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, border: "none", borderRadius: 8, background: "transparent", color: T.text, cursor: "pointer", flexShrink: 0 }
       }, /*#__PURE__*/React.createElement(Menu, { size: 19 })),
@@ -18852,7 +18879,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.4";
+var APP_VERSION = "1.6.5";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
