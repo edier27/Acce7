@@ -1,5 +1,5 @@
 {
-  "version": "1.6.6",
-  "notes": "Ventas a crédito / fiado: elige el cliente y el plazo, registra abonos y mira quién debe en Ventas → Fiados y créditos.",
+  "version": "1.6.7",
+  "notes": "Buscador de clientes con registro rápido; celulares fiados; las reparaciones suman ganancia al entregarse.",
   "url": "https://edier27.github.io/Acce7/"
 }

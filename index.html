@@ -3527,7 +3527,7 @@ function RepairModal(_ref0) {
           gr.costoExtra > 0 && fila("Repuestos comprados aparte", "− " + fmt(gr.costoExtra)),
           fila("Ganancia neta de la reparación", fmt(gr.ganancia), gr.ganancia >= 0 ? T.green : T.red, true),
           /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: T.muted, marginTop: 6 } },
-            "Se suma a Reportes → Ganancias cuando la reparación queda pagada."))
+            "Se suma a Reportes → Ganancias cuando la reparación se entrega o queda pagada."))
       );
     })(),
 
@@ -4352,7 +4352,7 @@ function ProductsView(_ref13) {
       var pn = _provNombre(data, p.proveedorId || (inv && inv.proveedorId));
       return pn ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: -8, marginBottom: 12 } },
         "Proveedor: ", /*#__PURE__*/React.createElement("b", { style: { color: T.text } }, pn)) : null;
-    })(), verCostos && _ganCostoLinea(_ganCostoActual(data, "products", p.id), Number(p.price) || 0), p.specs && p.specs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    })(), verCostos && _ganCostoLinea(_ganCostoActual(data, "products", p.id), Number(p.price) || 0, null, "Ganarías c/u"), p.specs && p.specs.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 14
       }
@@ -4895,13 +4895,14 @@ function CelularesView(_refCel) {
         /*#__PURE__*/React.createElement("div", { style: { padding: 16 } },
           /*#__PURE__*/React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4, lineHeight: 1.3 } }, c.marca, " ", c.modelo),
           /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 800, color: T.green, marginBottom: 10 } }, fmt(Number(c.precio) || 0)),
-          verCostos && _ganCostoLinea(Number(c.costo) || 0, c.estado === "Vendido" && Number(c.precioVenta) > 0 ? Number(c.precioVenta) : Number(c.precio) || 0, { marginTop: -6, marginBottom: 10 }),
+          verCostos && _ganCostoLinea(Number(c.costo) || 0, c.estado === "Vendido" && Number(c.precioVenta) > 0 ? Number(c.precioVenta) : Number(c.precio) || 0, { marginTop: -6, marginBottom: 10 }, c.estado === "Vendido" ? "Ganaste" : "Ganarías"),
           /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 2, marginBottom: 14, fontSize: 13, color: T.muted } },
             c.capacidad && /*#__PURE__*/React.createElement("div", null, "• ", c.capacidad, c.ram ? " · " + c.ram + " RAM" : ""),
             c.color && /*#__PURE__*/React.createElement("div", null, "• Color: ", c.color),
             c.condicion === "Usado" && c.bateria && /*#__PURE__*/React.createElement("div", null, "• Bater\xEDa: ", c.bateria, "%"),
             c.imei && /*#__PURE__*/React.createElement("div", null, "• IMEI: ", c.imei),
-            c.estado === "Vendido" && c.vendidoA && /*#__PURE__*/React.createElement("div", { style: { color: T.accent } }, "• Vendido a: ", c.vendidoA)
+            c.estado === "Vendido" && c.vendidoA && /*#__PURE__*/React.createElement("div", { style: { color: T.accent } }, "• Vendido a: ", c.vendidoA),
+            c.estado === "Vendido" && c.credito && /*#__PURE__*/React.createElement("div", { style: { color: _ventaSaldo(c) > 0 ? T.orange : T.green, fontWeight: 700 } }, _ventaSaldo(c) > 0 ? "• Fiado: debe " + fmt(_ventaSaldo(c)) + " (vence " + c.credito.vence + ")" : "• Fiado: pagado")
           ),
           /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 5, flexWrap: "wrap" } },
             /*#__PURE__*/React.createElement(Btn, {
@@ -5082,6 +5083,11 @@ function VenderCelularModal(_refVM) {
     _useStateVM2 = _slicedToArray(_useStateVM, 2),
     form = _useStateVM2[0],
     setForm = _useStateVM2[1];
+  // Venta a crédito / fiado
+  var _vc1 = useState(false), esCredito = _vc1[0], setEsCredito = _vc1[1];
+  var _vc2 = useState("15"), diasCredito = _vc2[0], setDiasCredito = _vc2[1];
+  var _vc3 = useState(""), abonoIni = _vc3[0], setAbonoIni = _vc3[1];
+  var _vc4 = useState("Efectivo"), medioAbono = _vc4[0], setMedioAbono = _vc4[1];
   var set = function (k, v) {
     return setForm(function (f) {
       var o = Object.assign({}, f);
@@ -5089,48 +5095,88 @@ function VenderCelularModal(_refVM) {
       return o;
     });
   };
+  var escribirCliente = function (v) {
+    var c = (data.customers || []).find(function (x) { return (x.name || "").trim().toLowerCase() === String(v).trim().toLowerCase(); });
+    setForm(function (f) {
+      var o = Object.assign({}, f, { vendidoA: v });
+      if (c) o.vendidoTel = String(c.phone || "");
+      else if (f.vendidoTel && (data.customers || []).some(function (x) { return String(x.phone || "") === f.vendidoTel; })) o.vendidoTel = "";
+      return o;
+    });
+  };
+  var precio = Number(form.precioVenta) || 0;
   var handleVender = function () {
-    if (!form.vendidoA || !form.precioVenta) {
+    if (!String(form.vendidoA).trim() || !form.precioVenta) {
       notify("Nombre del cliente y precio final son requeridos", "error");
       return;
     }
+    var abonoNum = esCredito ? Math.max(0, Math.min(Number(abonoIni) || 0, precio)) : 0;
+    if (esCredito) {
+      if (!(Number(diasCredito) > 0)) { notify("Indica en cuántos días debe pagar", "error"); return; }
+      if (abonoNum >= precio) { notify("El abono cubre todo: regístrala como venta de contado", "error"); return; }
+    }
     var updatedCel = Object.assign({}, celular, {
       estado: "Vendido",
-      vendidoA: form.vendidoA,
+      vendidoA: String(form.vendidoA).trim(),
       vendidoTel: form.vendidoTel,
-      precioVenta: Number(form.precioVenta),
-      medioPago: form.medioPago,
+      precioVenta: precio,
+      medioPago: esCredito ? "Fiado" : form.medioPago,
       notasVenta: form.notasVenta,
       garantiaDias: Number(form.garantiaDias) || 0,
       fechaVenta: today()
     });
+    var cashflow = data.cashflow || [];
+    if (esCredito) {
+      var abonos = abonoNum > 0 ? [{ id: uid(), fecha: today(), monto: abonoNum, medio: medioAbono, nota: "Abono inicial" }] : [];
+      updatedCel.credito = { dias: Number(diasCredito), vence: _isoAdd(today(), Number(diasCredito)), telefono: String(form.vendidoTel || "").trim(), abonos: abonos };
+      // Lo recibido hoy entra a Caja; el resto queda por cobrar en Ventas → Fiados y créditos.
+      if (abonoNum > 0) cashflow = [_fiadoCashflow(updatedCel, abonos[0])].concat(cashflow);
+    } else {
+      delete updatedCel.credito;
+    }
     var celulares = (data.celulares || []).map(function (c) { return c.id === celular.id ? updatedCel : c; });
-    save(Object.assign({}, data, { celulares: celulares }));
-    notify("Venta registrada");
+    save(Object.assign({}, data, { celulares: celulares, cashflow: cashflow }));
+    notify(esCredito ? "Celular fiado a " + updatedCel.vendidoA + " · saldo " + fmt(_ventaSaldo(updatedCel)) + " · vence " + updatedCel.credito.vence : "Venta registrada");
     onClose();
     showPrintModal(function (type, tw) {
       printCelularReceipt(updatedCel, (data.settings && data.settings.storeName) || "CLINICELL", type, tw);
     });
   };
-  return /*#__PURE__*/React.createElement(ModalWrap, { title: "Vender " + celular.marca + " " + celular.modelo, onClose: onClose },
-    /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
-      /*#__PURE__*/React.createElement("div", { style: { background: T.bg, borderRadius: 8, padding: "10px 13px", fontSize: 14, color: T.text } },
-        celular.marca, " ", celular.modelo, " · ", celular.condicion, " · Precio lista: ", fmt(Number(celular.precio) || 0)
-      ),
-      /*#__PURE__*/React.createElement(Field, { label: "Nombre del cliente *", value: form.vendidoA, onChange: function (v) { return set("vendidoA", v); }, required: true, placeholder: "Nombre completo" }),
-      /*#__PURE__*/React.createElement(Field, { label: "Tel\xE9fono del cliente", value: form.vendidoTel, onChange: function (v) { return set("vendidoTel", v); }, placeholder: "300 000 0000" }),
-      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
-        /*#__PURE__*/React.createElement(Field, { label: "Precio final de venta *", value: form.precioVenta, onChange: function (v) { return set("precioVenta", v); }, type: "number", required: true }),
-        /*#__PURE__*/React.createElement(Field, { label: "Forma de pago", value: form.medioPago, onChange: function (v) { return set("medioPago", v); }, options: ["Efectivo", "Transferencia", "Tarjeta", "Otro"] })
-      ),
-      /*#__PURE__*/React.createElement(Field, { label: "Garant\xEDa (d\xEDas)", value: form.garantiaDias, onChange: function (v) { return set("garantiaDias", v); }, type: "number", placeholder: "30" }),
-      /*#__PURE__*/React.createElement(Field, { label: "Notas", value: form.notasVenta, onChange: function (v) { return set("notasVenta", v); }, textarea: true, rows: 2 }),
-      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8 } },
-        /*#__PURE__*/React.createElement(Btn, { onClick: handleVender, variant: "success", icon: /*#__PURE__*/React.createElement(DollarSign, { size: 15 }) }, "Confirmar Venta y Generar Factura"),
-        /*#__PURE__*/React.createElement(Btn, { variant: "ghost", onClick: onClose }, "Cancelar")
-      )
-    )
-  );
+  var h = React.createElement;
+  return h(ModalWrap, { title: "Vender " + celular.marca + " " + celular.modelo, onClose: onClose },
+    h("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+      h("div", { style: { background: T.bg, borderRadius: 8, padding: "10px 13px", fontSize: 14, color: T.text } },
+        celular.marca, " ", celular.modelo, " · ", celular.condicion, " · Precio lista: ", fmt(Number(celular.precio) || 0)),
+      h(ClientePicker, {
+        label: "Cliente *", data: data, save: save, notify: notify,
+        value: form.vendidoA, onChange: escribirCliente,
+        onSelect: function (c) { setForm(function (f) { return Object.assign({}, f, { vendidoA: c.name || "", vendidoTel: String(c.phone || "") }); }); }
+      }),
+      h(Field, { label: "Tel\xE9fono del cliente", value: form.vendidoTel, onChange: function (v) { return set("vendidoTel", v); }, placeholder: "300 000 0000" }),
+      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+        h(Field, { label: "Precio final de venta *", value: form.precioVenta, onChange: function (v) { return set("precioVenta", v); }, type: "number", required: true }),
+        h(Field, { label: "Garant\xEDa (d\xEDas)", value: form.garantiaDias, onChange: function (v) { return set("garantiaDias", v); }, type: "number", placeholder: "30" })),
+      h("div", { style: { display: "flex", padding: 3, borderRadius: 10, background: T.bg, border: "1px solid " + T.border, gap: 3 } },
+        [[false, "De contado"], [true, "Fiado / crédito"]].map(function (op) {
+          var on = esCredito === op[0];
+          return h("button", { key: op[1], type: "button", onClick: function () { setEsCredito(op[0]); },
+            style: { flex: 1, padding: "8px 6px", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+              background: on ? (op[0] ? T.orange : T.accent) : "transparent", color: on ? "#fff" : T.muted } }, op[1]);
+        })),
+      !esCredito && h(Field, { label: "Forma de pago", value: form.medioPago, onChange: function (v) { return set("medioPago", v); }, options: PAYMENT_METHODS }),
+      esCredito && h("div", { style: { display: "flex", flexDirection: "column", gap: 10, padding: 12, borderRadius: 10, border: "1px solid rgba(217,119,6,0.4)", background: "rgba(217,119,6,0.06)" } },
+        h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+          h(Field, { label: "Paga en (días)", value: diasCredito, onChange: setDiasCredito, options: ["8", "15", "30", "45", "60", "90"] }),
+          h(Field, { label: "Abono hoy (opcional)", value: abonoIni, onChange: setAbonoIni, type: "number", placeholder: "0" })),
+        h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: -4 } }, Number(diasCredito) > 0 ? "Vence el " + _isoAdd(today(), Number(diasCredito)) : ""),
+        Number(abonoIni) > 0 && h(Field, { label: "Medio del abono", value: medioAbono, onChange: setMedioAbono, options: PAYMENT_METHODS }),
+        h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 800, color: T.orange } },
+          h("span", null, "Queda debiendo"),
+          h("span", null, fmt(Math.max(0, precio - (Number(abonoIni) || 0)))))),
+      h(Field, { label: "Notas", value: form.notasVenta, onChange: function (v) { return set("notasVenta", v); }, textarea: true, rows: 2 }),
+      h("div", { style: { display: "flex", gap: 8 } },
+        h(Btn, { onClick: handleVender, variant: "success", icon: h(DollarSign, { size: 15 }) }, esCredito ? "Confirmar venta fiada" : "Confirmar Venta y Generar Factura"),
+        h(Btn, { variant: "ghost", onClick: onClose }, "Cancelar"))));
 }
 
 function SendCelularesModal(_refSM) {
@@ -7138,6 +7184,7 @@ function printCelularReceipt(cel) {
       "<div style=\"font-size:"+bigFont+";font-weight:bold;margin-bottom:4px\">"+_escHtml(equipo)+" ("+_escHtml(cel.condicion || "")+")</div>"+
       specsHtml+
       "<div class=\"total-row\"><span>TOTAL</span><span>"+fmtCOP(precioVenta)+"</span></div>"+
+      (cel.credito?"<div style=\"margin-top:6px;font-size:10px\"><b>VENTA A CRÉDITO</b><br>Abonado: "+fmtCOP(_ventaAbonado(cel))+"<br><b>Saldo: "+fmtCOP(_ventaSaldo(cel))+"</b><br>Paga antes del: "+_escHtml(cel.credito.vence||"")+"</div>":"")+
       (cel.vendidoA?"<div style=\"margin-top:6px;font-size:10px\"><b>Cliente:</b> "+_escHtml(cel.vendidoA)+(cel.vendidoTel?" · "+_escHtml(cel.vendidoTel):"")+"</div>":"")+
       ((cel.garantiaDias||0) > 0 ? "<div style=\"font-size:10px\"><b>Garantía:</b> "+cel.garantiaDias+" días</div>" : "")+
       (cel.notasVenta?"<div style=\"font-size:10px;margin-top:4px\"><b>Notas:</b> "+_escHtml(cel.notasVenta)+"</div>":"")+
@@ -7181,6 +7228,7 @@ function printCelularReceipt(cel) {
       "<div class=\"equipo-box\"><h3>"+_escHtml(equipo)+" · "+_escHtml(cel.condicion || "")+"</h3>"+
       "<table>"+specsRows+"</table></div>"+
       "<div class=\"total-box\"><div class=\"total-inner\"><div class=\"row\"><span>TOTAL</span><span>"+fmtCOP(precioVenta)+"</span></div></div></div>"+
+      (cel.credito?"<div style=\"margin:-8px 0 20px;padding:12px 16px;border:1px dashed #d97706;border-radius:10px;font-size:13px;color:#333\"><b>Venta a crédito</b> · Abonado: "+fmtCOP(_ventaAbonado(cel))+" · <b>Saldo pendiente: "+fmtCOP(_ventaSaldo(cel))+"</b> · Paga antes del "+_escHtml(cel.credito.vence||"")+"</div>":"")+
       (cel.notasVenta?"<p style=\"font-size:13px;color:#666;margin-bottom:20px\"><strong>Nota:</strong> "+_escHtml(cel.notasVenta)+"</p>":"")+
       "<div class=\"footer\">¡Gracias por su compra!</div>"+
       "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#1A1A1A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">Imprimir</button></div>"+
@@ -7476,20 +7524,42 @@ function shareFacturaWA(f, cfg, notify) {
 // La venta fiada guarda sale.credito = { dias, vence, telefono, abonos:[{id, fecha, monto, medio, nota}], pagadoEl }.
 // No cuenta como dinero en caja el día de la venta: cada abono entra a Caja como un
 // ingreso (cashflow con origen "fiado" y saleId) el día en que se recibe.
+// Sirven para ventas (total) y para celulares vendidos (precioVenta).
+function _fiadoTotal(s) {
+  return Number(s && (s.total != null ? s.total : s.precioVenta)) || 0;
+}
 function _ventaAbonado(s) {
   return ((s && s.credito && s.credito.abonos) || []).reduce(function (a, x) { return a + (Number(x.monto) || 0); }, 0);
 }
 function _ventaSaldo(s) {
-  return s && s.credito ? Math.max(0, (Number(s.total) || 0) - _ventaAbonado(s)) : 0;
+  return s && s.credito ? Math.max(0, _fiadoTotal(s) - _ventaAbonado(s)) : 0;
+}
+// Todos los fiados (ventas y celulares) en un mismo formato para el registro.
+function _fiadosTodos(data) {
+  var out = [];
+  (data.sales || []).forEach(function (s) {
+    if (!s.credito) return;
+    out.push({ kind: "sale", id: s.id, src: s, customer: s.customer, date: s.date, total: _fiadoTotal(s), credito: s.credito,
+      ref: "Venta #" + String(s.id || "").slice(-6).toUpperCase(),
+      desc: (s.items || []).map(function (it) { return it.qty + "× " + it.name; }).join(", ") });
+  });
+  (data.celulares || []).forEach(function (c) {
+    if (!c.credito || c.estado !== "Vendido") return;
+    out.push({ kind: "cel", id: c.id, src: c, customer: c.vendidoA, date: c.fechaVenta, total: _fiadoTotal(c), credito: c.credito,
+      ref: "Celular", desc: [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" ") + (c.imei ? " · IMEI " + c.imei : "") });
+  });
+  return out;
 }
 // Lo que entra a caja el día de la venta (las ventas fiadas entran por sus abonos).
 function _ventaContado(s) {
   return s && s.credito ? 0 : (Number(s && s.total) || 0);
 }
 function _fiadoCashflow(sale, ab) {
+  var esCel = sale.precioVenta != null && sale.total == null;
   return {
     id: "ing_fiado_" + ab.id, type: "ingreso", amount: Number(ab.monto) || 0,
-    description: "Abono fiado — " + (sale.customer || "Cliente") + " (venta #" + String(sale.id || "").slice(-6).toUpperCase() + ")",
+    description: "Abono fiado — " + ((esCel ? sale.vendidoA : sale.customer) || "Cliente") +
+      (esCel ? " (celular " + [sale.marca, sale.modelo].filter(Boolean).join(" ") + ")" : " (venta #" + String(sale.id || "").slice(-6).toUpperCase() + ")"),
     category: "Ventas", date: ab.fecha, notes: "Generado desde Ventas (fiado) · " + (ab.medio || "Efectivo"),
     saleId: sale.id, origen: "fiado", payment: ab.medio || "Efectivo"
   };
@@ -7501,7 +7571,7 @@ function _fiadoDias(s) {
 // Ventana para registrar un abono a una venta fiada.
 function AbonoFiadoModal(p) {
   var h = React.createElement;
-  var s = p.sale, saldo = _ventaSaldo(s);
+  var f = p.item, s = f.src, saldo = _ventaSaldo(s);
   var _m = useState(String(saldo)), monto = _m[0], setMonto = _m[1];
   var _d = useState("Efectivo"), medio = _d[0], setMedio = _d[1];
   var guardar = function () {
@@ -7511,15 +7581,16 @@ function AbonoFiadoModal(p) {
     var cred = Object.assign({}, s.credito, { abonos: (s.credito.abonos || []).concat([ab]) });
     var nueva = Object.assign({}, s, { credito: cred });
     if (_ventaSaldo(nueva) <= 0) nueva.credito.pagadoEl = getHoyColombia();
-    p.save(Object.assign({}, p.data, {
-      sales: (p.data.sales || []).map(function (x) { return x.id === s.id ? nueva : x; }),
-      cashflow: [_fiadoCashflow(nueva, ab)].concat(p.data.cashflow || [])
-    }));
-    p.notify(_ventaSaldo(nueva) <= 0 ? s.customer + " quedó a paz y salvo" : "Abono registrado · saldo " + fmt(_ventaSaldo(nueva)));
+    var cambio = { cashflow: [_fiadoCashflow(nueva, ab)].concat(p.data.cashflow || []) };
+    if (f.kind === "cel") cambio.celulares = (p.data.celulares || []).map(function (x) { return x.id === s.id ? nueva : x; });
+    else cambio.sales = (p.data.sales || []).map(function (x) { return x.id === s.id ? nueva : x; });
+    p.save(Object.assign({}, p.data, cambio));
+    p.notify(_ventaSaldo(nueva) <= 0 ? (f.customer || "El cliente") + " quedó a paz y salvo" : "Abono registrado · saldo " + fmt(_ventaSaldo(nueva)));
     p.onClose();
   };
-  return h(ModalWrap, { title: "Registrar abono — " + (s.customer || "Cliente"), onClose: p.onClose },
+  return h(ModalWrap, { title: "Registrar abono — " + (f.customer || "Cliente"), onClose: p.onClose },
     h("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+      h("div", { style: { fontSize: 13, color: T.muted } }, f.ref + " · " + f.desc),
       h("div", { style: { display: "flex", justifyContent: "space-between", padding: "12px 14px", borderRadius: 10, background: T.bg, border: "1px solid " + T.border, fontSize: 14 } },
         h("span", { style: { color: T.muted } }, "Saldo pendiente"), h("b", { style: { color: T.orange } }, fmt(saldo))),
       h(Field, { label: "Valor del abono", value: monto, onChange: setMonto, type: "number" }),
@@ -7529,73 +7600,81 @@ function AbonoFiadoModal(p) {
         h(Btn, { variant: "ghost", onClick: p.onClose }, "Cancelar"))));
 }
 
-// Registro de ventas fiadas: a quién se le fió, cuánto debe y cuándo vence.
+// Registro de fiados (ventas y celulares): a quién se le fió, cuánto debe y cuándo vence.
 function FiadosPanel(p) {
   var h = React.createElement;
   var data = p.data;
   var _a = useState(null), abonando = _a[0], setAbonando = _a[1];
   var _v = useState(false), verPagados = _v[0], setVerPagados = _v[1];
-  var fiados = (data.sales || []).filter(function (s) { return s.credito; });
-  var pendientes = fiados.filter(function (s) { return _ventaSaldo(s) > 0; }).sort(function (a, b) { return String(a.credito.vence).localeCompare(String(b.credito.vence)); });
-  var pagados = fiados.filter(function (s) { return _ventaSaldo(s) <= 0; }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
-  var totalDeben = pendientes.reduce(function (a, s) { return a + _ventaSaldo(s); }, 0);
-  var vencidos = pendientes.filter(function (s) { return _fiadoDias(s) < 0; });
+  var fiados = _fiadosTodos(data);
+  var pendientes = fiados.filter(function (f) { return _ventaSaldo(f.src) > 0; }).sort(function (a, b) { return String(a.credito.vence).localeCompare(String(b.credito.vence)); });
+  var pagados = fiados.filter(function (f) { return _ventaSaldo(f.src) <= 0; }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+  var totalDeben = pendientes.reduce(function (a, f) { return a + _ventaSaldo(f.src); }, 0);
+  var vencidos = pendientes.filter(function (f) { return _fiadoDias(f.src) < 0; });
   var clientes = {};
-  pendientes.forEach(function (s) { clientes[(s.customer || "").trim().toLowerCase()] = 1; });
+  pendientes.forEach(function (f) { clientes[(f.customer || "").trim().toLowerCase()] = 1; });
   var tienda = ((data.settings && data.settings.storeName) || "").trim() || "CLINICELL";
-  var waRecordar = function (s) {
-    var tel = String((s.credito && s.credito.telefono) || "").replace(/\D/g, "");
+  var waRecordar = function (f) {
+    var tel = String((f.credito && f.credito.telefono) || "").replace(/\D/g, "");
     if (!tel) return null;
-    var dias = _fiadoDias(s);
-    var msg = "Hola " + ((s.customer || "").split(" ")[0] || "") + ", le saluda *" + tienda + "*."
-      + "\n\nLe recordamos amablemente que tiene un saldo pendiente de *" + fmt(_ventaSaldo(s)) + "* por su compra del " + s.date + "."
-      + (dias < 0 ? "\nEl plazo venció el " + s.credito.vence + "." : "\nLa fecha de pago es el *" + s.credito.vence + "*.")
+    var dias = _fiadoDias(f.src);
+    var msg = "Hola " + ((f.customer || "").split(" ")[0] || "") + ", le saluda *" + tienda + "*."
+      + "\n\nLe recordamos amablemente que tiene un saldo pendiente de *" + fmt(_ventaSaldo(f.src)) + "* por su compra del " + f.date
+      + (f.kind === "cel" ? " (" + f.desc.split(" · ")[0] + ")" : "") + "."
+      + (dias < 0 ? "\nEl plazo venció el " + f.credito.vence + "." : "\nLa fecha de pago es el *" + f.credito.vence + "*.")
       + "\n\nPuede pagar en el local o por transferencia. ¡Muchas gracias!";
     return "https://wa.me/57" + tel + "?text=" + encodeURIComponent(msg);
+  };
+  var imprimir = function (f) {
+    showPrintModal(function (type, tw) {
+      if (f.kind === "cel") printCelularReceipt(f.src, tienda, type, tw);
+      else printReceipt(f.src, tienda, type, tw);
+    });
   };
   var kpi = function (l, v, c) {
     return h(Card, { key: l, style: { padding: "14px 18px", flex: "1 1 160px" } },
       h("div", { style: { fontSize: 13, color: T.muted, marginBottom: 4 } }, l),
       h("div", { style: { fontSize: 21, fontWeight: 800, color: c || T.text } }, v));
   };
-  var tarjeta = function (s) {
-    var saldo = _ventaSaldo(s), dias = _fiadoDias(s), pagado = saldo <= 0;
-    var estado = pagado ? ["Pagado" + (s.credito.pagadoEl ? " el " + s.credito.pagadoEl : ""), T.green]
+  var tarjeta = function (f) {
+    var s = f.src, saldo = _ventaSaldo(s), dias = _fiadoDias(s), pagado = saldo <= 0;
+    var estado = pagado ? ["Pagado" + (f.credito.pagadoEl ? " el " + f.credito.pagadoEl : ""), T.green]
       : dias < 0 ? ["Vencido hace " + (-dias) + " día" + (dias === -1 ? "" : "s"), T.red]
-      : dias === 0 ? ["Vence hoy", T.orange] : ["Vence en " + dias + " día" + (dias === 1 ? "" : "s") + " (" + s.credito.vence + ")", T.muted];
-    var wa = !pagado && waRecordar(s);
-    return h(Card, { key: s.id, style: { padding: "14px 16px", opacity: pagado ? 0.75 : 1 } },
+      : dias === 0 ? ["Vence hoy", T.orange] : ["Vence en " + dias + " día" + (dias === 1 ? "" : "s") + " (" + f.credito.vence + ")", T.muted];
+    var wa = !pagado && waRecordar(f);
+    return h(Card, { key: f.kind + f.id, style: { padding: "14px 16px", opacity: pagado ? 0.75 : 1 } },
       h("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" } },
         h("div", { style: { minWidth: 0 } },
-          h("div", { style: { fontSize: 15, fontWeight: 700, color: T.text } }, s.customer || "Cliente",
-            s.credito.telefono ? h("span", { style: { fontSize: 12.5, fontWeight: 500, color: T.muted, marginLeft: 8 } }, s.credito.telefono) : null),
+          h("div", { style: { fontSize: 15, fontWeight: 700, color: T.text } }, f.customer || "Cliente",
+            f.credito.telefono ? h("span", { style: { fontSize: 12.5, fontWeight: 500, color: T.muted, marginLeft: 8 } }, f.credito.telefono) : null),
           h("div", { style: { fontSize: 12.5, color: estado[1], fontWeight: 600, marginTop: 2 } }, estado[0]),
-          h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 4 } },
-            "Venta #" + s.id.slice(-6).toUpperCase() + " · " + s.date + " · " + (s.items || []).map(function (it) { return it.qty + "× " + it.name; }).join(", "))),
+          h("div", { style: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.muted, marginTop: 4, flexWrap: "wrap" } },
+            f.kind === "cel" && h("span", { style: { display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px", borderRadius: 999, background: T.accentDim, color: T.accent, fontWeight: 700, fontSize: 11 } },
+              h(Smartphone, { size: 11 }), "Celular"),
+            h("span", null, (f.kind === "cel" ? "" : f.ref + " · ") + f.date + " · " + f.desc))),
         h("div", { style: { textAlign: "right" } },
-          h("div", { style: { fontSize: 12, color: T.muted } }, "Total " + fmt(s.total) + " · Abonado " + fmt(_ventaAbonado(s))),
+          h("div", { style: { fontSize: 12, color: T.muted } }, "Total " + fmt(f.total) + " · Abonado " + fmt(_ventaAbonado(s))),
           h("div", { style: { fontSize: 19, fontWeight: 800, color: pagado ? T.green : T.orange, marginTop: 2 } }, pagado ? "Pagado" : "Debe " + fmt(saldo)))),
-      (s.credito.abonos || []).length > 0 && h("div", { style: { fontSize: 12, color: T.muted, marginTop: 8 } },
-        "Abonos: " + s.credito.abonos.map(function (a) { return a.fecha + " " + fmt(a.monto) + " (" + (a.medio || "") + ")"; }).join(" · ")),
+      (f.credito.abonos || []).length > 0 && h("div", { style: { fontSize: 12, color: T.muted, marginTop: 8 } },
+        "Abonos: " + f.credito.abonos.map(function (a) { return a.fecha + " " + fmt(a.monto) + " (" + (a.medio || "") + ")"; }).join(" · ")),
       h("div", { style: { display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" } },
-        !pagado && h(Btn, { small: true, onClick: function () { setAbonando(s); }, icon: h(Plus, { size: 13 }) }, "Registrar abono"),
+        !pagado && h(Btn, { small: true, onClick: function () { setAbonando(f); }, icon: h(Plus, { size: 13 }) }, "Registrar abono"),
         wa && h("a", { href: wa, target: "_blank", rel: "noopener noreferrer", style: { textDecoration: "none" } },
           h(Btn, { small: true, variant: "ghost", icon: h(MessageCircle, { size: 13 }) }, "Recordar por WhatsApp")),
-        h(Btn, { small: true, variant: "ghost", icon: h(Printer, { size: 13 }), onClick: function () {
-          showPrintModal(function (type, tw) { printReceipt(s, tienda, type, tw); }); } }, "Imprimir")));
+        h(Btn, { small: true, variant: "ghost", icon: h(Printer, { size: 13 }), onClick: function () { imprimir(f); } }, "Imprimir")));
   };
   return h("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
     h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap" } },
       kpi("Por cobrar en fiados", fmt(totalDeben), T.orange),
       kpi("Clientes que deben", String(Object.keys(clientes).length)),
       kpi("Vencidos", String(vencidos.length), vencidos.length ? T.red : T.text)),
-    pendientes.length === 0 && h(Card, { style: { padding: 30, textAlign: "center", color: T.muted } }, "No hay ventas fiadas pendientes. Para fiar, en Nueva Venta elige “Fiado / crédito”."),
+    pendientes.length === 0 && h(Card, { style: { padding: 30, textAlign: "center", color: T.muted } }, "No hay fiados pendientes. Para fiar, elige “Fiado / crédito” en Nueva Venta o al vender un celular."),
     pendientes.map(tarjeta),
     pagados.length > 0 && h("button", { onClick: function () { setVerPagados(!verPagados); },
       style: { alignSelf: "flex-start", background: "none", border: "none", color: T.accent, cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, padding: 4 } },
       (verPagados ? "Ocultar" : "Ver") + " fiados ya pagados (" + pagados.length + ")"),
     verPagados && pagados.map(tarjeta),
-    abonando && h(AbonoFiadoModal, { sale: abonando, data: data, save: p.save, notify: p.notify, onClose: function () { setAbonando(null); } }));
+    abonando && h(AbonoFiadoModal, { item: abonando, data: data, save: p.save, notify: p.notify, onClose: function () { setAbonando(null); } }));
 }
 
 function VentasView(_ref18) {
@@ -7728,7 +7807,7 @@ function VentasView(_ref18) {
     notify("Venta eliminada");
   };
   // Pestañas: todas las ventas | fiados y créditos
-  var nFiadosPend = sales.filter(function (s) { return _ventaSaldo(s) > 0; }).length;
+  var nFiadosPend = _fiadosTodos(data).filter(function (f) { return _ventaSaldo(f.src) > 0; }).length;
   var pestanas = /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 4, padding: 4, borderRadius: 12, background: T.surface, border: "1px solid " + T.border, marginBottom: 16, width: "fit-content", maxWidth: "100%" } },
     [["ventas", "Todas las ventas"], ["fiados", "Fiados y créditos" + (nFiadosPend ? " (" + nFiadosPend + ")" : "")]].map(function (t) {
       var on = vista === t[0];
@@ -8004,6 +8083,78 @@ function VentasView(_ref18) {
     notify: notify
   }));
 }
+// Buscador de clientes para Nueva Venta: muestra los que coinciden (con teléfono)
+// y permite registrar uno nuevo ahí mismo, sin salir de la venta.
+function ClientePicker(p) {
+  var h = React.createElement;
+  var clientes = p.data.customers || [];
+  var _o = useState(false), abierto = _o[0], setAbierto = _o[1];
+  var _c = useState(false), creando = _c[0], setCreando = _c[1];
+  var _n = useState(""), nuevoNombre = _n[0], setNuevoNombre = _n[1];
+  var _t = useState(""), nuevoTel = _t[0], setNuevoTel = _t[1];
+  var q = String(p.value || "").trim().toLowerCase();
+  var qTel = q.replace(/\D/g, "");
+  var lista = clientes.filter(function (c) {
+    if (!q) return true;
+    return (c.name || "").toLowerCase().indexOf(q) >= 0 || (qTel.length >= 3 && String(c.phone || "").replace(/\D/g, "").indexOf(qTel) >= 0);
+  }).slice(0, 8);
+  var exacto = clientes.find(function (c) { return (c.name || "").trim().toLowerCase() === q; });
+  var elegir = function (c) { p.onSelect(c); setAbierto(false); setCreando(false); };
+  var empezarNuevo = function () { setNuevoNombre(String(p.value || "").trim()); setNuevoTel(""); setCreando(true); setAbierto(false); };
+  var guardarNuevo = function () {
+    var nombre = nuevoNombre.trim();
+    if (!nombre) { p.notify("Escribe el nombre del cliente", "error"); return; }
+    var tel = nuevoTel.replace(/\D/g, "");
+    var repetido = clientes.find(function (c) { return (c.name || "").trim().toLowerCase() === nombre.toLowerCase() || (tel && String(c.phone || "").replace(/\D/g, "") === tel); });
+    if (repetido) { p.notify("Ese cliente ya existe: lo seleccioné"); elegir(repetido); return; }
+    var nc = { id: uid(), name: nombre, phone: tel, email: "", city: "", notes: "" };
+    p.save(Object.assign({}, p.data, { customers: clientes.concat([nc]) }));
+    p.notify("Cliente " + nombre + " registrado");
+    elegir(nc);
+  };
+  var fila = function (key, contenido, fn, destacado) {
+    return h("button", { key: key, type: "button", onMouseDown: function (e) { e.preventDefault(); }, onClick: fn,
+      style: { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px", border: "none", borderBottom: "1px solid " + T.border,
+        background: destacado ? T.accentDim : "transparent", color: T.text, cursor: "pointer", textAlign: "left", fontFamily: "inherit" } }, contenido);
+  };
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 5, position: "relative" } },
+    h("label", { style: { fontSize: 15, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, p.label),
+    h("div", { style: { position: "relative" } },
+      h("input", { value: p.value, placeholder: "Buscar o escribir el cliente", autoComplete: "off",
+        onChange: function (e) { p.onChange(e.target.value); setAbierto(true); setCreando(false); },
+        onFocus: function () { setAbierto(true); },
+        onBlur: function () { setTimeout(function () { setAbierto(false); }, 150); },
+        onKeyDown: function (e) { if (e.key === "Escape") setAbierto(false); if (e.key === "Enter" && abierto && lista[0]) { e.preventDefault(); elegir(lista[0]); } },
+        style: Object.assign({}, IS, { paddingRight: 34 }) }),
+      h("span", { style: { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: T.muted, display: "flex", pointerEvents: "none" } }, h(Search, { size: 15 })),
+      abierto && !creando && h("div", { className: "trp-scroll",
+        style: { position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50, maxHeight: 280, overflow: "auto",
+          background: T.surface, border: "1px solid " + T.border, borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.18)" } },
+        lista.map(function (c) {
+          return fila(c.id, h(React.Fragment, null,
+            h("span", { style: { width: 26, height: 26, borderRadius: "50%", background: T.bg, border: "1px solid " + T.border, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 12, fontWeight: 700 } },
+              (c.name || "?").charAt(0).toUpperCase()),
+            h("span", { style: { minWidth: 0 } },
+              h("span", { style: { display: "block", fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, c.name),
+              h("span", { style: { display: "block", fontSize: 12, color: T.muted } }, c.phone || "Sin teléfono"))), function () { elegir(c); }, false);
+        }),
+        q && !exacto && fila("nuevo", h(React.Fragment, null,
+          h("span", { style: { width: 26, height: 26, borderRadius: "50%", background: T.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, h(Plus, { size: 14 })),
+          h("span", { style: { fontSize: 13.5, fontWeight: 700, color: T.accent } }, "Registrar «" + String(p.value).trim() + "» como cliente nuevo")), empezarNuevo, lista.length === 0),
+        !q && clientes.length === 0 && h("div", { style: { padding: 12, fontSize: 13, color: T.muted } }, "Aún no hay clientes. Escribe un nombre para registrarlo."),
+        q && lista.length === 0 && h("div", { style: { padding: "8px 12px", fontSize: 12.5, color: T.muted } }, "No hay clientes con ese nombre."))),
+    exacto && !creando && h("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: T.green, fontWeight: 600 } },
+      h(CheckCircle, { size: 13 }), "Cliente registrado" + (exacto.phone ? " · " + exacto.phone : "")),
+    creando && h("div", { style: { display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 10, border: "1px solid " + T.accent, background: T.accentDim } },
+      h("div", { style: { fontSize: 13, fontWeight: 700, color: T.text } }, "Nuevo cliente"),
+      h("input", { value: nuevoNombre, placeholder: "Nombre completo", onChange: function (e) { setNuevoNombre(e.target.value); }, style: IS }),
+      h("input", { value: nuevoTel, placeholder: "Teléfono (WhatsApp)", inputMode: "tel", autoFocus: true, onChange: function (e) { setNuevoTel(e.target.value); },
+        onKeyDown: function (e) { if (e.key === "Enter") guardarNuevo(); }, style: IS }),
+      h("div", { style: { display: "flex", gap: 6 } },
+        h(Btn, { small: true, onClick: guardarNuevo, icon: h(Check, { size: 13 }) }, "Guardar cliente"),
+        h(Btn, { small: true, variant: "ghost", onClick: function () { setCreando(false); } }, "Cancelar"))));
+}
+
 function SaleModal(_ref19) {
   var verCostos = _ref19.verCostos !== false;
   var setModal = _ref19.setModal,
@@ -8051,7 +8202,9 @@ function SaleModal(_ref19) {
   var elegirCliente = function (v) {
     setCustomer(v);
     var c = (data.customers || []).find(function (x) { return (x.name || "").trim().toLowerCase() === String(v).trim().toLowerCase(); });
-    if (c && c.phone && !telCredito) setTelCredito(String(c.phone));
+    if (c) setTelCredito(String(c.phone || ""));
+    // Si se cambia a otro nombre, no dejar el teléfono del cliente anterior.
+    else if (telCredito && (data.customers || []).some(function (x) { return String(x.phone || "") === telCredito; })) setTelCredito("");
   };
 
   // All sellable items = inventory with stock > 0
@@ -8424,11 +8577,13 @@ function SaleModal(_ref19) {
       flexDirection: "column",
       gap: 12
     }
-  }, /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 5 } },
-    /*#__PURE__*/React.createElement("label", { style: { fontSize: 15, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, esCredito ? "Cliente *" : "Cliente (opcional)"),
-    /*#__PURE__*/React.createElement("input", { list: "sale-clientes", value: customer, placeholder: "Nombre del cliente", onChange: function (e) { elegirCliente(e.target.value); }, style: IS }),
-    /*#__PURE__*/React.createElement("datalist", { id: "sale-clientes" }, (data.customers || []).slice(0, 300).map(function (c) { return /*#__PURE__*/React.createElement("option", { key: c.id, value: c.name }); }))
-  ), /*#__PURE__*/React.createElement("div", { style: { display: "flex", padding: 3, borderRadius: 10, background: T.bg, border: "1px solid " + T.border, gap: 3 } },
+  }, /*#__PURE__*/React.createElement(ClientePicker, {
+    label: esCredito ? "Cliente *" : "Cliente (opcional)",
+    data: data, save: save, notify: notify,
+    value: customer,
+    onChange: elegirCliente,
+    onSelect: function (c) { setCustomer(c.name || ""); setTelCredito(String(c.phone || "")); }
+  }), /*#__PURE__*/React.createElement("div", { style: { display: "flex", padding: 3, borderRadius: 10, background: T.bg, border: "1px solid " + T.border, gap: 3 } },
     [[false, "De contado"], [true, "Fiado / crédito"]].map(function (op) {
       var on = esCredito === op[0];
       return /*#__PURE__*/React.createElement("button", { key: op[1], type: "button", onClick: function () { setEsCredito(op[0]); },
@@ -9131,7 +9286,7 @@ function FacturaModal(_refFM) {
           }
           // se quitó de la factura → vuelve a quedar disponible
           return Object.assign({}, c, {
-            estado: "Disponible", vendidoA: "", vendidoTel: "", precioVenta: "", fechaVenta: ""
+            estado: "Disponible", vendidoA: "", vendidoTel: "", precioVenta: "", fechaVenta: "", credito: null
           });
         });
       }
@@ -11050,7 +11205,7 @@ function _repCalc(data, desde, hasta) {
 
   // Las ventas fiadas no cuentan aquí: sus abonos entran como ingresos de Caja.
   var tv = ventas.reduce(function (a, s) { return a + _ventaContado(s); }, 0);
-  var tcel = celVentas.reduce(function (a, c) { return a + (Number(c.precioVenta) || 0); }, 0);
+  var tcel = celVentas.reduce(function (a, c) { return a + (c.credito ? 0 : (Number(c.precioVenta) || 0)); }, 0);
   var tr = abonos.filter(function (x) { return x.repair.paid; }).reduce(function (a, x) { return a + x.amount; }, 0);
   var tab = abonos.filter(function (x) { return !x.repair.paid; }).reduce(function (a, x) { return a + x.amount; }, 0);
   var ti = ingresos.reduce(function (a, e) { return a + (Number(e.amount) || 0); }, 0);
@@ -11235,10 +11390,10 @@ function ReporteView(_props) {
   //    caja) + los equipos que entraron a reparación (informativo, signo 0) ──
   var movsTodos = [];
   res.ventas.forEach(function (x) {
-    movsTodos.push({ date: x.date, tipo: "Venta", detalle: (x.items || []).map(function (it) { return it.name + " x" + it.qty; }).join(", ") || "Venta", cliente: x.customer || "", monto: Number(x.total) || 0, signo: 1 });
+    movsTodos.push({ date: x.date, tipo: x.credito ? "Venta fiada" : "Venta", detalle: (x.items || []).map(function (it) { return it.name + " x" + it.qty; }).join(", ") || "Venta", cliente: x.customer || "", monto: Number(x.total) || 0, signo: x.credito ? 0 : 1 }); // fiada: el dinero entra con cada abono
   });
   res.celVentas.forEach(function (c) {
-    movsTodos.push({ date: c.fechaVenta, tipo: "Celular vendido", detalle: ((c.marca || "") + " " + (c.modelo || "")).trim() || "Celular", cliente: c.vendidoA || "", monto: Number(c.precioVenta) || 0, signo: 1 });
+    movsTodos.push({ date: c.fechaVenta, tipo: c.credito ? "Celular fiado" : "Celular vendido", detalle: ((c.marca || "") + " " + (c.modelo || "")).trim() || "Celular", cliente: c.vendidoA || "", monto: Number(c.precioVenta) || 0, signo: c.credito ? 0 : 1 });
   });
   res.abonos.forEach(function (a) {
     movsTodos.push({ date: a.date, tipo: a.tipo === "Pago final" || a.tipo === "Pago" ? "Pago reparación" : "Abono reparación", detalle: (a.repair.device || "Reparación") + (a.tipo && a.tipo !== "Abono" && a.tipo !== "Pago" && a.tipo !== "Pago final" ? " — " + a.tipo : ""), cliente: a.repair.customer || "", monto: a.amount, signo: 1 });
@@ -11887,9 +12042,10 @@ function _ganLineas(data, desde, hasta) {
       nombre: [c.marca, c.modelo, c.capacidad].filter(Boolean).join(" ") || "Celular", qty: 1, costoUnit: c.costo, venta: c.precioVenta });
   });
 
-  // Reparaciones: cuentan cuando quedan pagadas, en la fecha de pago/entrega.
+  // Reparaciones: cuentan al entregarse o al quedar pagadas, en la fecha de entrega/pago.
   (data.repairs || []).forEach(function (r) {
-    if (!r || !r.paid || r.status === "Cancelado") return;
+    // Se gana al hacer la reparación: cuenta al entregarla (o al quedar pagada), igual que una venta fiada cuenta al venderse.
+    if (!r || r.status === "Cancelado" || !(r.paid || r.status === "Entregado")) return;
     var f = r.deliveryDate || r.date;
     if (!inR(f)) return;
     var gr = _ganReparacion(data, r);
@@ -11932,7 +12088,8 @@ function _ganVenta(data, s) {
 }
 
 // Línea "Compra $X · Ganas $Y" para las tarjetas de Productos y Celulares.
-function _ganCostoLinea(costo, precio, extraStyle) {
+// etiqueta: "Ganas" (al vender), "Ganarías" (aún sin vender) o "Ganaste" (ya vendido).
+function _ganCostoLinea(costo, precio, extraStyle, etiqueta) {
   var st = Object.assign({ fontSize: 12.5, color: T.muted, marginTop: -8, marginBottom: 12, lineHeight: 1.4 }, extraStyle || {});
   if (!(costo > 0)) {
     return React.createElement("div", { style: st }, React.createElement("span", { style: { color: T.orange, fontWeight: 700 } }, "Sin precio de compra"));
@@ -11940,7 +12097,7 @@ function _ganCostoLinea(costo, precio, extraStyle) {
   var g = (Number(precio) || 0) - costo;
   return React.createElement("div", { style: st },
     "Compra ", React.createElement("b", { style: { color: T.text } }, fmt(costo)),
-    " · Ganas ", React.createElement("b", { style: { color: g >= 0 ? T.green : T.red } }, fmt(g)));
+    " · " + (etiqueta || "Ganas") + " ", React.createElement("b", { style: { color: g >= 0 ? T.green : T.red } }, fmt(g)));
 }
 
 // Totales del período y agrupación por producto (de mayor a menor ganancia).
@@ -12024,7 +12181,7 @@ function GananciasView(_props) {
       filas || "<tr><td colspan='5' style='text-align:center;padding:24px;color:#a1a1a1'>No hay ventas en este período</td></tr>",
       res.productos.length ? "<tr><td style='" + td + ";font-weight:800'>TOTAL</td><td style='" + tdr + ";font-weight:800'>" + res.unidades + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.costo) + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.venta) + "</td><td style='" + tdr + ";font-weight:800'>" + fmt(res.ganancia) + "</td></tr>" : "",
       "</tbody></table>",
-      "<p style='font-size:11px;color:#a1a1a1;margin-top:14px'>Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA), celulares vendidos y reparaciones pagadas (cobrado − repuestos).</p>",
+      "<p style='font-size:11px;color:#a1a1a1;margin-top:14px'>Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA), celulares vendidos y reparaciones entregadas o pagadas (cobrado − repuestos).</p>",
       "<p style='text-align:center;margin-top:16px;color:#a1a1a1;font-size:11px'>Generado el " + new Date().toLocaleString("es-CO") + "</p>",
       "<div class='no-print' style='text-align:center;margin-top:18px'><button onclick='window.print()' style='padding:10px 28px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700'>Imprimir</button></div>",
       "</body></html>"
@@ -12077,7 +12234,7 @@ function GananciasView(_props) {
   var listaProductos = res.productos.length === 0 ? vacio : res.productos.map(function (p, i) {
     if (String(p.nombre).indexOf("Reparaciones · ") === 0) {
       return fila("p" + i, p.nombre, [
-        p.qty + " reparación(es) pagada(s)",
+        p.qty + " reparación(es) entregada(s) o pagada(s)",
         "Repuestos " + fmt(p.costo) + " · Cobrado " + fmt(p.venta)
       ], p.ganancia, false);
     }
@@ -12134,7 +12291,7 @@ function GananciasView(_props) {
       "Vendiste ", h("b", { style: { color: T.text } }, fmt(res.venta)), " − te costó ", h("b", { style: { color: T.red } }, fmt(res.costo)),
       " = ganaste ", h("b", { style: { color: colGan } }, fmt(res.ganancia))),
     h("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 } },
-      [["Ganancia en ventas", res.ganVentas, "Ventas, facturas y celulares"], ["Ganancia en reparaciones", res.ganReparaciones, res.nReparaciones + " reparación(es) pagada(s)"]].map(function (x) {
+      [["Ganancia en ventas", res.ganVentas, "Ventas, facturas y celulares"], ["Ganancia en reparaciones", res.ganReparaciones, res.nReparaciones + " reparación(es) entregada(s) o pagada(s)"]].map(function (x) {
         return h(Card, { key: x[0], style: { padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 } },
           h("div", null,
             h("div", { style: { fontSize: 13, fontWeight: 700, color: T.text } }, x[0]),
@@ -12153,7 +12310,7 @@ function GananciasView(_props) {
       tabBtn("productos", "Por producto"), tabBtn("ventas", "Cada venta")),
     h(Card, { style: { padding: 0, overflow: "hidden" } }, tab === "productos" ? listaProductos : listaVentas),
     h("div", { style: { fontSize: 11.5, color: T.muted, lineHeight: 1.5 } },
-      "Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA), celulares vendidos y reparaciones pagadas (lo cobrado menos los repuestos). No incluye gastos del local.")
+      "Ganancia = precio de venta − precio de compra. Incluye ventas, facturas (sin IVA), celulares vendidos y reparaciones entregadas o pagadas (lo cobrado menos los repuestos). No incluye gastos del local.")
   );
 }
 
@@ -14490,6 +14647,10 @@ function PorCobrarTab(props) {
   (data.facturas || []).forEach(function (f) {
     var s = typeof _facturaSaldo === "function" ? _facturaSaldo(f) : 0;
     if (s > 0) deudas.push({ tipo: "Factura", ref: "Factura " + (f.numero || ""), customer: (f.cliente && f.cliente.nombre) || "Cliente", phone: (f.cliente && (f.cliente.telefono || f.cliente.phone)) || "", saldo: s, fecha: f.date || f.fecha });
+  });
+  (data.celulares || []).forEach(function (c) {
+    var cv = c.estado === "Vendido" ? _ventaSaldo(c) : 0;
+    if (cv > 0) deudas.push({ tipo: "Fiado", ref: "Celular " + [c.marca, c.modelo].filter(Boolean).join(" ") + (c.credito.vence ? " (vence " + c.credito.vence + ")" : ""), customer: c.vendidoA || "Cliente", phone: (c.credito && c.credito.telefono) || c.vendidoTel || "", saldo: cv, fecha: c.fechaVenta });
   });
   (data.sales || []).forEach(function (s) {
     var sv = _ventaSaldo(s);
@@ -19073,7 +19234,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.6";
+var APP_VERSION = "1.6.7";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
