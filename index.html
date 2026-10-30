@@ -1079,24 +1079,30 @@ var DEFAULT_SETTINGS = {
 };
 var ACCENT_PRESETS = ["#2563EB", "#16A34A", "#DC2626", "#D97706", "#0D9488", "#7C3AED", "#000000", "#4B5563"];
 var STATUSES = ["Recibido", "Diagnóstico", "En Reparación", "Listo", "Entregado", "Cancelado"];
-function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trackUrl, storeName) {
+// trackUrl = enlace de calificación (al entregar); seguimientoUrl = enlace para seguir la reparación.
+function buildWAMessage(customer, device, status, paid, cost, warrantyDays, trackUrl, storeName, seguimientoUrl) {
   var nombre = customer ? customer.split(" ")[0] : "cliente";
   var equipo = device || "su equipo";
   var tienda = (storeName && String(storeName).trim()) || "CLINICELL";
   var pagado = paid ? "PAGADO" : "PENDIENTE DE PAGO";
   var costoInfo = (cost && Number(cost) > 0) ? ("\nValor de la reparacion: *$" + Number(cost).toLocaleString("es-CO") + "*") : "";
   var wDays = (warrantyDays === 0 || warrantyDays) ? Number(warrantyDays) : 15;
+  // Enlace de rastreo: va arriba para que WhatsApp no lo esconda en "Leer más".
+  var rastreo = seguimientoUrl ? ("\n\n*Siga el estado de su equipo aqui:*\n" + seguimientoUrl) : "";
   var msg = "";
   if (status === "Recibido") {
     msg = "Hola " + nombre + ", le confirmamos que hemos recibido su equipo *" + equipo + "* en *" + tienda + "*."
+        + rastreo
         + "\n\nEn breve comenzaremos a revisarlo y le notificaremos el diagnostico."
         + "\n\nGracias por confiar en nosotros.";
   } else if (status === "Diagn\u00f3stico") {
     msg = "Hola " + nombre + ", su equipo *" + equipo + "* se encuentra en *diagnostico* en *" + tienda + "*."
+        + rastreo
         + "\n\nNuestros tecnicos lo estan revisando. Pronto le informaremos el resultado y el costo de la reparacion."
         + "\n\nGracias por su paciencia.";
   } else if (status === "En Reparaci\u00f3n") {
     msg = "Hola " + nombre + ", le informamos que su equipo *" + equipo + "* esta siendo *reparado* en *" + tienda + "*."
+        + rastreo
         + "\n\nEn cuanto este listo le avisaremos de inmediato."
         + "\n\nGracias por su paciencia y confianza.";
   } else if (status === "Listo") {
@@ -2655,7 +2661,7 @@ function RepairsView(_ref9) {
     }, /*#__PURE__*/React.createElement(Edit2, {
       size: 14
     })), r.phone && /*#__PURE__*/React.createElement("a", {
-      href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=" + encodeURIComponent(buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildRatingUrl(clientId, r) : "", (data.settings && data.settings.storeName) || "")),
+      href: "https://wa.me/57" + (r.phone||"").replace(/\D/g,"") + "?text=" + encodeURIComponent(buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildRatingUrl(clientId, r) : "", (data.settings && data.settings.storeName) || "", (clientId && r.id) ? _buildTrackUrl(clientId, r) : "")),
       target: "_blank",
       onClick: function(e){ e.stopPropagation(); },
       title: "Contactar por WhatsApp",
@@ -3180,7 +3186,7 @@ function RepairModal(_ref0) {
         }, "+"),
         // Botón WhatsApp si hay teléfono
         form.phone && /*#__PURE__*/React.createElement("a", {
-          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text="+encodeURIComponent(buildWAMessage(form.customer, form.device, form.status, form.paid, form.cost, form.warrantyDays, (clientId && form.id) ? _buildRatingUrl(clientId, form) : "", (data.settings && data.settings.storeName) || "")),
+          href:"https://wa.me/57"+form.phone.replace(/\D/g,"")+"?text="+encodeURIComponent(buildWAMessage(form.customer, form.device, form.status, form.paid, form.cost, form.warrantyDays, (clientId && form.id) ? _buildRatingUrl(clientId, form) : "", (data.settings && data.settings.storeName) || "", (clientId && form.id) ? _buildTrackUrl(clientId, form) : "")),
           target:"_blank",
           title:"Contactar por WhatsApp",
           style:{ width:42, height:42, background:"#1A1A1A", color:"#fff", border:"none", borderRadius:12, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none", flexShrink:0 }
@@ -6785,7 +6791,7 @@ function printRepair(r) {
 // ── COMPARTIR RECIBO POR WHATSAPP (imagen + texto) ─────────────────────────
 function shareRepairReceipt(r, storeName, clientId, notify) {
   var orderId = (r.id || "").slice(-6).toUpperCase();
-  var caption = buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildRatingUrl(clientId, r) : "", storeName);
+  var caption = buildWAMessage(r.customer, r.device, r.status, r.paid, r.cost, r.warrantyDays, (clientId && r.id) ? _buildRatingUrl(clientId, r) : "", storeName, (clientId && r.id) ? _buildTrackUrl(clientId, r) : "");
   var waNum = (r.phone || "").replace(/\D/g, "");
   var openWA = function () {
     window.open("https://wa.me/" + (waNum ? "57" + waNum : "") + "?text=" + encodeURIComponent(caption), "_blank");
@@ -18755,7 +18761,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.2";
+var APP_VERSION = "1.6.3";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

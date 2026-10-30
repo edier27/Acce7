@@ -1,5 +1,5 @@
 {
-  "version": "1.6.2",
-  "notes": "Estilos Windows: sin botones flotantes; el Asistente IA y el Catálogo PDF están en la barra y en las notificaciones.",
+  "version": "1.6.3",
+  "notes": "El mensaje de WhatsApp al recibir el equipo (y en diagnóstico o reparación) incluye el enlace para que el cliente siga su reparación.",
   "url": "https://edier27.github.io/Acce7/"
 }
