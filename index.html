@@ -1859,7 +1859,7 @@ function DashboardView(_ref8) {
     var _stDK = _stD.getFullYear() + "-" + String(_stD.getMonth() + 1).padStart(2, "0") + "-" + String(_stD.getDate()).padStart(2, "0");
     var _stReps = (data.repairs || []).filter(function (r) { return r.date === _stDK; }).length;
     var _stIng = (data.repairs || []).filter(function (r) { return r.date === _stDK && r.paid; }).reduce(function (a, r) { return a + (Number(r.cost) || 0); }, 0)
-      + (data.sales || []).filter(function (s) { return s.date === _stDK; }).reduce(function (a, s) { return a + (Number(s.total) || 0); }, 0);
+      + (data.sales || []).filter(function (s) { return s.date === _stDK; }).reduce(function (a, s) { return a + _ventaContado(s); }, 0);
     _serieActivasTop.push(_stReps);
     _serieIngresosTop.push(_stIng);
   }
@@ -1963,7 +1963,7 @@ function DashboardView(_ref8) {
     var _ingresoDia = function(day) {
       var _r = (data.repairs || []).filter(function(x) { return x.date === day && x.paid; }).reduce(function(a, x) { return a + (Number(x.cost) || 0); }, 0);
       var _adv = (data.repairs || []).reduce(function(a, x) { return a + (x.advances || []).filter(function(ad) { return ad.date === day; }).reduce(function(s, ad) { return s + (Number(ad.amount) || 0); }, 0); }, 0);
-      var _ventas = (data.sales || []).filter(function(s) { return s.date === day; }).reduce(function(a, s) { return a + (Number(s.total) || 0); }, 0);
+      var _ventas = (data.sales || []).filter(function(s) { return s.date === day; }).reduce(function(a, s) { return a + _ventaContado(s); }, 0);
       var _ing = (data.cashflow || []).filter(function(e) { return e.date === day && e.type === "ingreso"; }).reduce(function(a, e) { return a + (Number(e.amount) || 0); }, 0);
       return _r + _adv + _ventas + _ing;
     };
@@ -1988,7 +1988,7 @@ function DashboardView(_ref8) {
     var _totalMes = function(mesKey) {
       var _ingR = (data.repairs || []).filter(function(x) { return x.date && x.date.indexOf(mesKey) === 0 && x.paid; }).reduce(function(a, x) { return a + (Number(x.cost) || 0); }, 0);
       var _advR = (data.repairs || []).reduce(function(a, x) { return a + (x.advances || []).filter(function(ad) { return ad.date && ad.date.indexOf(mesKey) === 0; }).reduce(function(s, ad) { return s + (Number(ad.amount) || 0); }, 0); }, 0);
-      var _ventasM = (data.sales || []).filter(function(s) { return s.date && s.date.indexOf(mesKey) === 0; }).reduce(function(a, s) { return a + (Number(s.total) || 0); }, 0);
+      var _ventasM = (data.sales || []).filter(function(s) { return s.date && s.date.indexOf(mesKey) === 0; }).reduce(function(a, s) { return a + _ventaContado(s); }, 0);
       var _ingM = (data.cashflow || []).filter(function(e) { return e.date && e.date.indexOf(mesKey) === 0 && e.type === "ingreso"; }).reduce(function(a, e) { return a + (Number(e.amount) || 0); }, 0);
       var _completadasM = (data.repairs || []).filter(function(x) { var _fd = x.deliveryDate || x.date; return x.status === "Entregado" && _fd && _fd.indexOf(mesKey) === 0; }).length;
       var _ingresoTotal = _ingR + _advR + _ventasM + _ingM;
@@ -7040,6 +7040,7 @@ function printReceipt(sale) {
       "<div class=\"dash\"></div>"+
       items+
       "<div class=\"total-row\"><span>TOTAL</span><span>"+fmtCOP(sale.total)+"</span></div>"+
+      (sale.credito?"<div style=\"margin-top:6px;font-size:10px\"><b>VENTA A CRÉDITO</b><br>Abonado: "+fmtCOP(_ventaAbonado(sale))+"<br><b>Saldo: "+fmtCOP(_ventaSaldo(sale))+"</b><br>Paga antes del: "+_escHtml(sale.credito.vence||"")+"</div>":"")+
       (sale.customer?"<div style=\"margin-top:6px;font-size:10px\"><b>Cliente:</b> "+_escHtml(sale.customer)+"</div>":"")+
       "<div class=\"dash\"></div>"+
       "<div class=\"c small\">Gracias por su compra</div>"+
@@ -7081,6 +7082,7 @@ function printReceipt(sale) {
       "<div class=\"meta\"><div><span>Forma de pago</span><strong>"+_escHtml(sale.payment)+"</strong></div>"+(sale.customer?"<div><span>Cliente</span><strong>"+_escHtml(sale.customer)+"</strong></div>":"")+"</div>"+
       "<table class=\"items\"><thead><tr><th>Producto</th><th>Cant</th><th>Precio</th><th>Total</th></tr></thead><tbody>"+items+"</tbody></table>"+
       "<div class=\"total-box\"><div class=\"total-inner\"><div class=\"row\"><span>TOTAL</span><span>"+fmtCOP(sale.total)+"</span></div></div></div>"+
+      (sale.credito?"<div style=\"margin:-8px 0 20px;padding:12px 16px;border:1px dashed #d97706;border-radius:10px;font-size:13px;color:#333\"><b>Venta a crédito</b> · Abonado: "+fmtCOP(_ventaAbonado(sale))+" · <b>Saldo pendiente: "+fmtCOP(_ventaSaldo(sale))+"</b> · Paga antes del "+_escHtml(sale.credito.vence||"")+"</div>":"")+
       (sale.notes?"<p style=\"font-size:13px;color:#666;margin-bottom:20px\"><strong>Nota:</strong> "+_escHtml(sale.notes)+"</p>":"")+
       "<div class=\"footer\">¡Gracias por su compra!</div>"+
       "<div style=\"text-align:center;margin-top:24px\"><button onclick=\"window.print();window.close()\" style=\"padding:12px 32px;background:#1A1A1A;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;font-family:inherit\">Imprimir</button></div>"+
@@ -7470,6 +7472,132 @@ function shareFacturaWA(f, cfg, notify) {
   window.open("https://wa.me/" + (tel.length === 10 ? "57" + tel : tel) + "?text=" + encodeURIComponent(msg), "_blank");
 }
 
+// ─── VENTAS A CRÉDITO / FIADO ───────────────────────────────────────────────
+// La venta fiada guarda sale.credito = { dias, vence, telefono, abonos:[{id, fecha, monto, medio, nota}], pagadoEl }.
+// No cuenta como dinero en caja el día de la venta: cada abono entra a Caja como un
+// ingreso (cashflow con origen "fiado" y saleId) el día en que se recibe.
+function _ventaAbonado(s) {
+  return ((s && s.credito && s.credito.abonos) || []).reduce(function (a, x) { return a + (Number(x.monto) || 0); }, 0);
+}
+function _ventaSaldo(s) {
+  return s && s.credito ? Math.max(0, (Number(s.total) || 0) - _ventaAbonado(s)) : 0;
+}
+// Lo que entra a caja el día de la venta (las ventas fiadas entran por sus abonos).
+function _ventaContado(s) {
+  return s && s.credito ? 0 : (Number(s && s.total) || 0);
+}
+function _fiadoCashflow(sale, ab) {
+  return {
+    id: "ing_fiado_" + ab.id, type: "ingreso", amount: Number(ab.monto) || 0,
+    description: "Abono fiado — " + (sale.customer || "Cliente") + " (venta #" + String(sale.id || "").slice(-6).toUpperCase() + ")",
+    category: "Ventas", date: ab.fecha, notes: "Generado desde Ventas (fiado) · " + (ab.medio || "Efectivo"),
+    saleId: sale.id, origen: "fiado", payment: ab.medio || "Efectivo"
+  };
+}
+function _fiadoDias(s) {
+  return s && s.credito && s.credito.vence ? _isoDiff(getHoyColombia(), s.credito.vence) : 0;
+}
+
+// Ventana para registrar un abono a una venta fiada.
+function AbonoFiadoModal(p) {
+  var h = React.createElement;
+  var s = p.sale, saldo = _ventaSaldo(s);
+  var _m = useState(String(saldo)), monto = _m[0], setMonto = _m[1];
+  var _d = useState("Efectivo"), medio = _d[0], setMedio = _d[1];
+  var guardar = function () {
+    var m = Math.min(Number(monto) || 0, saldo);
+    if (!(m > 0)) { p.notify("Escribe el valor del abono", "error"); return; }
+    var ab = { id: uid(), fecha: getHoyColombia(), monto: m, medio: medio, nota: "Abono" };
+    var cred = Object.assign({}, s.credito, { abonos: (s.credito.abonos || []).concat([ab]) });
+    var nueva = Object.assign({}, s, { credito: cred });
+    if (_ventaSaldo(nueva) <= 0) nueva.credito.pagadoEl = getHoyColombia();
+    p.save(Object.assign({}, p.data, {
+      sales: (p.data.sales || []).map(function (x) { return x.id === s.id ? nueva : x; }),
+      cashflow: [_fiadoCashflow(nueva, ab)].concat(p.data.cashflow || [])
+    }));
+    p.notify(_ventaSaldo(nueva) <= 0 ? s.customer + " quedó a paz y salvo" : "Abono registrado · saldo " + fmt(_ventaSaldo(nueva)));
+    p.onClose();
+  };
+  return h(ModalWrap, { title: "Registrar abono — " + (s.customer || "Cliente"), onClose: p.onClose },
+    h("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+      h("div", { style: { display: "flex", justifyContent: "space-between", padding: "12px 14px", borderRadius: 10, background: T.bg, border: "1px solid " + T.border, fontSize: 14 } },
+        h("span", { style: { color: T.muted } }, "Saldo pendiente"), h("b", { style: { color: T.orange } }, fmt(saldo))),
+      h(Field, { label: "Valor del abono", value: monto, onChange: setMonto, type: "number" }),
+      h(Field, { label: "Medio de pago", value: medio, onChange: setMedio, options: PAYMENT_METHODS }),
+      h("div", { style: { display: "flex", gap: 8 } },
+        h(Btn, { onClick: guardar, icon: h(Check, { size: 15 }) }, "Registrar abono"),
+        h(Btn, { variant: "ghost", onClick: p.onClose }, "Cancelar"))));
+}
+
+// Registro de ventas fiadas: a quién se le fió, cuánto debe y cuándo vence.
+function FiadosPanel(p) {
+  var h = React.createElement;
+  var data = p.data;
+  var _a = useState(null), abonando = _a[0], setAbonando = _a[1];
+  var _v = useState(false), verPagados = _v[0], setVerPagados = _v[1];
+  var fiados = (data.sales || []).filter(function (s) { return s.credito; });
+  var pendientes = fiados.filter(function (s) { return _ventaSaldo(s) > 0; }).sort(function (a, b) { return String(a.credito.vence).localeCompare(String(b.credito.vence)); });
+  var pagados = fiados.filter(function (s) { return _ventaSaldo(s) <= 0; }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+  var totalDeben = pendientes.reduce(function (a, s) { return a + _ventaSaldo(s); }, 0);
+  var vencidos = pendientes.filter(function (s) { return _fiadoDias(s) < 0; });
+  var clientes = {};
+  pendientes.forEach(function (s) { clientes[(s.customer || "").trim().toLowerCase()] = 1; });
+  var tienda = ((data.settings && data.settings.storeName) || "").trim() || "CLINICELL";
+  var waRecordar = function (s) {
+    var tel = String((s.credito && s.credito.telefono) || "").replace(/\D/g, "");
+    if (!tel) return null;
+    var dias = _fiadoDias(s);
+    var msg = "Hola " + ((s.customer || "").split(" ")[0] || "") + ", le saluda *" + tienda + "*."
+      + "\n\nLe recordamos amablemente que tiene un saldo pendiente de *" + fmt(_ventaSaldo(s)) + "* por su compra del " + s.date + "."
+      + (dias < 0 ? "\nEl plazo venció el " + s.credito.vence + "." : "\nLa fecha de pago es el *" + s.credito.vence + "*.")
+      + "\n\nPuede pagar en el local o por transferencia. ¡Muchas gracias!";
+    return "https://wa.me/57" + tel + "?text=" + encodeURIComponent(msg);
+  };
+  var kpi = function (l, v, c) {
+    return h(Card, { key: l, style: { padding: "14px 18px", flex: "1 1 160px" } },
+      h("div", { style: { fontSize: 13, color: T.muted, marginBottom: 4 } }, l),
+      h("div", { style: { fontSize: 21, fontWeight: 800, color: c || T.text } }, v));
+  };
+  var tarjeta = function (s) {
+    var saldo = _ventaSaldo(s), dias = _fiadoDias(s), pagado = saldo <= 0;
+    var estado = pagado ? ["Pagado" + (s.credito.pagadoEl ? " el " + s.credito.pagadoEl : ""), T.green]
+      : dias < 0 ? ["Vencido hace " + (-dias) + " día" + (dias === -1 ? "" : "s"), T.red]
+      : dias === 0 ? ["Vence hoy", T.orange] : ["Vence en " + dias + " día" + (dias === 1 ? "" : "s") + " (" + s.credito.vence + ")", T.muted];
+    var wa = !pagado && waRecordar(s);
+    return h(Card, { key: s.id, style: { padding: "14px 16px", opacity: pagado ? 0.75 : 1 } },
+      h("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" } },
+        h("div", { style: { minWidth: 0 } },
+          h("div", { style: { fontSize: 15, fontWeight: 700, color: T.text } }, s.customer || "Cliente",
+            s.credito.telefono ? h("span", { style: { fontSize: 12.5, fontWeight: 500, color: T.muted, marginLeft: 8 } }, s.credito.telefono) : null),
+          h("div", { style: { fontSize: 12.5, color: estado[1], fontWeight: 600, marginTop: 2 } }, estado[0]),
+          h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 4 } },
+            "Venta #" + s.id.slice(-6).toUpperCase() + " · " + s.date + " · " + (s.items || []).map(function (it) { return it.qty + "× " + it.name; }).join(", "))),
+        h("div", { style: { textAlign: "right" } },
+          h("div", { style: { fontSize: 12, color: T.muted } }, "Total " + fmt(s.total) + " · Abonado " + fmt(_ventaAbonado(s))),
+          h("div", { style: { fontSize: 19, fontWeight: 800, color: pagado ? T.green : T.orange, marginTop: 2 } }, pagado ? "Pagado" : "Debe " + fmt(saldo)))),
+      (s.credito.abonos || []).length > 0 && h("div", { style: { fontSize: 12, color: T.muted, marginTop: 8 } },
+        "Abonos: " + s.credito.abonos.map(function (a) { return a.fecha + " " + fmt(a.monto) + " (" + (a.medio || "") + ")"; }).join(" · ")),
+      h("div", { style: { display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" } },
+        !pagado && h(Btn, { small: true, onClick: function () { setAbonando(s); }, icon: h(Plus, { size: 13 }) }, "Registrar abono"),
+        wa && h("a", { href: wa, target: "_blank", rel: "noopener noreferrer", style: { textDecoration: "none" } },
+          h(Btn, { small: true, variant: "ghost", icon: h(MessageCircle, { size: 13 }) }, "Recordar por WhatsApp")),
+        h(Btn, { small: true, variant: "ghost", icon: h(Printer, { size: 13 }), onClick: function () {
+          showPrintModal(function (type, tw) { printReceipt(s, tienda, type, tw); }); } }, "Imprimir")));
+  };
+  return h("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+    h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap" } },
+      kpi("Por cobrar en fiados", fmt(totalDeben), T.orange),
+      kpi("Clientes que deben", String(Object.keys(clientes).length)),
+      kpi("Vencidos", String(vencidos.length), vencidos.length ? T.red : T.text)),
+    pendientes.length === 0 && h(Card, { style: { padding: 30, textAlign: "center", color: T.muted } }, "No hay ventas fiadas pendientes. Para fiar, en Nueva Venta elige “Fiado / crédito”."),
+    pendientes.map(tarjeta),
+    pagados.length > 0 && h("button", { onClick: function () { setVerPagados(!verPagados); },
+      style: { alignSelf: "flex-start", background: "none", border: "none", color: T.accent, cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, padding: 4 } },
+      (verPagados ? "Ocultar" : "Ver") + " fiados ya pagados (" + pagados.length + ")"),
+    verPagados && pagados.map(tarjeta),
+    abonando && h(AbonoFiadoModal, { sale: abonando, data: data, save: p.save, notify: p.notify, onClose: function () { setAbonando(null); } }));
+}
+
 function VentasView(_ref18) {
   var verCostos = _ref18.verCostos !== false;
   var data = _ref18.data,
@@ -7487,6 +7615,7 @@ function VentasView(_ref18) {
     _useState44 = _slicedToArray(_useState43, 2),
     showRegistros = _useState44[0],
     setShowRegistros = _useState44[1];
+  var _vv = useState("ventas"), vista = _vv[0], setVista = _vv[1];
   var sales = data.sales || [];
   var filtered = sales.filter(function (s) {
     return !dateFilter || s.date === dateFilter;
@@ -7587,14 +7716,29 @@ function VentasView(_ref18) {
     return a + s.total;
   }, 0);
   var del = function del(id) {
-    if (!confirm("¿Eliminar esta venta? El stock NO se restaurará automáticamente.")) return;
+    var sv = sales.find(function (s) { return s.id === id; });
+    var esFiado = sv && sv.credito;
+    if (!confirm("¿Eliminar esta venta? El stock NO se restaurará automáticamente." + (esFiado ? " También se quitan de Caja los abonos de este fiado." : ""))) return;
     save(_objectSpread(_objectSpread({}, data), {}, {
       sales: sales.filter(function (s) {
         return s.id !== id;
-      })
+      }),
+      cashflow: esFiado ? (data.cashflow || []).filter(function (c) { return c.saleId !== id; }) : (data.cashflow || [])
     }));
     notify("Venta eliminada");
   };
+  // Pestañas: todas las ventas | fiados y créditos
+  var nFiadosPend = sales.filter(function (s) { return _ventaSaldo(s) > 0; }).length;
+  var pestanas = /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 4, padding: 4, borderRadius: 12, background: T.surface, border: "1px solid " + T.border, marginBottom: 16, width: "fit-content", maxWidth: "100%" } },
+    [["ventas", "Todas las ventas"], ["fiados", "Fiados y créditos" + (nFiadosPend ? " (" + nFiadosPend + ")" : "")]].map(function (t) {
+      var on = vista === t[0];
+      return /*#__PURE__*/React.createElement("button", { key: t[0], onClick: function () { setVista(t[0]); },
+        style: { padding: "8px 16px", border: "none", borderRadius: 9, cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: 700,
+          background: on ? T.accent : "transparent", color: on ? "#fff" : T.muted } }, t[1]);
+    }));
+  if (vista === "fiados") {
+    return /*#__PURE__*/React.createElement("div", null, pestanas, /*#__PURE__*/React.createElement(FiadosPanel, { data: data, save: save, notify: notify }));
+  }
   var ganSuma = function (lista) {
     return lista.reduce(function (a, s) { return a + _ganVenta(data, s).ganancia; }, 0);
   };
@@ -7610,7 +7754,7 @@ function VentasView(_ref18) {
     { l: "Ventas este mes", v: fmt(totalMes), c: T.blue },
     { l: "Total transacciones", v: sales.length, c: T.purple }
   ];
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", null, pestanas, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
@@ -7791,9 +7935,11 @@ function VentasView(_ref18) {
       }
     }, /*#__PURE__*/React.createElement(Badge, {
       label: s.payment,
-      color: T.muted,
-      bg: T.bg
-    })), /*#__PURE__*/React.createElement("td", {
+      color: s.credito ? T.orange : T.muted,
+      bg: s.credito ? "rgba(217,119,6,0.1)" : T.bg
+    }), s.credito && /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 11.5, fontWeight: 700, marginTop: 4, color: _ventaSaldo(s) > 0 ? T.orange : T.green, whiteSpace: "nowrap" }
+    }, _ventaSaldo(s) > 0 ? "Debe " + fmt(_ventaSaldo(s)) : "Pagado")), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "11px 14px",
         fontWeight: 800,
@@ -7896,6 +8042,17 @@ function SaleModal(_ref19) {
     _useState56 = _slicedToArray(_useState55, 2),
     showPicker = _useState56[0],
     setShowPicker = _useState56[1];
+  // Venta a crédito / fiado
+  var _cr1 = useState(false), esCredito = _cr1[0], setEsCredito = _cr1[1];
+  var _cr2 = useState(""), telCredito = _cr2[0], setTelCredito = _cr2[1];
+  var _cr3 = useState("15"), diasCredito = _cr3[0], setDiasCredito = _cr3[1];
+  var _cr4 = useState(""), abonoIni = _cr4[0], setAbonoIni = _cr4[1];
+  var _cr5 = useState("Efectivo"), medioAbono = _cr5[0], setMedioAbono = _cr5[1];
+  var elegirCliente = function (v) {
+    setCustomer(v);
+    var c = (data.customers || []).find(function (x) { return (x.name || "").trim().toLowerCase() === String(v).trim().toLowerCase(); });
+    if (c && c.phone && !telCredito) setTelCredito(String(c.phone));
+  };
 
   // All sellable items = inventory with stock > 0
   var available = (data.inventory || []).filter(function (i) {
@@ -7955,11 +8112,17 @@ function SaleModal(_ref19) {
       notify("Agrega al menos un producto", "error");
       return;
     }
+    var abonoNum = esCredito ? Math.max(0, Math.min(Number(abonoIni) || 0, total)) : 0;
+    if (esCredito) {
+      if (!String(customer).trim()) { notify("Para fiar escribe el nombre del cliente", "error"); return; }
+      if (!(Number(diasCredito) > 0)) { notify("Indica en cuántos días debe pagar", "error"); return; }
+      if (abonoNum >= total) { notify("El abono cubre todo: regístrala como venta de contado", "error"); return; }
+    }
     var sale = {
       id: uid(),
       date: today(),
-      customer: customer,
-      payment: payment,
+      customer: String(customer).trim(),
+      payment: esCredito ? "Fiado" : payment,
       notes: notes,
       discount: discountAmt,
       total: total,
@@ -7967,6 +8130,13 @@ function SaleModal(_ref19) {
         return _objectSpread({}, it);
       })
     };
+    var cashflowNuevo = data.cashflow || [];
+    if (esCredito) {
+      var abonosIni = abonoNum > 0 ? [{ id: uid(), fecha: today(), monto: abonoNum, medio: medioAbono, nota: "Abono inicial" }] : [];
+      sale.credito = { dias: Number(diasCredito), vence: _isoAdd(today(), Number(diasCredito)), telefono: String(telCredito || "").trim(), abonos: abonosIni };
+      // Lo que se recibe hoy entra a Caja; el resto queda por cobrar.
+      if (abonoNum > 0) cashflowNuevo = [_fiadoCashflow(sale, abonosIni[0])].concat(cashflowNuevo);
+    }
 
     // Descontar del inventario
     var inventory = _toConsumableArray(data.inventory || []);
@@ -8005,9 +8175,11 @@ function SaleModal(_ref19) {
     save(_objectSpread(_objectSpread({}, data), {}, {
       inventory: inventory,
       products: products,
-      sales: sales
+      sales: sales,
+      cashflow: cashflowNuevo
     }));
-    notify(verCostos ? "Venta registrada · Ganancia neta " + fmt(gananciaNeta) : "Venta registrada exitosamente");
+    if (esCredito) notify("Venta fiada a " + sale.customer + " · saldo " + fmt(_ventaSaldo(sale)) + " · vence " + sale.credito.vence);
+    else notify(verCostos ? "Venta registrada · Ganancia neta " + fmt(gananciaNeta) : "Venta registrada exitosamente");
     setModal(null);
     showPrintModal(function(type, tw){ printReceipt(sale, (data.settings && data.settings.storeName) || "", type, tw); });
   };
@@ -8252,17 +8424,32 @@ function SaleModal(_ref19) {
       flexDirection: "column",
       gap: 12
     }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Cliente (opcional)",
-    value: customer,
-    onChange: setCustomer,
-    placeholder: "Nombre del cliente"
-  }), /*#__PURE__*/React.createElement(Field, {
+  }, /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 5 } },
+    /*#__PURE__*/React.createElement("label", { style: { fontSize: 15, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" } }, esCredito ? "Cliente *" : "Cliente (opcional)"),
+    /*#__PURE__*/React.createElement("input", { list: "sale-clientes", value: customer, placeholder: "Nombre del cliente", onChange: function (e) { elegirCliente(e.target.value); }, style: IS }),
+    /*#__PURE__*/React.createElement("datalist", { id: "sale-clientes" }, (data.customers || []).slice(0, 300).map(function (c) { return /*#__PURE__*/React.createElement("option", { key: c.id, value: c.name }); }))
+  ), /*#__PURE__*/React.createElement("div", { style: { display: "flex", padding: 3, borderRadius: 10, background: T.bg, border: "1px solid " + T.border, gap: 3 } },
+    [[false, "De contado"], [true, "Fiado / crédito"]].map(function (op) {
+      var on = esCredito === op[0];
+      return /*#__PURE__*/React.createElement("button", { key: op[1], type: "button", onClick: function () { setEsCredito(op[0]); },
+        style: { flex: 1, padding: "8px 6px", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+          background: on ? (op[0] ? T.orange : T.accent) : "transparent", color: on ? "#fff" : T.muted } }, op[1]);
+    })
+  ), !esCredito && /*#__PURE__*/React.createElement(Field, {
     label: "M\xE9todo de pago",
     value: payment,
     onChange: setPayment,
     options: PAYMENT_METHODS
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }), esCredito && /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, padding: 12, borderRadius: 10, border: "1px solid rgba(217,119,6,0.4)", background: "rgba(217,119,6,0.06)" } },
+    /*#__PURE__*/React.createElement(Field, { label: "Teléfono del cliente", value: telCredito, onChange: setTelCredito, placeholder: "3001234567" }),
+    /*#__PURE__*/React.createElement(Field, { label: "Paga en (días)", value: diasCredito, onChange: setDiasCredito, options: ["8", "15", "30", "45", "60", "90"] }),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 12.5, color: T.muted, marginTop: -4 } }, Number(diasCredito) > 0 ? "Vence el " + _isoAdd(today(), Number(diasCredito)) : ""),
+    /*#__PURE__*/React.createElement(Field, { label: "Abono hoy (opcional)", value: abonoIni, onChange: setAbonoIni, type: "number", placeholder: "0" }),
+    Number(abonoIni) > 0 && /*#__PURE__*/React.createElement(Field, { label: "Medio del abono", value: medioAbono, onChange: setMedioAbono, options: PAYMENT_METHODS }),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 800, color: T.orange } },
+      /*#__PURE__*/React.createElement("span", null, "Queda debiendo"),
+      /*#__PURE__*/React.createElement("span", null, fmt(Math.max(0, total - (Number(abonoIni) || 0)))))
+  ), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 15,
       fontWeight: 600,
@@ -10861,7 +11048,8 @@ function _repCalc(data, desde, hasta) {
     return c.estado === "Vendido" && inRange(c.fechaVenta) && !celFacturados[c.id];
   });
 
-  var tv = ventas.reduce(function (a, s) { return a + (Number(s.total) || 0); }, 0);
+  // Las ventas fiadas no cuentan aquí: sus abonos entran como ingresos de Caja.
+  var tv = ventas.reduce(function (a, s) { return a + _ventaContado(s); }, 0);
   var tcel = celVentas.reduce(function (a, c) { return a + (Number(c.precioVenta) || 0); }, 0);
   var tr = abonos.filter(function (x) { return x.repair.paid; }).reduce(function (a, x) { return a + x.amount; }, 0);
   var tab = abonos.filter(function (x) { return !x.repair.paid; }).reduce(function (a, x) { return a + x.amount; }, 0);
@@ -14102,10 +14290,12 @@ function _gMovimientosDia(data, fecha) {
   var porMetodo = {};
   var add = function (m, v) { m = m || "Efectivo"; porMetodo[m] = (porMetodo[m] || 0) + (Number(v) || 0); };
   var ventas = (data.sales || []).filter(function (s) { return s.date === fecha; });
-  ventas.forEach(function (s) { add(s.payment, s.total); });
+  ventas.forEach(function (s) { if (!s.credito) add(s.payment, s.total); });
   var abonos = [];
   (data.repairs || []).forEach(function (r) { (r.advances || []).forEach(function (a) { if (a.date === fecha) { abonos.push({ r: r, a: a }); add(/nequi|davi|transf|tarjeta/i.test(a.note || "") ? (a.note.match(/nequi|daviplata|transferencia|tarjeta/i) || ["Efectivo"])[0].replace(/^./, function (c) { return c.toUpperCase(); }) : "Efectivo", a.amount); } }); });
-  var cf = (data.cashflow || []).filter(function (e) { return e.date === fecha; });
+  // Abonos de ventas fiadas: cuentan por su medio de pago (efectivo, Nequi...), no como ingreso manual.
+  (data.cashflow || []).forEach(function (e) { if (e.date === fecha && e.origen === "fiado" && e.type === "ingreso") add(e.payment || "Efectivo", e.amount); });
+  var cf = (data.cashflow || []).filter(function (e) { return e.date === fecha && e.origen !== "fiado"; });
   var ingCaja = cf.filter(function (e) { return e.type === "ingreso"; }).reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
   var egrCaja = cf.filter(function (e) { return e.type === "egreso"; }).reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
   return { porMetodo: porMetodo, ventas: ventas, abonos: abonos, ingCaja: ingCaja, egrCaja: egrCaja, cf: cf };
@@ -14300,6 +14490,10 @@ function PorCobrarTab(props) {
   (data.facturas || []).forEach(function (f) {
     var s = typeof _facturaSaldo === "function" ? _facturaSaldo(f) : 0;
     if (s > 0) deudas.push({ tipo: "Factura", ref: "Factura " + (f.numero || ""), customer: (f.cliente && f.cliente.nombre) || "Cliente", phone: (f.cliente && (f.cliente.telefono || f.cliente.phone)) || "", saldo: s, fecha: f.date || f.fecha });
+  });
+  (data.sales || []).forEach(function (s) {
+    var sv = _ventaSaldo(s);
+    if (sv > 0) deudas.push({ tipo: "Fiado", ref: "Venta #" + String(s.id || "").slice(-6).toUpperCase() + (s.credito.vence ? " (vence " + s.credito.vence + ")" : ""), customer: s.customer || "Cliente", phone: (s.credito && s.credito.telefono) || "", saldo: sv, fecha: s.date });
   });
   var grupos = {};
   deudas.forEach(function (d) { var k = (d.customer || "").trim().toLowerCase(); if (!grupos[k]) grupos[k] = { customer: d.customer, phone: d.phone, items: [], total: 0, oldest: d.fecha }; var g = grupos[k]; g.items.push(d); g.total += d.saldo; if (!g.phone) g.phone = d.phone; if (d.fecha && d.fecha < g.oldest) g.oldest = d.fecha; });
@@ -18879,7 +19073,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.5";
+var APP_VERSION = "1.6.6";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {
