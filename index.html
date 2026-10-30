@@ -2816,6 +2816,79 @@ function PatternLock(_ref) {
   );
 }
 
+// ─── Novedades para el cliente ──────────────────────────────────────────────
+// Observaciones con fecha (problemas encontrados, avances, esperas de repuesto...)
+// que el cliente ve en su página de seguimiento. En órdenes ya guardadas se
+// guardan al instante para que el enlace las muestre sin esperar a "Guardar".
+function _fechaNovedad(iso) {
+  try {
+    return new Date(iso).toLocaleString("es-CO", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" });
+  } catch (e) { return String(iso || "").slice(0, 16).replace("T", " "); }
+}
+function NovedadesCliente(p) {
+  var h = React.createElement;
+  var form = p.form;
+  var _t = useState(""), texto = _t[0], setTexto = _t[1];
+  var lista = Array.isArray(form.novedades) ? form.novedades : [];
+  var persistir = function (nuevas) {
+    p.set("novedades", nuevas);
+    if (!p.isNew) {
+      p.save(Object.assign({}, p.data, { repairs: (p.data.repairs || []).map(function (r) {
+        return r.id === form.id ? Object.assign({}, r, { novedades: nuevas }) : r;
+      }) }));
+    }
+  };
+  var agregar = function () {
+    var t = texto.trim();
+    if (!t) { p.notify("Escribe la novedad", "error"); return; }
+    persistir([{ id: uid(), fecha: new Date().toISOString(), texto: t }].concat(lista));
+    setTexto("");
+    p.notify(p.isNew ? "Novedad agregada (se guarda con la orden)" : "Novedad publicada: el cliente ya la puede ver");
+  };
+  var quitar = function (id) {
+    if (!confirm("¿Quitar esta novedad? El cliente dejará de verla.")) return;
+    persistir(lista.filter(function (n) { return n.id !== id; }));
+  };
+  var waLink = function (n) {
+    var tel = String(form.phone || "").replace(/\D/g, "");
+    if (!tel) return null;
+    var nombre = (form.customer || "").split(" ")[0] || "";
+    var tienda = ((p.data.settings && p.data.settings.storeName) || "").trim() || "CLINICELL";
+    var url = p.clientId && form.id ? _buildTrackUrl(p.clientId, form) : "";
+    var msg = "Hola " + nombre + ", le escribimos de *" + tienda + "* con una novedad sobre su equipo *" + (form.device || "") + "*:"
+      + "\n\n" + n.texto
+      + (url ? "\n\n*Siga el estado de su equipo aqui:*\n" + url : "")
+      + "\n\nCualquier duda, con gusto le atendemos.";
+    return "https://wa.me/57" + tel + "?text=" + encodeURIComponent(msg);
+  };
+  return h("div", { style: { background: T.surface, border: "1px solid " + T.border, borderRadius: 14, padding: 14 } },
+    h("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 4 } },
+      h(Eye, { size: 15, color: T.accent }),
+      h("span", { style: { fontSize: 14, fontWeight: 700, color: T.text } }, "Novedades para el cliente")),
+    h("div", { style: { fontSize: 12.5, color: T.muted, marginBottom: 10, lineHeight: 1.45 } },
+      "Lo que escribas aquí aparece con fecha en la página de seguimiento del cliente. Úsalo para problemas encontrados, avances o esperas de repuesto."),
+    h("div", { style: { display: "flex", gap: 8 } },
+      h("textarea", { value: texto, rows: 2, placeholder: "Ej: Al revisar encontramos humedad en la placa; hay que hacerle limpieza.",
+        onChange: function (e) { setTexto(e.target.value); },
+        style: Object.assign({}, IS, { flex: 1, resize: "vertical", minHeight: 44, borderRadius: 10 }) }),
+      h(Btn, { onClick: agregar, style: { alignSelf: "stretch" } }, "Agregar")),
+    lista.length > 0 && h("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12 } },
+      lista.map(function (n) {
+        var wa = waLink(n);
+        return h("div", { key: n.id, style: { display: "flex", gap: 10, padding: "10px 12px", background: T.bg, border: "1px solid " + T.border, borderRadius: 10 } },
+          h("div", { style: { flex: 1, minWidth: 0 } },
+            h("div", { style: { fontSize: 11.5, color: T.muted, marginBottom: 3 } }, _fechaNovedad(n.fecha)),
+            h("div", { style: { fontSize: 13.5, color: T.text, lineHeight: 1.45, whiteSpace: "pre-wrap", overflowWrap: "anywhere" } }, n.texto)),
+          h("div", { style: { display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 } },
+            wa && h("a", { href: wa, target: "_blank", rel: "noopener noreferrer", title: "Avisar al cliente por WhatsApp",
+              style: { display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, background: "rgba(22,163,74,0.1)", color: "#16A34A" } },
+              h(MessageCircle, { size: 15 })),
+            h("button", { onClick: function () { quitar(n.id); }, title: "Quitar",
+              style: { display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: T.red, cursor: "pointer" } },
+              h(Trash2, { size: 14 }))));
+      })));
+}
+
 function RepairModal(_ref0) {
   var verCostos = _ref0.verCostos !== false;
   var modal = _ref0.modal,
@@ -3455,7 +3528,9 @@ function RepairModal(_ref0) {
 
     /*#__PURE__*/React.createElement(ChecklistRecepcion, { form: form, set: set }),
 
-    /*#__PURE__*/React.createElement(Field, { label:"Notas / Diagnóstico", value:form.notes, onChange:function(v){return set("notes",v);}, textarea:true, placeholder:"Diagnóstico, repuestos usados, observaciones..." }),
+    /*#__PURE__*/React.createElement(NovedadesCliente, { form: form, set: set, data: data, save: save, isNew: isNew, clientId: clientId, notify: notify }),
+
+    /*#__PURE__*/React.createElement(Field, { label:"Notas / Diagnóstico (el cliente también las ve)", value:form.notes, onChange:function(v){return set("notes",v);}, textarea:true, placeholder:"Diagnóstico, repuestos usados, observaciones..." }),
 
     // ─── ABONOS ─────────────────────────────────────────────
     /*#__PURE__*/React.createElement("div", { style:{ background:T.surface, border:"1px solid ".concat(T.border), borderRadius:14, padding:14 } },
@@ -17844,7 +17919,7 @@ function _authErrMsg(code) {
 //   seguimiento_publico/{clientId}_{CÓDIGO}  → UNA reparación por documento, así el
 //       enlace de un cliente solo deja ver SU orden (la colección no se puede listar).
 var _PUB_PRODUCT_FIELDS = ["id", "name", "category", "price", "description", "image", "specs", "stock", "featured", "active"];
-var _PUB_REPAIR_FIELDS = ["id", "status", "customer", "device", "category", "problem", "technician", "date", "cost", "paid", "notes", "photos", "readyDate", "deliveryDate", "warrantyDays"];
+var _PUB_REPAIR_FIELDS = ["id", "status", "customer", "device", "category", "problem", "technician", "date", "cost", "paid", "notes", "photos", "readyDate", "deliveryDate", "warrantyDays", "novedades"];
 var _PUB_SETTINGS_FIELDS = ["storeName", "storeSubtitle", "logo", "address", "whatsapp", "theme", "accentColor", "themePreset"];
 function _pubPick(o, fields) {
   var out = {};
@@ -18526,6 +18601,22 @@ function TrackingLoader(_ref) {
       isCancelled && /*#__PURE__*/React.createElement("div", {
         style:{ background:"#F5F5F5", borderRadius:10, padding:"20px", marginBottom:16, textAlign:"center", border:"1px solid #dadada", color:"#1A1A1A", fontWeight:600 }
       }, "Esta reparación fue cancelada. Contáctanos para más información."),
+      // Novedades que el taller le escribe al cliente (la más reciente arriba)
+      (Array.isArray(r.novedades) && r.novedades.length > 0) && /*#__PURE__*/React.createElement("div", {
+        style:{ background:"#fff", borderRadius:10, padding:"22px 24px", boxShadow:"0 4px 20px rgba(18,18,18,0.06)", marginBottom:16, border:"1px solid rgba(18,18,18,0.05)" }
+      },
+        /*#__PURE__*/React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:7, fontSize:14, fontWeight:700, color:"#131313", marginBottom:14 } },
+          /*#__PURE__*/React.createElement(MessageCircle,{size:14}), "Novedades de su equipo"),
+        r.novedades.slice().sort(function(a,b){ return String(b.fecha||"").localeCompare(String(a.fecha||"")); }).map(function(n, i, arr){
+          return /*#__PURE__*/React.createElement("div", { key: n.id || i, style:{ display:"flex", gap:12 } },
+            /*#__PURE__*/React.createElement("div", { style:{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0 } },
+              /*#__PURE__*/React.createElement("span", { style:{ width:10, height:10, borderRadius:"50%", marginTop:4, background: i === 0 ? "#2563EB" : "#cfcfcf" } }),
+              i < arr.length - 1 && /*#__PURE__*/React.createElement("span", { style:{ width:2, flex:1, background:"#ececec", margin:"4px 0" } })),
+            /*#__PURE__*/React.createElement("div", { style:{ paddingBottom: i < arr.length - 1 ? 16 : 0, minWidth:0 } },
+              /*#__PURE__*/React.createElement("div", { style:{ fontSize:12, color:"#878787", marginBottom:3 } }, _fechaNovedad(n.fecha), i === 0 ? " · Lo más reciente" : ""),
+              /*#__PURE__*/React.createElement("div", { style:{ fontSize:14.5, color:"#131313", lineHeight:1.55, whiteSpace:"pre-wrap", overflowWrap:"anywhere" } }, n.texto)));
+        })
+      ),
       // Datos del equipo
       /*#__PURE__*/React.createElement("div", {
         style:{ background:"#fff", borderRadius:10, padding:"22px 24px", boxShadow:"0 4px 20px rgba(18,18,18,0.06)", marginBottom:16, border:"1px solid rgba(18,18,18,0.05)" }
@@ -18761,7 +18852,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.3";
+var APP_VERSION = "1.6.4";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

@@ -1,5 +1,5 @@
 {
-  "version": "1.6.3",
-  "notes": "El mensaje de WhatsApp al recibir el equipo (y en diagnóstico o reparación) incluye el enlace para que el cliente siga su reparación.",
+  "version": "1.6.4",
+  "notes": "Novedades para el cliente: las observaciones que escribas en la orden aparecen con fecha en su página de seguimiento y se pueden avisar por WhatsApp.",
   "url": "https://edier27.github.io/Acce7/"
 }
