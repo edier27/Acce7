@@ -15699,6 +15699,35 @@ function _iaAsk(prompt, opts) {
     try { return JSON.parse(t); } catch (e) { throw new Error("No se pudo interpretar la respuesta de la IA."); }
   }, function (e) { throw new Error((e && e.error && e.error.message) || (e && e.message) || "Error al conectar con la IA."); });
 }
+// Pregunta a Gemini CON búsqueda en Google (respuestas basadas en páginas reales).
+// Devuelve { data: JSON pedido, fuentes: [{uri,title}], consultas: [texto] }.
+// Si Google no hace ninguna búsqueda, se rechaza: no se aceptan datos sin verificar.
+function _iaBuscarWeb(prompt, opts) {
+  opts = opts || {};
+  var key = _iaKey();
+  if (!key) return Promise.reject(new Error("SIN_CLAVE"));
+  var body = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { maxOutputTokens: opts.max || 3000, temperature: 0 }
+  };
+  if (opts.system) body.system_instruction = { parts: [{ text: opts.system }] };
+  return _geminiGenerate(key, body).then(function (json) {
+    var cand = (json && json.candidates && json.candidates[0]) || {};
+    var meta = cand.groundingMetadata || {};
+    var vistas = {};
+    var fuentes = (meta.groundingChunks || []).map(function (c) { return c && c.web ? { uri: c.web.uri, title: c.web.title || c.web.domain || "Fuente" } : null; })
+      .filter(function (f) { if (!f || !f.uri || vistas[f.title + f.uri]) return false; vistas[f.title + f.uri] = 1; return true; });
+    var consultas = meta.webSearchQueries || [];
+    if (!fuentes.length && !consultas.length) throw new Error("La IA no pudo buscar en internet en este momento. Intenta de nuevo en un minuto.");
+    var t = _geminiText(json).trim().replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "");
+    var a = t.indexOf("{"), b = t.lastIndexOf("}");
+    if (a < 0 || b < a) throw new Error("La IA no devolvió un resultado claro. Intenta de nuevo.");
+    var data;
+    try { data = JSON.parse(t.slice(a, b + 1)); } catch (e) { throw new Error("No se pudo interpretar la respuesta de la IA. Intenta de nuevo."); }
+    return { data: data, fuentes: fuentes, consultas: consultas };
+  }, function (e) { throw new Error((e && e.error && e.error.message) || (e && e.message) || "Error al conectar con la IA."); });
+}
 function _iaErrMsg(e) {
   return e && e.message === "SIN_CLAVE" ? "Primero configura la clave de la IA (Gemini) en Configuración → Integraciones." : ((e && e.message) || "Error con la IA");
 }
@@ -17029,12 +17058,18 @@ function CompatibilidadesView(p) {
     var modelo = q.trim();
     if (!modelo) return;
     setIaCargando(true); setIa(null);
-    _iaAsk("Modelo de celular: " + modelo + "\n\nIndica: 1) con qué otros modelos comparte el MISMO vidrio templado (protector de pantalla) y 2) con qué otros modelos comparte la MISMA pantalla (display completo), y qué tipos de pantalla se consiguen (Original, OLED, Incell, etc.).\n" +
-      "Devuelve JSON: {\"modelo\":\"nombre completo\",\"vidrio\":{\"compatibles\":[\"modelo\"],\"medida\":\"pulgadas\",\"nota\":\"frase corta\"},\"pantalla\":{\"compatibles\":[\"modelo\"],\"tipos\":[\"Incell\"],\"nota\":\"frase corta\"}}. " +
-      "Incluye el mismo modelo en cada lista. Si no estás seguro de un modelo, NO lo pongas. Listas vacías si no sabes.", {
-      system: "Eres un técnico experto en repuestos de celulares en Colombia. Respondes solo con datos de compatibilidad que conoces con seguridad.",
-      json: true, temp: 0.2, max: 1500
-    }).then(function (r) { setIa(r || {}); }).catch(function (e) { p.notify(_iaErrMsg(e), "error"); }).then(function () { setIaCargando(false); });
+    // Búsqueda REAL en Google: solo se aceptan modelos que aparezcan confirmados en páginas.
+    _iaBuscarWeb("Modelo de celular: " + modelo + "\n\n" +
+      "Busca en internet (tiendas de repuestos, vendedores de vidrios templados, fichas técnicas, foros de técnicos) y responde:\n" +
+      "1) VIDRIO TEMPLADO: qué otros modelos usan EXACTAMENTE el mismo vidrio templado / protector (misma medida, mismo recorte de cámara y bordes). Usa listados que digan explícitamente \"compatible con\".\n" +
+      "2) PANTALLA (display completo): qué otros modelos usan EXACTAMENTE el mismo display (mismo número de parte, mismo conector y mismas medidas). Esto es lo más importante: si no hay una fuente clara que diga que la pantalla es intercambiable, NO incluyas ese modelo.\n\n" +
+      "Reglas estrictas: incluye solo modelos que hayas visto confirmados en alguna página de la búsqueda; nunca adivines por parecido de nombre ni de tamaño; incluye siempre el modelo consultado; si no encuentras confirmación, deja la lista solo con el modelo consultado y confianza \"baja\".\n\n" +
+      "Responde ÚNICAMENTE con este JSON, sin texto adicional:\n" +
+      "{\"modelo\":\"nombre comercial completo y código de modelo si lo encuentras (ej. SM-A125F)\"," +
+      "\"vidrio\":{\"compatibles\":[\"modelo\"],\"medida\":\"pulgadas\",\"confianza\":\"alta|media|baja\",\"nota\":\"frase corta\"}," +
+      "\"pantalla\":{\"compatibles\":[\"modelo\"],\"codigo_parte\":\"si aparece\",\"tipos\":[\"Original\",\"OLED\",\"Incell\"],\"confianza\":\"alta|media|baja\",\"nota\":\"frase corta (ej. variantes que NO sirven)\"}}", {
+      system: "Eres un técnico experto en repuestos de celulares. Verificas cada compatibilidad en la búsqueda web antes de afirmarla. Un error en pantallas le hace perder dinero al taller, así que ante la duda excluyes el modelo."
+    }).then(function (r) { setIa(r); }).catch(function (e) { p.notify(_iaErrMsg(e), "error"); }).then(function () { setIaCargando(false); });
   };
 
   var chip = function (t) {
@@ -17065,13 +17100,22 @@ function CompatibilidadesView(p) {
           h("button", { title: "Borrar", onClick: function () { borrar(c); }, style: { border: "none", background: "transparent", color: T.red, cursor: "pointer", padding: 6, display: "flex" } }, h(Trash2, { size: 15 })))));
   };
   var bloqueIA = function (titulo, tipo, d) {
-    if (!d || !Array.isArray(d.compatibles) || d.compatibles.length === 0) {
-      return h("div", { key: tipo, style: { fontSize: 13, color: T.muted } }, titulo + ": la IA no tiene un dato seguro para este modelo.");
+    var compatibles = d && Array.isArray(d.compatibles) ? d.compatibles.filter(function (m) { return String(m || "").trim(); }) : [];
+    var conf = String((d && d.confianza) || "baja").toLowerCase();
+    var confColor = conf === "alta" ? T.green : conf === "media" ? T.orange : T.red;
+    // Solo el propio modelo (o nada) = no se encontró otro compatible confirmado.
+    if (compatibles.length <= 1) {
+      return h("div", { key: tipo, style: { fontSize: 13, color: T.muted, lineHeight: 1.5 } },
+        h("b", { style: { color: T.text } }, titulo + ": "), "no se encontró en internet otro modelo confirmado que use el mismo " + (tipo === "Pantalla" ? "display" : "vidrio") + ".",
+        d && d.nota ? h("span", null, " " + d.nota) : null);
     }
+    d = Object.assign({}, d, { compatibles: compatibles });
     return h("div", { key: tipo, style: { display: "flex", flexDirection: "column", gap: 8 } },
-      h("div", { style: { fontSize: 13.5, fontWeight: 700, color: T.text } }, titulo,
-        d.medida ? h("span", { style: { fontWeight: 500, color: T.muted } }, " · " + d.medida) : null,
-        Array.isArray(d.tipos) && d.tipos.length ? h("span", { style: { fontWeight: 500, color: T.muted } }, " · " + d.tipos.join(", ")) : null),
+      h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13.5, fontWeight: 700, color: T.text } }, titulo,
+        h("span", { style: { fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 999, color: confColor, border: "1px solid " + confColor, textTransform: "uppercase" } }, "Confianza " + conf),
+        d.medida ? h("span", { style: { fontWeight: 500, color: T.muted } }, d.medida) : null,
+        d.codigo_parte ? h("span", { style: { fontWeight: 500, color: T.muted } }, "Código: " + d.codigo_parte) : null,
+        Array.isArray(d.tipos) && d.tipos.length ? h("span", { style: { fontWeight: 500, color: T.muted } }, d.tipos.join(", ")) : null),
       h("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, d.compatibles.map(function (m, i) {
         return h("span", { key: i, style: { fontSize: 12.5, padding: "4px 10px", borderRadius: 8, background: T.bg, border: "1px solid " + T.border, color: T.text } }, m);
       })),
@@ -17109,12 +17153,24 @@ function CompatibilidadesView(p) {
 
     buscando && h(Card, { style: { padding: "14px 16px", borderRadius: 12, border: "1px dashed " + T.border } },
       h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" } },
-        h("div", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: T.text } }, _gIco("Sparkles", 16), "Consultar con la IA"),
-        h(Btn, { small: true, onClick: preguntarIA, disabled: iaCargando }, iaCargando ? "Consultando…" : "Preguntar por «" + q.trim() + "»")),
+        h("div", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: T.text } }, _gIco("Globe", 16), "Buscar en internet con IA"),
+        h(Btn, { small: true, onClick: preguntarIA, disabled: iaCargando }, iaCargando ? "Buscando en internet…" : "Buscar «" + q.trim() + "»")),
+      !ia && !iaCargando && h("div", { style: { fontSize: 12.5, color: T.muted, marginTop: 8, lineHeight: 1.45 } },
+        "La IA busca en Google (tiendas de repuestos, vendedores de vidrios y fichas técnicas) y solo muestra modelos que encuentre confirmados, con sus fuentes."),
       ia && h("div", { style: { display: "flex", flexDirection: "column", gap: 14, marginTop: 12 } },
-        h("div", { style: { fontSize: 12.5, color: T.orange, fontWeight: 600 } }, "Sugerencia de la IA" + (ia.modelo ? " para " + ia.modelo : "") + ": verifícala antes de vender o instalar."),
-        bloqueIA("Vidrio templado", "Vidrio templado", ia.vidrio),
-        bloqueIA("Pantalla", "Pantalla", ia.pantalla))),
+        h("div", { style: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.green, fontWeight: 700 } },
+          h(CheckCircle, { size: 14 }), "Verificado con búsqueda en Google" + (ia.data.modelo ? " · " + ia.data.modelo : "") + " · " + ia.fuentes.length + " fuente(s)"),
+        bloqueIA("Vidrio templado", "Vidrio templado", ia.data.vidrio),
+        bloqueIA("Pantalla", "Pantalla", ia.data.pantalla),
+        ia.fuentes.length > 0 && h("div", { style: { borderTop: "1px solid " + T.border, paddingTop: 10 } },
+          h("div", { style: { fontSize: 12.5, fontWeight: 700, color: T.text, marginBottom: 6 } }, "Fuentes consultadas (ábrelas para comprobar)"),
+          ia.fuentes.slice(0, 8).map(function (f, i) {
+            return h("a", { key: i, href: f.uri, target: "_blank", rel: "noopener noreferrer",
+              style: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.accent, textDecoration: "none", padding: "3px 0" } },
+              h(ExternalLink, { size: 12 }), f.title);
+          })),
+        h("div", { style: { fontSize: 12, color: T.orange, lineHeight: 1.45 } },
+          "Aun así, antes de cambiar una pantalla compara el conector y las medidas con la original. Guarda en tu lista solo lo que confirmes."))),
 
     editando && h(CompatModal, { item: editando.item, tipoInicial: editando.tipoInicial, modelosIniciales: editando.modelosIniciales,
       data: data, save: p.save, notify: p.notify, onClose: function () { setEditando(null); } }));
@@ -19411,7 +19467,7 @@ function PublicCatalogLoader(_ref) {
 }
 
 // ── SISTEMA DE ACTUALIZACIONES ───────────────────────────
-var APP_VERSION = "1.6.8";
+var APP_VERSION = "1.6.9";
 var VERSION_CHECK_URL = "https://edier27.github.io/Acce7/version.json";
 
 function compareVersions(a, b) {

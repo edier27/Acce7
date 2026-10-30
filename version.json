@@ -1,5 +1,5 @@
 {
-  "version": "1.6.8",
-  "notes": "Nueva sección Compatibilidades: busca un modelo y mira qué vidrio templado, pantalla y repuestos le sirven; con consulta a la IA.",
+  "version": "1.6.9",
+  "notes": "Compatibilidades: la IA ahora busca en Google y solo muestra modelos confirmados, con nivel de confianza y fuentes.",
   "url": "https://edier27.github.io/Acce7/"
 }
